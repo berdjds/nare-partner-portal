@@ -9,13 +9,14 @@ import { getTravelActor, travelError, unauthorized } from "../../guard";
 // INTERNAL: ADMIN/VALIDATOR roles, plus the assigned validator of any role
 // (the assignment itself grants internal visibility, v0.10.0). The filesystem
 // path is never exposed.
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
   try {
     const doc = await prisma.quoteDocument.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { version: { select: { requestId: true, request: { select: { ownerId: true } } } } },
     });
     if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });

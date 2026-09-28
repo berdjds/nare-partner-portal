@@ -7,7 +7,8 @@ import { getTravelActor, travelError, unauthorized } from "../../../guard";
 // fresh template (versionNo restarts at 1) with a -COPY code, incremented when
 // taken. The duplicated content is fully editable afterwards — the source is
 // never touched.
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -16,7 +17,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   try {
     const source = await prisma.packageTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { versions: { orderBy: { versionNo: "desc" } } },
     });
     if (!source) {

@@ -27,7 +27,8 @@ const patchServiceSchema = z
   })
   .partial();
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -42,7 +43,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { weekdays, supplierId, ...rest } = parsed.data;
 
   try {
-    const existing = await prisma.serviceProduct.findUnique({ where: { id: params.id } });
+    const existing = await prisma.serviceProduct.findUnique({ where: { id } });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (supplierId) {
@@ -51,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     const service = await prisma.serviceProduct.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...rest,
         // undefined = unchanged; ""/whitespace clears the description.
@@ -70,7 +71,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 // Hard delete of a service product AND its rate versions (ADMIN). Blocked
 // while any quote version's service line still links the catalog product —
 // those lines resolve their rates from RateVersion via this FK.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -78,7 +80,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   }
 
   try {
-    const service = await prisma.serviceProduct.findUnique({ where: { id: params.id } });
+    const service = await prisma.serviceProduct.findUnique({ where: { id } });
     if (!service) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const lines = await prisma.serviceLine.count({ where: { serviceProductId: service.id } });

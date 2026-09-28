@@ -13,7 +13,8 @@ const updateAgencySchema = z.object({
   active: z.boolean().optional(),
 });
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -27,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   try {
-    const agency = await prisma.agency.update({ where: { id: params.id }, data: parsed.data });
+    const agency = await prisma.agency.update({ where: { id }, data: parsed.data });
     await writeAuditLog("AGENCY_UPDATED", actor.id, `Updated agency ${agency.shortCode}`);
     return NextResponse.json(agency);
   } catch (err) {

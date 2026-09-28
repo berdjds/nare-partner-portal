@@ -20,13 +20,14 @@ const patchBodySchema = z.object({
 // document metadata without filesystem paths. Advisors get 404 for other
 // advisors' requests (IDOR). The request owner sees full costing (v0.11.0) —
 // redaction to sell-side fields would only apply to a non-owner advisor.
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
   try {
     const request = await prisma.travelRequest.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         agency: true,
         owner: { select: { id: true, email: true, name: true, role: true } },
@@ -168,7 +169,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
@@ -179,7 +181,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   try {
-    const updated = await updateDraft(actor, params.id, parsed.data.expectedRevision, parsed.data.patch);
+    const updated = await updateDraft(actor, id, parsed.data.expectedRevision, parsed.data.patch);
     return NextResponse.json(updated);
   } catch (err) {
     return travelError(err, "[API /travel/requests/[id]]");
@@ -193,7 +195,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 // FKs predate the cascade annotations. Rendered PDF files under
 // data/documents/ are unlinked best-effort afterwards — a missing file must
 // not fail the delete (it may already be gone).
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== ROLE_ADMIN) {
@@ -202,7 +205,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   try {
     const request = await prisma.travelRequest.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { versions: { select: { id: true, documents: { select: { filePath: true } } } } },
     });
     if (!request) {

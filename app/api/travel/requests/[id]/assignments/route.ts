@@ -4,13 +4,14 @@ import { assignValidator, assignValidatorSchema } from "@/lib/travel/workflow";
 import { getTravelActor, travelError, unauthorized } from "../../../guard";
 
 // Assignment history (newest first).
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
   try {
     const assignments = await prisma.validationAssignment.findMany({
-      where: { requestId: params.id },
+      where: { requestId: id },
       orderBy: { createdAt: "desc" },
       include: { validator: { select: { id: true, email: true, name: true, role: true } } },
     });
@@ -21,7 +22,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 // Initial assignment: ADMIN, or the owning advisor assigning someone else.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    const assignment = await assignValidator(actor, params.id, parsed.data);
+    const assignment = await assignValidator(actor, id, parsed.data);
     return NextResponse.json(assignment, { status: 201 });
   } catch (err) {
     return travelError(err, "[API /travel/requests/[id]/assignments]");

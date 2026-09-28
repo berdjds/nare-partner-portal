@@ -5,7 +5,8 @@ import { getTravelActor, travelError, unauthorized } from "../../guard";
 
 // Hard delete of an FX rate version (ADMIN). The last rate of a currency is
 // protected — without it the engine cannot convert that currency to AMD.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -13,7 +14,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   }
 
   try {
-    const fx = await prisma.fXRateVersion.findUnique({ where: { id: params.id } });
+    const fx = await prisma.fXRateVersion.findUnique({ where: { id } });
     if (!fx) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const siblings = await prisma.fXRateVersion.count({ where: { currency: fx.currency } });

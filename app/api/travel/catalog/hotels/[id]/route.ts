@@ -25,7 +25,8 @@ const patchHotelSchema = z
   })
   .partial();
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -40,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { boardOptions, supplierId, ...rest } = parsed.data;
 
   try {
-    const existing = await prisma.hotelProduct.findUnique({ where: { id: params.id } });
+    const existing = await prisma.hotelProduct.findUnique({ where: { id } });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (supplierId) {
@@ -49,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     const hotel = await prisma.hotelProduct.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...rest,
         ...(supplierId !== undefined ? { supplierId } : {}),
@@ -69,7 +70,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 // any itinerary stay still links the catalog product — stays freeze the hotel
 // name for display but keep the FK for rate resolution, so deleting would
 // orphan them.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -77,7 +79,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   }
 
   try {
-    const hotel = await prisma.hotelProduct.findUnique({ where: { id: params.id } });
+    const hotel = await prisma.hotelProduct.findUnique({ where: { id } });
     if (!hotel) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const stays = await prisma.staySegment.count({ where: { hotelProductId: hotel.id } });

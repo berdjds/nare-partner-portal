@@ -14,7 +14,8 @@ const sendSchema = z.object({
 // WhatsApp. Allowed for the request owner, the assigned validator and ADMIN.
 // INTERNAL documents are additionally restricted per recipient (admins /
 // validators only) inside sendQuoteDocument.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const doc = await prisma.quoteDocument.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { version: { select: { requestId: true, request: { select: { ownerId: true } } } } },
     });
     if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     }
 
-    const results = await sendQuoteDocument(params.id, parsed.data, actor.id);
+    const results = await sendQuoteDocument(id, parsed.data, actor.id);
     return NextResponse.json({ results });
   } catch (err) {
     return travelError(err, "[API /travel/documents/[id]/send]");

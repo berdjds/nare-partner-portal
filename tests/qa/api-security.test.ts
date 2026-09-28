@@ -91,14 +91,14 @@ describe("GET /travel/requests/[id] scoping", () => {
   it("another advisor gets 404, not 403 (existence is not disclosed)", async () => {
     const { request } = await submittedRequest();
     session(advisor2);
-    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: { id: request.id } });
+    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     expect(res.status).toBe(404);
   });
 
   it("the owner-advisor sees the full costing blob incl. per-line net costs (v0.11.0)", async () => {
     const { request } = await submittedRequest();
     session(fx.advisor);
-    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: { id: request.id } });
+    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     const scenario = body.versions[0].scenarios[0];
@@ -113,7 +113,7 @@ describe("GET /travel/requests/[id] scoping", () => {
   it("a validator sees the full costing blob", async () => {
     const { request } = await submittedRequest();
     session(fx.validator);
-    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: { id: request.id } });
+    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     const parsed = JSON.parse(body.versions[0].scenarios[0].resultJson);
@@ -136,7 +136,7 @@ describe("GET /travel/requests/[id] scoping", () => {
       },
     });
     session(fx.advisor);
-    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: { id: request.id } });
+    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     const body = await res.json();
     const doc = body.versions[0].documents[0];
     expect(doc.renderState).toBe("FAILED");
@@ -154,16 +154,16 @@ describe("POST /travel/versions/[id]/calculate scoping", () => {
 
     session(fx.validator2); // validator, but not assigned
     expect(
-      (await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: { id: version.id } })).status,
+      (await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) })).status,
     ).toBe(404);
 
     session(advisor2);
     expect(
-      (await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: { id: version.id } })).status,
+      (await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) })).status,
     ).toBe(404);
 
     session(fx.validator);
-    const ok = await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: { id: version.id } });
+    const ok = await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) });
     expect(ok.status).toBe(200);
     const full = await ok.json();
     expect(full.scenarios[0].totals.costQuote).toBe("300");
@@ -171,7 +171,7 @@ describe("POST /travel/versions/[id]/calculate scoping", () => {
 
     session(fx.admin);
     expect(
-      (await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: { id: version.id } })).status,
+      (await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) })).status,
     ).toBe(200);
   });
 
@@ -179,7 +179,7 @@ describe("POST /travel/versions/[id]/calculate scoping", () => {
     const { version } = await submittedRequest();
 
     session(fx.advisor);
-    const res = await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: { id: version.id } });
+    const res = await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.quoteCurrency).toBe("USD");
@@ -192,7 +192,7 @@ describe("POST /travel/versions/[id]/calculate scoping", () => {
         method: "POST",
         body: { policy: { type: "MARKUP_ON_COST", rate: "0.5", roundingIncrement: "1" } },
       }),
-      { params: { id: version.id } },
+      { params: Promise.resolve({ id: version.id }) },
     );
     expect(withPolicy.status).toBe(403);
   });
@@ -208,7 +208,7 @@ describe("POST /travel/requests/[id]/submit response", () => {
     })();
 
     session(fx.advisor);
-    const res = await submitRoute.POST(req(`http://t/api/travel/requests/${request.id}/submit`, { method: "POST" }), { params: { id: request.id } });
+    const res = await submitRoute.POST(req(`http://t/api/travel/requests/${request.id}/submit`, { method: "POST" }), { params: Promise.resolve({ id: request.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.hash).toMatch(/^[0-9a-f]{64}$/);
@@ -237,19 +237,19 @@ describe("GET /travel/documents/[id] CLIENT scoping", () => {
     });
 
     session(advisor2);
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: { id: doc.id } })).status).toBe(404);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: Promise.resolve({ id: doc.id }) })).status).toBe(404);
 
     session(fx.validator2); // not assigned to this request
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: { id: doc.id } })).status).toBe(404);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: Promise.resolve({ id: doc.id }) })).status).toBe(404);
 
     session(fx.validator); // the assigned validator
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: { id: doc.id } })).status).toBe(200);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: Promise.resolve({ id: doc.id }) })).status).toBe(200);
 
     session(fx.advisor); // owner
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: { id: doc.id } })).status).toBe(200);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: Promise.resolve({ id: doc.id }) })).status).toBe(200);
 
     session(fx.admin);
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: { id: doc.id } })).status).toBe(200);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${doc.id}`), { params: Promise.resolve({ id: doc.id }) })).status).toBe(200);
     expect(request.packageCode).toBeTruthy();
   });
 });

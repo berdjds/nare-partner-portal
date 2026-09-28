@@ -13,7 +13,8 @@ const issueBodySchema = issueSchema.extend({
 // Idempotent issuing: repeating with the same idempotencyKey (or the default
 // `issue-<versionId>`) returns the existing document with 200. Documents are
 // returned as public views — never with the filesystem path or render error.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const document = await retryDocument(actor, parsed.data.retryDocumentId);
       return NextResponse.json({ document: publicDocumentView(document!), retried: true });
     }
-    const { document, idempotent } = await issue(actor, params.id, parsed.data);
+    const { document, idempotent } = await issue(actor, id, parsed.data);
     return NextResponse.json({ document: publicDocumentView(document), idempotent }, { status: 200 });
   } catch (err) {
     return travelError(err, "[API /travel/versions/[id]/issue]");

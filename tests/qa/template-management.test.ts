@@ -124,7 +124,7 @@ describe("POST /travel/templates/[id]/duplicate", () => {
     });
 
     const res = await duplicateRoute.POST(req(`http://t/api/travel/templates/${source.id}/duplicate`, { method: "POST" }), {
-      params: { id: source.id },
+      params: Promise.resolve({ id: source.id }),
     });
     expect(res.status).toBe(201);
     const copy = await res.json();
@@ -135,7 +135,7 @@ describe("POST /travel/templates/[id]/duplicate", () => {
     expect(copy.versions[0].scenariosJson).toContain("Option A");
 
     const res2 = await duplicateRoute.POST(req(`http://t/api/travel/templates/${source.id}/duplicate`, { method: "POST" }), {
-      params: { id: source.id },
+      params: Promise.resolve({ id: source.id }),
     });
     expect(res2.status).toBe(201);
     expect((await res2.json()).code).toBe("DUP-S26-0101A-COPY-2");
@@ -144,13 +144,13 @@ describe("POST /travel/templates/[id]/duplicate", () => {
   it("404 for unknown template, 403 for non-ADMIN", async () => {
     session(fx.admin);
     const missing = await duplicateRoute.POST(req("http://t/api/travel/templates/nope/duplicate", { method: "POST" }), {
-      params: { id: "nope" },
+      params: Promise.resolve({ id: "nope" }),
     });
     expect(missing.status).toBe(404);
 
     session(fx.validator);
     const forbidden = await duplicateRoute.POST(req("http://t/api/travel/templates/x/duplicate", { method: "POST" }), {
-      params: { id: "x" },
+      params: Promise.resolve({ id: "x" }),
     });
     expect(forbidden.status).toBe(403);
   });
@@ -169,20 +169,20 @@ describe("DELETE /travel/templates/[id]", () => {
 
     session(fx.advisor);
     const forbidden = await templateByIdRoute.DELETE(req(`http://t/api/travel/templates/${template.id}`, { method: "DELETE" }), {
-      params: { id: template.id },
+      params: Promise.resolve({ id: template.id }),
     });
     expect(forbidden.status).toBe(403);
 
     session(fx.admin);
     const res = await templateByIdRoute.DELETE(req(`http://t/api/travel/templates/${template.id}`, { method: "DELETE" }), {
-      params: { id: template.id },
+      params: Promise.resolve({ id: template.id }),
     });
     expect(res.status).toBe(200);
     expect(await prisma.packageTemplate.findUnique({ where: { id: template.id } })).toBeNull();
     expect(await prisma.templateVersion.count({ where: { templateId: template.id } })).toBe(0);
 
     const again = await templateByIdRoute.DELETE(req(`http://t/api/travel/templates/${template.id}`, { method: "DELETE" }), {
-      params: { id: template.id },
+      params: Promise.resolve({ id: template.id }),
     });
     expect(again.status).toBe(404);
   });
@@ -200,13 +200,13 @@ describe("DELETE /travel/requests/[id]", () => {
     const { request } = await deletableRequest();
     session(fx.advisor);
     const forbidden = await requestByIdRoute.DELETE(req(`http://t/api/travel/requests/${request.id}`, { method: "DELETE" }), {
-      params: { id: request.id },
+      params: Promise.resolve({ id: request.id }),
     });
     expect(forbidden.status).toBe(403);
 
     session(fx.admin);
     const missing = await requestByIdRoute.DELETE(req("http://t/api/travel/requests/nope", { method: "DELETE" }), {
-      params: { id: "nope" },
+      params: Promise.resolve({ id: "nope" }),
     });
     expect(missing.status).toBe(404);
   });
@@ -217,7 +217,7 @@ describe("DELETE /travel/requests/[id]", () => {
 
     session(fx.admin);
     const res = await requestByIdRoute.DELETE(req(`http://t/api/travel/requests/${request.id}`, { method: "DELETE" }), {
-      params: { id: request.id },
+      params: Promise.resolve({ id: request.id }),
     });
     expect(res.status).toBe(200);
 

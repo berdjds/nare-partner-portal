@@ -66,7 +66,7 @@ describe("calculation trace rows", () => {
     const { version } = await draftVersion();
     session(fx.advisor);
     const res = await calculateRoute.POST(post(`http://localhost/api/travel/versions/${version.id}/calculate`, {}), {
-      params: { id: version.id },
+      params: Promise.resolve({ id: version.id }),
     });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -91,7 +91,7 @@ describe("calculation trace rows", () => {
     const { request } = await draftVersion();
     session(fx.advisor);
     const res = await requestByIdRoute.GET(new NextRequest(`http://localhost/api/travel/requests/${request.id}`), {
-      params: { id: request.id },
+      params: Promise.resolve({ id: request.id }),
     });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -106,7 +106,7 @@ describe("calculation trace rows", () => {
 
     session(fx.advisor);
     const res = await requestByIdRoute.GET(new NextRequest(`http://localhost/api/travel/requests/${request.id}`), {
-      params: { id: request.id },
+      params: Promise.resolve({ id: request.id }),
     });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -127,7 +127,7 @@ describe("calculation trace rows", () => {
     // The assigned validator (full-costing role) sees the same frozen rows.
     session(fx.validator);
     const resV = await requestByIdRoute.GET(new NextRequest(`http://localhost/api/travel/requests/${request.id}`), {
-      params: { id: request.id },
+      params: Promise.resolve({ id: request.id }),
     });
     const bodyV = await resV.json();
     expect(bodyV.versions[0].scenarios[0].traceRows?.length).toBe(scenario.traceRows.length);

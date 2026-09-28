@@ -17,8 +17,9 @@ const updateTemplateVersionSchema = z.object({
 // content (templateLength) so the request-dialog picker stays accurate.
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string; versionId: string } },
+  { params }: { params: Promise<{ id: string; versionId: string }> },
 ) {
+  const { id, versionId } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -33,10 +34,10 @@ export async function PUT(
 
   try {
     const version = await prisma.templateVersion.findUnique({
-      where: { id: params.versionId },
+      where: { id: versionId },
       include: { template: true },
     });
-    if (!version || version.templateId !== params.id) {
+    if (!version || version.templateId !== id) {
       return NextResponse.json({ error: "Template version not found" }, { status: 404 });
     }
 
