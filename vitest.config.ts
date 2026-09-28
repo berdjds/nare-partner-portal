@@ -5,6 +5,11 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, ".") },
   },
+  // The base tsconfig preserves JSX for Next.js; tests import .tsx page
+  // modules, which Vite's oxc transform would then leave uncompiled (the SSR
+  // import-analysis parse rejects raw JSX). Point vitest at a test tsconfig
+  // that compiles JSX with the automatic runtime instead (see file).
+  tsconfig: "tsconfig.test.json",
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],

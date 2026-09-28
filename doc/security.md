@@ -33,7 +33,7 @@ The Socket.io server and `/api/socket` headers allow all origins (`*`). For prod
 
 - API routes use Zod schemas for incoming request bodies.
 - File uploads (media messages) are saved with random UUID filenames but should be validated for size and type before deployment.
-- Uploaded media is served from `/uploads/` under `public/uploads/`. Consider adding authentication or moving uploads outside the public directory in production.
+- Uploaded media is served from `/uploads/` under `public/uploads/`. Since W1 these URLs are authenticated by the custom server (see "Interim access policy" below); before W1 they were publicly reachable.
 
 ### Rate Limiting
 
@@ -64,6 +64,53 @@ costing. Non-owner advisors are unchanged: they are 404'd from other people's re
 would see only sell-side fields if redaction ever applied. INTERNAL PDFs remain invisible to
 advisors (including owners).
 
+## Interim access policy (until W2)
+
+Implemented in `lib/access-policy.ts` and applied across pages, APIs and media serving.
+Documented here as the interim policy; W2 is expected to grant inbox access per user.
+
+**Roles.**
+
+- `canUseInbox(role)`: **ADMIN** or **USER** — may open the WhatsApp chat inbox.
+- `canAdministerWhatsApp(role)`: **ADMIN** — full WhatsApp status details and reconnect/logout.
+- **ADVISOR** and **VALIDATOR** are travel-only until W2.
+
+**Trust boundary.** Every gate reloads the user from the database on each request: the user
+must exist and be active, and the *current* database role decides. The role stored in the JWT
+at login is never consulted, so a deactivation or role change takes effect on the next
+request, with the same unexpired session token. A deactivated or deleted user gets **401**
+(their credential is revoked, not merely under-privileged).
+
+**Pages** (`app/page.tsx`, `app/dashboard/page.tsx`): ADVISOR/VALIDATOR are redirected to
+`/travel`; the dashboard additionally requires an inbox role (non-inbox roles → `/travel`,
+unknown/inactive sessions → `/login`). ADMIN continues to `/admin`, USER to `/dashboard`.
+
+**Chat APIs** (`/api/chats`, `/api/messages`, `/api/send`): **401** without a session and for
+deactivated users; **403** for active ADVISOR/VALIDATOR; ADMIN/USER proceed.
+
+**WhatsApp status** (`/api/whatsapp/status`): GET returns full details (`state`, `info`,
+pairing `qrSvg`, `version`, `startedAt`) to ADMIN only; USER receives only
+`{ "connected": boolean }` (availability as connected/not connected); other roles get 403.
+POST (reconnect/logout) stays ADMIN-only. The dashboard badge shows the raw connection state
+to admins and only connected/not connected to other inbox users.
+
+**Media** (`/uploads/*`, served by `lib/uploads.ts` mounted in `server.ts` before the Next.js
+handler): the pathname is percent-decoded, slash-collapsed and normalized before matching
+(`routeUploadsRequest`), so encoded spellings of `/uploads` (`/%75ploads/…`, `/uploads%2F…`,
+`//uploads/…`) are intercepted too instead of being served unsigned by Next's decoded
+public/ lookup; undecodable URLs get **400** and non-GET/HEAD methods **405**. The gate
+itself requires a valid, unexpired NextAuth session cookie (`next-auth/jwt` decode with
+`NEXTAUTH_SECRET`), an active inbox-role user from the database, and a normalized path inside
+`public/uploads/`. Responses stream the file with its mime type and
+`Cache-Control: private, no-store`. Otherwise: **401** (no/invalid/expired/revoked session),
+**403** (active non-inbox role), **404** (traversal or missing file). Existing and missing
+files are indistinguishable to unauthorized callers — file existence is never leaked.
+
+**Known gaps carried to W2.** The Socket.io channel (`/api/socket`) still accepts any
+connection (CORS `*`) and broadcasts `whatsapp_state` (including the pairing QR) and message
+events to every connected client without a per-socket role check; clients only hide what they
+do not render. Rate limiting and media size/type validation are still open (see below).
+
 ## Security Checklist Before Production
 
 - [ ] Upgrade all dependencies and resolve `npm audit` findings.
@@ -71,6 +118,6 @@ advisors (including owners).
 - [ ] Serve over HTTPS with a valid certificate.
 - [ ] Restrict CORS origins.
 - [ ] Add rate limiting and input size limits.
-- [ ] Move uploaded media outside `public/` or protect `/uploads/`.
+- [x] Protect `/uploads/` (W1: authenticated streaming via the custom server — see "Interim access policy"; media stays under `public/uploads/`).
 - [ ] Back up `.wwebjs_auth/` securely.
 - [ ] Review Puppeteer sandbox settings for your hosting environment.

@@ -2,7 +2,7 @@
 
 ## Authentication
 
-All API routes except the NextAuth endpoints require an active session cookie. Routes that require admin access check `session.user.role === "ADMIN"`.
+All API routes except the NextAuth endpoints require an active session cookie. Role checks follow the interim W1 access policy (`lib/access-policy.ts`, see `doc/security.md`): the user is re-loaded from the database on every request and the current role decides, so deactivation or a role change takes effect on the next request. Admin-only routes check the database role, not the JWT.
 
 ## HTTP Routes
 
@@ -26,7 +26,7 @@ Standard NextAuth.js endpoints. The credentials provider accepts:
 
 Returns all chats ordered by most recent message.
 
-**Access**: Any authenticated user.
+**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
 
 **Response**:
 
@@ -58,7 +58,7 @@ Returns all chats ordered by most recent message.
 
 Returns messages for a chat.
 
-**Access**: Any authenticated user.
+**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
 
 **Query parameters**:
 - `chatId` — Chat ID (preferred)
@@ -96,7 +96,7 @@ At least one parameter is required.
 
 Sends a WhatsApp message. Can be used to start a new chat with an unsaved number.
 
-**Access**: Any authenticated user.
+**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
 
 **Request body**:
 
@@ -119,7 +119,7 @@ For text messages to a new number, only `remoteJid`, `body`, and `type` are requ
 { "ok": true }
 ```
 
-Error responses include status `401` (unauthorized), `503` (WhatsApp not ready), and `500` (send failure).
+Error responses include status `401` (unauthorized), `403` (travel-only roles), `503` (WhatsApp not ready), and `500` (send failure).
 
 ### WhatsApp Status
 
@@ -127,23 +127,35 @@ Error responses include status `401` (unauthorized), `503` (WhatsApp not ready),
 
 Returns the current WhatsApp connection state.
 
-**Access**: Any authenticated user.
+**Access**: ADMIN (full details) or USER (`connected` only), both from the current database role. Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
 
-**Response**:
+**Response (ADMIN)**:
 
 ```json
 {
   "state": "ready",
   "qrSvg": null,
-  "info": "WhatsApp client is ready."
+  "info": "WhatsApp client is ready.",
+  "version": "0.16.2",
+  "startedAt": "2026-09-28T00:00:00.000Z"
 }
 ```
+
+`qrSvg` carries the pairing QR code while unpaired — ADMIN only.
+
+**Response (USER)**:
+
+```json
+{ "connected": true }
+```
+
+Availability strictly as connected/not connected; no state text, info, QR, version or uptime.
 
 #### POST /api/whatsapp/status
 
 Performs an admin action on the WhatsApp session.
 
-**Access**: Admin only.
+**Access**: Admin only (current database role; everyone else gets 401).
 
 **Request body**:
 
@@ -156,6 +168,23 @@ or
 ```json
 { "action": "reconnect" }
 ```
+
+### Media
+
+#### GET /uploads/\<file\>
+
+Streams an uploaded message media file (stored under `public/uploads/`).
+
+**Access**: Served by the custom server (`server.ts` → `lib/uploads.ts`), which intercepts
+`/uploads/*` before Next.js's static handler. The pathname is percent-decoded, slash-collapsed
+and normalized before matching, so encoded spellings (`/%75ploads/…`, `/uploads%2F…`) are gated
+too; GET/HEAD only, other methods get `405`. Requires a valid, unexpired NextAuth session
+cookie plus an active ADMIN/USER database role. Responses carry the file's mime type and
+`Cache-Control: private, no-store`.
+
+**Errors**: `400` (undecodable URL), `401` (no, invalid, expired or revoked session),
+`403` (active non-inbox role), `404` (traversal or missing file), `405` (non-GET/HEAD method).
+Existing and missing files are indistinguishable to unauthorized callers.
 
 ### Users
 

@@ -252,8 +252,14 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
           <Badge className="hidden sm:inline-flex" variant={connected ? "default" : "destructive"}>
             {connected ? "Socket connected" : "Socket offline"}
           </Badge>
+          {/* Interim W1 policy: non-admins see availability only as
+              connected/not connected, never the raw connection state. */}
           <Badge variant={whatsAppState?.state === "ready" ? "default" : "outline"}>
-            {whatsAppState?.state || "initializing"}
+            {isAdmin
+              ? whatsAppState?.state || "initializing"
+              : whatsAppState?.state === "ready"
+                ? "Connected"
+                : "Not connected"}
           </Badge>
           <Button variant="ghost" size="icon" onClick={() => signOut({ callbackUrl: "/login" })}>
             <LogOut className="h-4 w-4" />
@@ -377,7 +383,11 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
               <Phone className="mb-2 h-12 w-12 opacity-20" />
               <p>Select a chat to start messaging</p>
               {whatsAppState?.state !== "ready" && (
-                <p className="mt-2 text-sm">WhatsApp state: {whatsAppState?.state || "initializing"}</p>
+                <p className="mt-2 text-sm">
+                  {isAdmin
+                    ? `WhatsApp state: ${whatsAppState?.state || "initializing"}`
+                    : "WhatsApp not connected"}
+                </p>
               )}
             </div>
           )}

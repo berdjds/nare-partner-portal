@@ -63,6 +63,8 @@ The application uses a custom server entry point (`server.ts`) instead of the de
 
 ```
 HTTP Server
+├── GET/HEAD /uploads/* → lib/uploads.ts (authenticated media streaming,
+│   intercepted before the Next.js static handler)
 ├── Next.js request handler
 └── Socket.io server (path: /api/socket)
     └── WhatsApp service events (message, chat_update, whatsapp_state)
