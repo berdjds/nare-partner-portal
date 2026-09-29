@@ -9,11 +9,11 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 - **Send to new numbers** — start a chat and send messages to unsaved phone numbers from the dashboard.
 - **Text, image, voice, document** — send and view media messages.
 - **Admin panel** — manage WhatsApp connection, users, and logs.
-- **Role-based login** — admin and regular users.
+- **Role-based login** — ADMIN/USER run the WhatsApp chat inbox; ADVISOR/VALIDATOR run the B2B travel module.
 
 ## Stack
 
-- Next.js 14 App Router + TypeScript
+- Next.js 15 (App Router) + React 19 + TypeScript
 - TailwindCSS + shadcn/ui-style components
 - NextAuth (credentials) for authentication
 - Prisma + SQLite
@@ -48,7 +48,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 ## Important notes
 
 - **WhatsApp Web is not an official API.** Using it may violate WhatsApp's Terms of Service and can lead to account restrictions. For production, consider the official [WhatsApp Business Platform / Cloud API](https://business.whatsapp.com/products/business-platform).
-- **Real-time messages only.** The dashboard receives messages that arrive while the WhatsApp session is `ready`. Historical messages that were sent or received before the session connected are not backfilled.
+- **Real-time messages, plus a bounded backfill.** The dashboard receives messages that arrive while the WhatsApp session is `ready`; right after connecting, the app also backfills at most the 20 most recent chats × 50 messages each. Anything older is not captured.
 - **Your phone must be online.** The phone does not need to be open or in the foreground, but it must have an active internet connection to keep the WhatsApp Web session alive.
 - The first startup downloads a Chromium browser for Puppeteer. On Linux servers you may need to install additional system dependencies.
 - Keep `.wwebjs_auth/`, `.wwebjs_cache/`, `.env`, and the SQLite database secret — they contain the WhatsApp session and admin credentials.
@@ -70,3 +70,4 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 - `npm run start` — run the production server
 - `npm run db:push` — apply the Prisma schema
 - `npm run db:seed` — seed the admin user
+- `npm test` — run the Vitest test suite (also runs in CI before every deploy)

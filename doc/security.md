@@ -2,18 +2,74 @@
 
 ## Known Risks
 
-### Dependency Vulnerabilities
+### Dependency advisory register (W1, updated 2026-09-29)
 
-The project currently depends on older package versions with known security advisories:
+W1 moved the smallest set of dependencies that removes every critical/high
+advisory reachable in this deployment. Entries are grounded in the installed
+dependency tree (`package-lock.json`) and in how each package is actually
+used in this codebase. Re-run `npm audit` after any dependency change.
 
-- `next` 14.0.4 — multiple critical advisories (SSRF, cache poisoning, authorization bypass, XSS).
-- `@auth/core` via `next-auth` / `@auth/prisma-adapter` — critical authentication advisories.
-- `sharp` <0.35.0 — libvips CVEs.
-- `puppeteer` → `tar-fs`, `ws` — path traversal and DoS.
-- `postcss` via `next` — XSS / arbitrary file read.
-- `cookie` <0.7.0 — OOB cookie characters.
+**Resolved in W1 (target phase reached):**
 
-Run `npm audit` and upgrade dependencies before production use.
+- **`next` 14.0.4 → 15.5.26** — middleware authorization bypass via the
+  `x-middleware-subrequest` header
+  ([CVE-2025-29927](https://github.com/advisories/GHSA-f82v-jwr5-mffw)) and
+  the 2024 critical batch on the 14.x line, incl. Server-Actions SSRF
+  ([CVE-2024-34351](https://github.com/advisories/GHSA-fr5h-rqp8-mj6g)) and
+  cache poisoning
+  ([CVE-2024-46982](https://github.com/advisories/GHSA-gp8f-8m3g-qvj9)).
+  Fully reachable pre-fix (the app serves sessions and API routes through
+  Next.js); fixed by the upgrade.
+- **`@auth/core` / `@auth/prisma-adapter`** — the critical Auth.js v5-line
+  advisories this stack used to pull. `@auth/prisma-adapter` is no longer a
+  dependency and the app authenticates with next-auth v4 (credentials + JWT),
+  which never loads `@auth/core`. The `0.34.3` copy still in the tree exists
+  only as next-auth's optional peer (never imported) and is the sole reason a
+  stale top-level `cookie@0.6.0` copy remains.
+- **`sharp` <0.35.0 (bundled libvips CVEs)** — the optional dependency now
+  resolves to `0.35.5`, and the image optimizer is never exercised anyway:
+  `images.unoptimized: true` in `next.config.js` and no `next/image` usage.
+- **`puppeteer` → `ws`** — DoS via excessive HTTP headers
+  ([CVE-2024-37890](https://github.com/advisories/GHSA-3h5v-q93c-6p6p), fixed
+  ≥8.17.1). `ws` is pinned by the `overrides` block to `^8.21.3` (installed
+  `8.22.0`); the reachable surface (the Socket.io server) is patched.
+- **`postcss` (via `next`)** — line-return parsing error
+  ([CVE-2023-44270](https://www.cve.org/CVERecord?id=CVE-2023-44270), fixed
+  ≥8.4.31). Now a direct devDependency at `8.5.28` plus an
+  `overrides.next.postcss` pin; build-time only.
+- **`cookie` <0.7.0** — out-of-bounds cookie characters
+  ([CVE-2024-47764](https://github.com/advisories/GHSA-pxg6-pf52-xh8x), fixed
+  0.7.0). The copies the app actually loads (next-auth, engine.io) are
+  `0.7.2`; the only `0.6.0` copy belongs to the unused `@auth/core` peer
+  above.
+- **`axios` (declared `^1.6.3`, installed `1.19.0`)** — SSRF via spoofed
+  `X-Forwarded-For`
+  ([CVE-2024-39338](https://github.com/advisories/GHSA-8hc4-vh64-cxmj)) and
+  absolute-URL base/proxy bypass
+  ([CVE-2025-27152](https://github.com/advisories/GHSA-jr5f-v2jv-69x4)). Both
+  are server-side impact classes; axios is only imported by client components
+  in this repo, and the installed tree is patched anyway.
+
+**Present but not reachable (accepted for W1):**
+
+- **`puppeteer` → `tar-fs` 3.0.4 (installed)** — both tar-fs advisories are
+  still in the tree: tar-extraction path traversal
+  ([CVE-2025-48387](https://www.cve.org/CVERecord?id=CVE-2025-48387), fixed
+  in tar-fs 3.0.9; 2.1.3 / 1.16.5 on the older lines) and symlink-following
+  arbitrary file overwrite
+  ([CVE-2024-12905](https://www.cve.org/CVERecord?id=CVE-2024-12905), fixed
+  in tar-fs 3.0.7). Both live in tar-fs's extraction path, which only runs
+  when `@puppeteer/browsers` downloads a browser — this deployment never
+  does: Docker sets `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true` with the system
+  Chromium (`Dockerfile:4`), CI skips the download
+  (`.github/workflows/ci-cd.yml:20`), and the travel PDF renderer only
+  launches an executable (`lib/travel/pdf/render.ts:29`). Removal target:
+  W2 dependency pass.
+
+**Carried forward:** keep `npm audit` clean whenever dependencies are
+touched (ongoing, next dependency-changing phase). The residual `@auth/core`
+optional peer and its `cookie@0.6.0` artifact disappear when next-auth is
+next upgraded or the peer is dropped — target: W2 dependency pass.
 
 ### Credentials and Secrets
 
