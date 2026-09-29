@@ -9,6 +9,8 @@
 #   STUB_INSPECT_IMAGE=<ref>   image ref of the app container
 #   STUB_APP_ID=<id>           id of the app container
 #   STUB_PS_IDS="<ids...>"     output of `docker ps -q`
+#   STUB_APP_SHORT_ID=<id>    abbreviated app id from default `docker ps -q`
+#   STUB_APP_MOUNTS=<paths>   mounts returned when inspecting that short id
 #   STUB_OTHER_ID=<id>         id of another running container
 #   STUB_OTHER_MOUNTS=<paths>  mount sources of that container (one per line)
 #   STUB_FAIL_EXEC_ON="<c>:<substr> ..."
@@ -42,7 +44,11 @@ case "$cmd" in
   ps)
     if [ "${1:-}" = "-q" ]; then
       # Intentional word splitting: STUB_PS_IDS holds one id per word.
-      printf '%s\n' ${STUB_PS_IDS:-"${STUB_APP_ID:-aaa111}"}
+      if [ "${2:-}" = "--no-trunc" ]; then
+        printf '%s\n' ${STUB_PS_FULL_IDS:-${STUB_PS_IDS:-${STUB_APP_ID:-aaa111}}}
+      else
+        printf '%s\n' ${STUB_PS_IDS:-${STUB_APP_SHORT_ID:-${STUB_APP_ID:-aaa111}}}
+      fi
     fi
     exit 0
     ;;
@@ -63,6 +69,8 @@ case "$cmd" in
         *Mounts*)
           if [ "$target" = "${STUB_OTHER_ID:-}" ]; then
             printf '%s\n' "${STUB_OTHER_MOUNTS:-}"
+          elif [ -n "${STUB_APP_SHORT_ID:-}" ] && [ "$target" = "$STUB_APP_SHORT_ID" ]; then
+            printf '%s\n' "${STUB_APP_MOUNTS:-}"
           fi
           ;;
       esac

@@ -427,6 +427,19 @@ describe("scripts/restore-backup.sh", () => {
     expect(ctx.stdout).toContain("not the failed candidate");
   });
 
+  it("does not mistake the running app's short Docker ID for another restore writer", () => {
+    const { appRoot, archive, exportFile } = setupRestoreFixture();
+    writeFileSync(exportFile, JSON.stringify({ tables: {}, counts: {}, totalRows: 0 }));
+    const ctx = runRestore([archive, "--yes"], appRoot, {
+      STUB_APP_ID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+      STUB_APP_SHORT_ID: "abcdef123456",
+      STUB_APP_MOUNTS: path.join(appRoot, "wacontrol-data"),
+    });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    expect(ctx.dockerLog).toContain("ps -q --no-trunc");
+    expectBackupMarkers(appRoot);
+  });
+
   it("refuses when the restore image is missing", () => {
     const { appRoot, archive, exportFile } = setupRestoreFixture();
     writeFileSync(exportFile, JSON.stringify({ tables: {}, counts: {}, totalRows: 0 }));

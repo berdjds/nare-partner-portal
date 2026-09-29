@@ -157,7 +157,7 @@ assert_no_other_data_mounts() {
   if docker inspect "$APP_CONTAINER" >/dev/null 2>&1; then
     app_id="$(docker inspect -f '{{.Id}}' "$APP_CONTAINER" 2>/dev/null || true)"
   fi
-  running="$(docker ps -q)"
+  running="$(docker ps -q --no-trunc)"
   while IFS= read -r c; do
     if [ -z "$c" ] || [ "$c" = "$app_id" ]; then
       continue

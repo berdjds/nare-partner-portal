@@ -183,6 +183,18 @@ describe("scripts/vps-deploy.sh", () => {
     expectNoAutomaticRestore(ctx);
   });
 
+  it("does not mistake the running app's short Docker ID for another writer", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      STUB_APP_ID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+      STUB_APP_SHORT_ID: "abcdef123456",
+      STUB_APP_MOUNTS: "{APP_ROOT}/wacontrol-data",
+    });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    expect(ctx.dockerLog).toContain("ps -q --no-trunc");
+    expect(ctx.stdout).toContain("no other container mounts the data dirs");
+  });
+
   it("success: candidate whose first cutover probe fails but serves on a later probe deploys without rollback", () => {
     const appRoot = setupAppRoot();
     // The entrypoint runs `prisma db push` and boots Next before port 3000
