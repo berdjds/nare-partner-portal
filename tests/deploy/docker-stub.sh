@@ -3,7 +3,8 @@
 # Every invocation is appended to $STUB_LOG (one line, space-joined args);
 # behavior is driven by STUB_* environment variables:
 #   STUB_FAIL_BUILD=1          `docker build` exits 1
-#   STUB_CONTAINER_MISSING=1   `docker inspect <name>` (no -f) exits 1
+#   STUB_CONTAINER_MISSING=1   `docker inspect <name>` / `docker image inspect
+#                              <ref>` (no -f) exits 1
 #   STUB_INSPECT_RUNNING=false the app container is not running
 #   STUB_INSPECT_IMAGE=<ref>   image ref of the app container
 #   STUB_APP_ID=<id>           id of the app container
@@ -21,6 +22,13 @@ printf '%s\n' "$*" >> "${STUB_LOG:?STUB_LOG is required}"
 
 cmd="${1:-}"
 if [ -n "$cmd" ]; then
+  shift
+fi
+
+# `docker image inspect <ref>` is the image-only form of `docker inspect`;
+# both feed the inspect handling below.
+if [ "$cmd" = "image" ] && [ "${1:-}" = "inspect" ]; then
+  cmd="inspect"
   shift
 fi
 
