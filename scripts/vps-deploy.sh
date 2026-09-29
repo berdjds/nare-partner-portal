@@ -108,8 +108,7 @@ container_login_ok() {
 
 wait_for_login() {
   local container="$1"
-  local attempt
-  for attempt in $(seq 1 "$HEALTH_RETRIES"); do
+  for _ in $(seq 1 "$HEALTH_RETRIES"); do
     if container_login_ok "$container"; then
       return 0
     fi

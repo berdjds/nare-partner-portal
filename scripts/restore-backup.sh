@@ -258,8 +258,7 @@ container_login_ok() {
 }
 
 wait_for_login() {
-  local attempt
-  for attempt in $(seq 1 "$HEALTH_RETRIES"); do
+  for _ in $(seq 1 "$HEALTH_RETRIES"); do
     if container_login_ok "$APP_CONTAINER"; then
       return 0
     fi
