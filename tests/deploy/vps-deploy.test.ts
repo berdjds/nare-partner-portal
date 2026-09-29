@@ -274,6 +274,26 @@ describe("scripts/vps-deploy.sh", () => {
     expectNoAutomaticRestore(ctx);
   });
 
+  it("rolls back when the first cutover seed fails, even if the second would succeed", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, { STUB_FAIL_FIRST: "wacontrol-app:db:seed:1" });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("CUTOVER FAILED: bootstrap seeds failed after cutover");
+    expect(ctx.stdout + ctx.stderr).toContain("rollback OK");
+    expect(ctx.dockerLog).not.toContain(`exec ${APP_CONTAINER} npx tsx scripts/seed-travel-catalog.ts`);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("aborts trial A when the first bootstrap seed fails", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, { STUB_FAIL_EXEC_ON: "wacontrol-trial-a:db:seed" });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("TRIAL A failed");
+    expect(ctx.dockerLog).not.toContain("exec wacontrol-trial-a npx tsx scripts/seed-travel-catalog.ts");
+    expect(ctx.dockerLog).not.toContain("tag wacontrol:candidate wacontrol:latest");
+    expectNoAutomaticRestore(ctx);
+  });
+
   it("cutover failure with ROLLBACK_COMPATIBLE=yes: rolls back to previous on the current data", () => {
     const appRoot = setupAppRoot();
     // The candidate fails every health-check retry; only after the rollback

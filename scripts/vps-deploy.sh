@@ -123,8 +123,8 @@ run_bootstrap_seeds() {
   # is populated); failures must be loud — a silently skipped seed once left
   # the production catalog empty.
   local container="$1"
-  docker exec "$container" npm run db:seed < /dev/null
-  docker exec "$container" npx tsx scripts/seed-travel-catalog.ts < /dev/null
+  docker exec "$container" npm run db:seed < /dev/null || return 1
+  docker exec "$container" npx tsx scripts/seed-travel-catalog.ts < /dev/null || return 1
 }
 
 write_trial_compose_file() {
