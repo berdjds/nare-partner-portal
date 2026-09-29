@@ -123,8 +123,8 @@ run_bootstrap_seeds() {
   # is populated); failures must be loud — a silently skipped seed once left
   # the production catalog empty.
   local container="$1"
-  docker exec "$container" npm run db:seed < /dev/null
-  docker exec "$container" npx tsx scripts/seed-travel-catalog.ts < /dev/null
+  docker exec "$container" npm run db:seed < /dev/null || return 1
+  docker exec "$container" npx tsx scripts/seed-travel-catalog.ts < /dev/null || return 1
 }
 
 write_trial_compose_file() {
@@ -209,7 +209,7 @@ assert_exclusive_data_mounts() {
   if docker inspect "$APP_CONTAINER" >/dev/null 2>&1; then
     app_id="$(docker inspect -f '{{.Id}}' "$APP_CONTAINER" 2>/dev/null || true)"
   fi
-  running="$(docker ps -q)"
+  running="$(docker ps -q --no-trunc)"
   while IFS= read -r c; do
     if [ -z "$c" ] || [ "$c" = "$app_id" ]; then
       continue

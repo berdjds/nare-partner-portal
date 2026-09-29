@@ -183,6 +183,18 @@ describe("scripts/vps-deploy.sh", () => {
     expectNoAutomaticRestore(ctx);
   });
 
+  it("does not mistake the running app's short Docker ID for another writer", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      STUB_APP_ID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+      STUB_APP_SHORT_ID: "abcdef123456",
+      STUB_APP_MOUNTS: "{APP_ROOT}/wacontrol-data",
+    });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    expect(ctx.dockerLog).toContain("ps -q --no-trunc");
+    expect(ctx.stdout).toContain("no other container mounts the data dirs");
+  });
+
   it("success: candidate whose first cutover probe fails but serves on a later probe deploys without rollback", () => {
     const appRoot = setupAppRoot();
     // The entrypoint runs `prisma db push` and boots Next before port 3000
@@ -259,6 +271,26 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("deploy finished successfully");
     expect(ctx.dockerLog).toContain("-p wacontrol-trial-b");
     expect(ctx.dockerLog).toContain(`compose -f ${path.join(appRoot, "docker-compose.yml")} up -d wacontrol_app`);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("rolls back when the first cutover seed fails, even if the second would succeed", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, { STUB_FAIL_FIRST: "wacontrol-app:db:seed:1" });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("CUTOVER FAILED: bootstrap seeds failed after cutover");
+    expect(ctx.stdout + ctx.stderr).toContain("rollback OK");
+    expect(ctx.dockerLog).not.toContain(`exec ${APP_CONTAINER} npx tsx scripts/seed-travel-catalog.ts`);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("aborts trial A when the first bootstrap seed fails", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, { STUB_FAIL_EXEC_ON: "wacontrol-trial-a:db:seed" });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("TRIAL A failed");
+    expect(ctx.dockerLog).not.toContain("exec wacontrol-trial-a npx tsx scripts/seed-travel-catalog.ts");
+    expect(ctx.dockerLog).not.toContain("tag wacontrol:candidate wacontrol:latest");
     expectNoAutomaticRestore(ctx);
   });
 
