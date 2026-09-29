@@ -197,8 +197,9 @@ validate_archive_members() {
         ;;
     esac
   done < <(tar -tzf "$ARCHIVE")
-  [ "$seen_data" -eq 1 ] && [ "$seen_uploads" -eq 1 ] && [ "$seen_auth" -eq 1 ] \
-    || die "archive does not contain all three data dirs (wacontrol-data, wacontrol-uploads, wacontrol-auth)"
+  if [ "$seen_data" -ne 1 ] || [ "$seen_uploads" -ne 1 ] || [ "$seen_auth" -ne 1 ]; then
+    die "archive does not contain all three data dirs (wacontrol-data, wacontrol-uploads, wacontrol-auth)"
+  fi
 }
 
 assert_no_other_data_mounts
