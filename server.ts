@@ -5,6 +5,7 @@ import { initializeWhatsApp, setSocketServer } from "./lib/whatsapp";
 import { socketAllowRequest } from "./lib/socket-auth";
 import { startNotificationWorker, sweepOverdueValidations } from "./lib/travel/notifications";
 import { handleUploadsRequest, routeUploadsRequest } from "./lib/uploads";
+import { resolveServerRuntime } from "./lib/server-mode";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
@@ -69,21 +70,39 @@ app.prepare().then(async () => {
 
   setSocketServer(io);
 
-  setTimeout(() => {
-    initializeWhatsApp().catch((err) => {
-      console.error("[WhatsApp] initialization error:", err);
-    });
-  }, 2000);
+  // Deploy gate (scripts/vps-deploy.sh): WACONTROL_MODE=trial serves HTTP only
+  // — no WhatsApp client, no notification worker, no overdue sweep — so a
+  // candidate build can run against a copy of production data. HTTP, sockets
+  // and the media gate above stay live; that is what the trial health check
+  // verifies. WACONTROL_NOTIFICATIONS_PAUSED=1 stops only the worker.
+  const runtime = resolveServerRuntime();
+
+  if (runtime.whatsapp) {
+    setTimeout(() => {
+      initializeWhatsApp().catch((err) => {
+        console.error("[WhatsApp] initialization error:", err);
+      });
+    }, 2000);
+  } else {
+    console.log("[Server] trial mode: WhatsApp client not started");
+  }
 
   // Travel module: async delivery of queued workflow notifications (email +
   // WhatsApp). DB-backed outbox, so the Next.js bundle and this server share
   // state through SQLite, not process memory.
-  startNotificationWorker();
-  setInterval(() => {
-    sweepOverdueValidations().catch((err) => {
-      console.error("[Travel] overdue sweep error:", err);
-    });
-  }, 60 * 60 * 1000);
+  if (runtime.notificationWorker) {
+    startNotificationWorker();
+  } else if (runtime.notificationsPaused) {
+    console.log("[Server] notifications paused: outbox worker not started");
+  }
+
+  if (runtime.overdueSweep) {
+    setInterval(() => {
+      sweepOverdueValidations().catch((err) => {
+        console.error("[Travel] overdue sweep error:", err);
+      });
+    }, 60 * 60 * 1000);
+  }
 
   httpServer
     .once("error", (err) => {

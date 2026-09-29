@@ -1,8 +1,11 @@
-#!/bin/sh
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 # Ensure the Prisma schema is applied to the SQLite database before starting.
-npm run db:push -- --accept-data-loss
+# A schema change that would destroy existing rows must abort loudly — never
+# tell the push to accept data loss (the deploy gate's trials rely on this
+# failing rather than silently dropping data).
+npm run db:push --
 
 # Clear Chromium session locks from any previous container so the browser can start.
 find /app/.wwebjs_auth -type f \( -name "SingletonLock" -o -name "SingletonSocket" -o -name "SingletonCookie" \) -delete 2>/dev/null || true
