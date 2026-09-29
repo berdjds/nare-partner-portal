@@ -263,6 +263,26 @@ Returns audit logs.
 
 Socket.io is available at path `/api/socket`.
 
+### Connection policy (W1)
+
+Since W1 the socket channel is gated exactly like the HTTP APIs (see
+`doc/security.md`, "Interim access policy"):
+
+- **Origin**: the handshake is accepted only when its `Origin` header exactly
+  equals the origin of `NEXTAUTH_URL` (plus comma-separated
+  `SOCKET_ALLOWED_ORIGINS`). Anything else — including a missing `Origin` — is
+  refused before the Socket.io handshake runs.
+- **Session**: the NextAuth session cookie is decoded (`NEXTAUTH_SECRET`) and
+  the user is loaded from the database; the socket connects only for an
+  ACTIVE `ADMIN` or `USER`. Anything else gets a `connect_error` with the
+  message `unauthorized` and never connects.
+- **Rooms**: the SERVER places each socket in `inbox` (ADMIN/USER) and ADMIN
+  sockets additionally in `admins`. No client-to-server handlers exist:
+  client-emitted events are ignored and logged.
+- **Revalidation**: the socket is disconnected when its session token expires
+  or when the periodic (60s) database re-check finds the user deactivated or
+  the role changed.
+
 ### Client Connection
 
 ```typescript
@@ -274,25 +294,41 @@ const socket = io({
 });
 ```
 
+WebSocket is listed first on purpose: the server only accepts allowed
+origins, and browsers always send the `Origin` header on WebSocket
+connections (same-origin GET polling requests may omit it).
+
 ### Server-to-Client Events
 
 #### `whatsapp_state`
 
-Sent on connection and whenever the WhatsApp state changes.
+Sent on connection and whenever the WhatsApp state changes. The payload
+depends on the socket's role (server-managed rooms):
+
+- ADMIN sockets (`admins` room) receive the full state:
 
 ```json
 {
   "state": "qr",
   "qrSvg": "<svg>...</svg>",
-  "info": "Scan the QR code with WhatsApp on your phone."
+  "info": "Scan the QR code with WhatsApp on your phone.",
+  "version": "0.16.2",
+  "startedAt": "2026-09-29T00:00:00.000Z"
 }
 ```
 
-Possible states: `initializing`, `qr`, `authenticated`, `ready`, `disconnected`, `auth_failure`.
+- Inbox-only (USER) sockets receive availability and nothing else:
+
+```json
+{ "connected": false }
+```
+
+Possible `state` values: `initializing`, `qr`, `authenticated`, `ready`, `disconnected`, `auth_failure`.
 
 #### `message`
 
-Sent when a new message is persisted.
+Sent when a new message is persisted. Delivered to the `inbox` room only
+(active ADMIN/USER sockets).
 
 ```json
 {
@@ -309,7 +345,8 @@ Sent when a new message is persisted.
 
 #### `chat_update`
 
-Sent when a chat record is created or updated.
+Sent when a chat record is created or updated. Delivered to the `inbox` room
+only.
 
 ```json
 {
@@ -322,7 +359,9 @@ Sent when a chat record is created or updated.
 
 ### Client-to-Server Events
 
-Currently, the server only emits events. Client actions should use the HTTP API.
+None. The server registers no client-to-server handlers and ignores (logs)
+anything a client emits — clients cannot join rooms, subscribe or act over the
+socket. Client actions must use the HTTP API.
 
 ---
 

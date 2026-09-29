@@ -25,9 +25,17 @@ Run `npm audit` and upgrade dependencies before production use.
 
 The `.wwebjs_auth/` directory contains the authenticated WhatsApp session. Anyone with access to it can impersonate the linked WhatsApp account. Protect it with filesystem permissions and backups.
 
-### CORS
+### CORS / Socket origins
 
-The Socket.io server and `/api/socket` headers allow all origins (`*`). For production, restrict this to your actual domain.
+The Socket.io server (`/api/socket`) no longer answers cross-origin requests: the
+`allowRequest` hook in `lib/socket-auth.ts` accepts a handshake only when its
+`Origin` header exactly matches the origin of `NEXTAUTH_URL` (plus the optional
+comma-separated `SOCKET_ALLOWED_ORIGINS`, for local development). There is no
+`Access-Control-Allow-Origin: *` response header (the `/api/socket` headers in
+`next.config.js` were removed) and a missing `Origin` header is refused too.
+On top of the origin gate, every handshake authenticates the NextAuth session
+cookie and only ACTIVE `ADMIN`/`USER` sockets connect — see "Interim access
+policy" below.
 
 ### Input Validation
 
@@ -106,17 +114,39 @@ itself requires a valid, unexpired NextAuth session cookie (`next-auth/jwt` deco
 **403** (active non-inbox role), **404** (traversal or missing file). Existing and missing
 files are indistinguishable to unauthorized callers — file existence is never leaked.
 
-**Known gaps carried to W2.** The Socket.io channel (`/api/socket`) still accepts any
-connection (CORS `*`) and broadcasts `whatsapp_state` (including the pairing QR) and message
-events to every connected client without a per-socket role check; clients only hide what they
-do not render. Rate limiting and media size/type validation are still open (see below).
+**Sockets** (`/api/socket`, wired in `server.ts` + `lib/socket-auth.ts` via
+`setSocketServer()`): the origin gate (`allowRequest`) runs before the Socket.io
+handshake, then an `io.use` middleware decodes the NextAuth session cookie
+(`next-auth/jwt` with `NEXTAUTH_SECRET`) and refuses anything missing, forged or
+expired, exactly like the media gate. The user is then loaded from the database
+and must be active with an inbox role — anonymous, ADVISOR/VALIDATOR and
+deactivated sessions get the `unauthorized` connect_error and never connect.
+The SERVER places sockets in rooms (inbox users → `inbox`, ADMIN additionally →
+`admins`); no client-to-server handlers exist and anything a client emits is
+ignored and logged (`socket.onAny`). Emits are room-scoped: `message` and
+`chat_update` go to `inbox` only; availability `{ connected: boolean }` goes to
+`inbox` only; the full `whatsapp_state` (including `info` and the pairing
+`qrSvg`) goes to `admins` only, including on connection. Two revalidation
+mechanisms run while a socket is open: it is disconnected when its token's `exp`
+passes, and every 60s the user row is reloaded — deactivation or a role change
+disconnects the socket (and room membership is re-synced with the current role),
+so logout, expiry, deactivation or demotion all cut the socket promptly. The
+client (`hooks/useSocket.ts`) stops reconnecting after an `unauthorized`
+connect_error and disconnects on sign-out.
+
+**Known limit carried to W2.** A JWT copied before logout stays valid until it
+expires (NextAuth default 30 days) — the 60s revalidation only helps while the
+user row is deactivated or demoted. Per-session revocation arrives with W2.
+
+**Rate limiting and media validation.** Still open (see below).
 
 ## Security Checklist Before Production
 
 - [ ] Upgrade all dependencies and resolve `npm audit` findings.
 - [ ] Generate strong `NEXTAUTH_SECRET` and `ADMIN_PASSWORD`.
 - [ ] Serve over HTTPS with a valid certificate.
-- [ ] Restrict CORS origins.
+- [x] Restrict CORS/socket origins (W1: exact-origin allow-list via `allowRequest` in `lib/socket-auth.ts` — see "Interim access policy").
+- [x] Authenticate and room-scope Socket.io (W1: session-cookie handshake, server-managed `inbox`/`admins` rooms, 60s + token-expiry revalidation — see "Interim access policy").
 - [ ] Add rate limiting and input size limits.
 - [x] Protect `/uploads/` (W1: authenticated streaming via the custom server — see "Interim access policy"; media stays under `public/uploads/`).
 - [ ] Back up `.wwebjs_auth/` securely.

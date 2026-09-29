@@ -66,7 +66,8 @@ HTTP Server
 ├── GET/HEAD /uploads/* → lib/uploads.ts (authenticated media streaming,
 │   intercepted before the Next.js static handler)
 ├── Next.js request handler
-└── Socket.io server (path: /api/socket)
+└── Socket.io server (path: /api/socket, origin + session gated,
+    room-scoped — lib/socket-auth.ts)
     └── WhatsApp service events (message, chat_update, whatsapp_state)
 ```
 
@@ -75,7 +76,7 @@ HTTP Server
 1. WhatsApp Web emits a `message_create` event.
 2. `lib/whatsapp.ts` receives the message, downloads media if present, and saves it to `public/uploads/`.
 3. The chat and message are upserted in Prisma.
-4. Socket.io emits `message` and `chat_update` events to connected clients.
+4. Socket.io emits `message` and `chat_update` to the authenticated `inbox` room (ADMIN/USER sockets) and the full `whatsapp_state` only to the `admins` room.
 5. The dashboard UI updates the chat list and message thread.
 
 ## Data Flow for Outgoing Messages

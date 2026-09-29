@@ -33,7 +33,7 @@ interface Log {
 }
 
 export default function AdminDashboard() {
-  const { connected, whatsAppState } = useSocket();
+  const { connected, unauthorized, whatsAppState, disconnectSocket } = useSocket();
   const { toast } = useToast();
 
   const [users, setUsers] = useState<User[]>([]);
@@ -162,7 +162,13 @@ export default function AdminDashboard() {
           <Button variant="outline" onClick={() => (window.location.href = "/travel")}>
             Travel
           </Button>
-          <Button variant="outline" onClick={() => signOut({ callbackUrl: "/login" })}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              disconnectSocket();
+              signOut({ callbackUrl: "/login" });
+            }}
+          >
             Sign out
           </Button>
         </div>
@@ -180,7 +186,7 @@ export default function AdminDashboard() {
             <CardHeader>
               <CardTitle>WhatsApp Connection</CardTitle>
               <CardDescription>
-                Socket: <Badge variant={connected ? "default" : "destructive"}>{connected ? "connected" : "offline"}</Badge>{" "}
+                Socket: <Badge variant={connected ? "default" : "destructive"}>{unauthorized ? "session expired" : connected ? "connected" : "offline"}</Badge>{" "}
                 State: <Badge variant={whatsAppState?.state === "ready" ? "default" : "outline"}>{whatsAppState?.state || "initializing"}</Badge>
               </CardDescription>
             </CardHeader>

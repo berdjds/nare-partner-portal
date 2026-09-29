@@ -43,7 +43,7 @@ interface Message {
 }
 
 export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
-  const { connected, whatsAppState, lastEvent } = useSocket();
+  const { connected, unauthorized, whatsAppState, lastEvent, disconnectSocket } = useSocket();
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -82,6 +82,10 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
       toast("Failed to load chats", "error");
     }
   }
+
+  // Interim W1 policy: admins read the raw connection state from their full
+  // whatsapp_state payload; other inbox users receive only { connected }.
+  const waAvailable = isAdmin ? whatsAppState?.state === "ready" : whatsAppState?.connected === true;
 
   async function handleStartNewChat(e?: React.FormEvent) {
     e?.preventDefault();
@@ -250,18 +254,25 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <Badge className="hidden sm:inline-flex" variant={connected ? "default" : "destructive"}>
-            {connected ? "Socket connected" : "Socket offline"}
+            {unauthorized ? "Session expired" : connected ? "Socket connected" : "Socket offline"}
           </Badge>
           {/* Interim W1 policy: non-admins see availability only as
               connected/not connected, never the raw connection state. */}
-          <Badge variant={whatsAppState?.state === "ready" ? "default" : "outline"}>
+          <Badge variant={waAvailable ? "default" : "outline"}>
             {isAdmin
               ? whatsAppState?.state || "initializing"
-              : whatsAppState?.state === "ready"
+              : waAvailable
                 ? "Connected"
                 : "Not connected"}
           </Badge>
-          <Button variant="ghost" size="icon" onClick={() => signOut({ callbackUrl: "/login" })}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              disconnectSocket();
+              signOut({ callbackUrl: "/login" });
+            }}
+          >
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
@@ -382,7 +393,7 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
               <Phone className="mb-2 h-12 w-12 opacity-20" />
               <p>Select a chat to start messaging</p>
-              {whatsAppState?.state !== "ready" && (
+              {!waAvailable && (
                 <p className="mt-2 text-sm">
                   {isAdmin
                     ? `WhatsApp state: ${whatsAppState?.state || "initializing"}`

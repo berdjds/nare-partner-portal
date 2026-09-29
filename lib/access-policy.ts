@@ -38,6 +38,22 @@ export interface ActiveUser {
 }
 
 /**
+ * Resolves a user id to the current, active user row. Returns null when the
+ * user no longer exists or was deactivated — the caller must treat the
+ * request as unauthenticated, never fall back to the JWT role. Shared by
+ * getActiveUser() and the Socket.io handshake (which decodes the JWT itself
+ * and never has a Session object).
+ */
+export async function getActiveUserById(id: string): Promise<ActiveUser | null> {
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, email: true, name: true, role: true, active: true },
+  });
+  if (!user || !user.active) return null;
+  return user;
+}
+
+/**
  * Resolves a session to the current, active user row. Returns null when there
  * is no session user id, the user no longer exists, or the user was
  * deactivated — in all three cases the caller must treat the request as
@@ -46,12 +62,7 @@ export interface ActiveUser {
 export async function getActiveUser(session: Session | null): Promise<ActiveUser | null> {
   const id = session?.user?.id;
   if (!id) return null;
-  const user = await prisma.user.findUnique({
-    where: { id },
-    select: { id: true, email: true, name: true, role: true, active: true },
-  });
-  if (!user || !user.active) return null;
-  return user;
+  return getActiveUserById(id);
 }
 
 export type AccessDecision =

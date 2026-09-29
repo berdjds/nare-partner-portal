@@ -25,6 +25,7 @@ import {
 } from "@/lib/travel/contracts";
 import { sendEmail } from "@/lib/email";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { INBOX_ROOM } from "@/lib/socket-auth";
 import type { Prisma, User } from "@prisma/client";
 
 export const TEMPLATE_VERSION = "1";
@@ -115,8 +116,13 @@ export function renderNotificationBody(
 function emitDeliveryStatus(deliveryId: string, status: string) {
   // Socket.io lives on the WhatsApp singleton (dual module instances, see
   // AGENTS.md pitfall #1); optional-chained so tests and CLI runs are a no-op.
+  // Room-scoped like every other emit: under the W1 interim policy every
+  // connectable socket (active ADMIN/USER) sits in the inbox room, so this
+  // reaches the same set a broadcast would without broadcasting to all.
   try {
-    (globalThis as any).__waControlState?.io?.emit("travel_notification", { deliveryId, status });
+    (globalThis as any)
+      .__waControlState?.io?.to(INBOX_ROOM)
+      .emit("travel_notification", { deliveryId, status });
   } catch {
     // never let a socket hiccup affect delivery state
   }

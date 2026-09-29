@@ -2,6 +2,7 @@ import { createServer } from "http";
 import next from "next";
 import { Server } from "socket.io";
 import { initializeWhatsApp, setSocketServer } from "./lib/whatsapp";
+import { socketAllowRequest } from "./lib/socket-auth";
 import { startNotificationWorker, sweepOverdueValidations } from "./lib/travel/notifications";
 import { handleUploadsRequest, routeUploadsRequest } from "./lib/uploads";
 
@@ -58,10 +59,12 @@ app.prepare().then(async () => {
   });
   const io = new Server(httpServer, {
     path: "/api/socket",
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
-    },
+    // Origin gate for every transport/handshake (engine.io allowRequest):
+    // only the exact origin of NEXTAUTH_URL (+ SOCKET_ALLOWED_ORIGINS) is
+    // accepted — no CORS `*`, no /api/socket response headers. Session
+    // authentication, rooms and revalidation are wired by setSocketServer()
+    // via lib/socket-auth.ts.
+    allowRequest: socketAllowRequest,
   });
 
   setSocketServer(io);
