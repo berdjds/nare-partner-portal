@@ -50,6 +50,7 @@ import { generatePackageCode } from "@/lib/travel/codes";
 import { getActivePolicy, getCompanyBranding, getFxMap, getTravelSettings } from "@/lib/travel/settings";
 import { queueWorkflowEvent } from "@/lib/travel/notifications";
 import { sendQuoteDocument } from "@/lib/travel/whatsapp-docs";
+import { resolveTravelAccount } from "@/lib/whatsapp-accounts";
 import type { QuotationPdfBranding, QuotationPdfItineraryDay } from "@/lib/travel/pdf/types";
 
 // ---------------------------------------------------------------------------
@@ -982,6 +983,16 @@ export async function submit(actor: WorkflowActor, requestId: string) {
   // Company branding is frozen the same way: editing TravelSettings later must
   // not retroactively restyle an issued document.
   const branding = await getCompanyBranding();
+  // W3 (travel-nare): the client quotation's contact phone is the travel
+  // WhatsApp account's public number when one is configured (frozen with the
+  // rest of the branding); TravelSettings.companyPhone stays the fallback. A
+  // misconfigured travel account must not block submit — the fallback applies.
+  try {
+    const travelAccount = await resolveTravelAccount();
+    if (travelAccount.publicNumber) branding.companyPhone = travelAccount.publicNumber;
+  } catch {
+    // keep TravelSettings.companyPhone
+  }
   // Loaded before the transaction: the notification fan-out includes the
   // validator group members on top of owner + assigned validator.
   const groupIds = await validatorGroupIds();

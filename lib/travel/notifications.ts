@@ -25,9 +25,9 @@ import {
 } from "@/lib/travel/contracts";
 import { sendEmail } from "@/lib/email";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { DEFAULT_TRAVEL_ACCOUNT_KEY } from "@/lib/whatsapp-accounts";
+import { DEFAULT_TRAVEL_ACCOUNT_KEY, ensureDefaultAccounts, getAccount } from "@/lib/whatsapp-accounts";
 import { INBOX_ROOM } from "@/lib/socket-auth";
-import type { Prisma, User } from "@prisma/client";
+import type { Prisma, User, WhatsAppAccount } from "@prisma/client";
 
 export const TEMPLATE_VERSION = "1";
 
@@ -178,6 +178,20 @@ export async function processNotificationQueue({ limit = 50 }: { limit?: number 
     take: limit,
   });
 
+  // W3 (travel-nare): account rows are read once per sweep (cached) so a
+  // disabled or unconfigured travel account fails its deliveries with a
+  // coded, actionable WorkflowError naming the account — the row stays
+  // retryable on the SAME account and no other account is ever tried.
+  // Dynamic import: workflow.ts imports this module, so a static import of
+  // WorkflowError would close a cycle.
+  await ensureDefaultAccounts();
+  const { WorkflowError } = await import("@/lib/travel/workflow");
+  const accountCache = new Map<string, WhatsAppAccount | null>();
+  const accountFor = async (key: string): Promise<WhatsAppAccount | null> => {
+    if (!accountCache.has(key)) accountCache.set(key, await getAccount(key));
+    return accountCache.get(key) ?? null;
+  };
+
   let processed = 0;
   let sent = 0;
   let failed = 0;
@@ -208,9 +222,27 @@ export async function processNotificationQueue({ limit = 50 }: { limit?: number 
       } else {
         // W3 (wa-multi): sends through the account recorded on the delivery
         // (TravelSettings.whatsappAccountKey at queue time) — never a
-        // fallback account. Throws when that account's client is not ready —
-        // caught below, so the delivery becomes FAILED and stays retryable
-        // on the SAME account.
+        // fallback account. A disabled/unconfigured account fails here with a
+        // coded WorkflowError; a not-ready client throws from
+        // sendWhatsAppMessage naming the account. Either way the delivery
+        // becomes FAILED below and stays retryable on the SAME account.
+        const account = await accountFor(delivery.accountId);
+        if (!account) {
+          throw new WorkflowError(
+            "TRAVEL_WHATSAPP_ACCOUNT_NOT_CONFIGURED",
+            `WhatsApp account "${delivery.accountId}" is not configured. Create it under Admin → WhatsApp accounts; ` +
+              `the delivery stays queued for retry on the same account.`,
+            503,
+          );
+        }
+        if (!account.enabled) {
+          throw new WorkflowError(
+            "TRAVEL_WHATSAPP_ACCOUNT_DISABLED",
+            `WhatsApp account "${account.key}" (${account.displayName}) is disabled. Enable it under Admin → WhatsApp accounts; ` +
+              `the delivery stays queued for retry on the same account.`,
+            503,
+          );
+        }
         const msg: any = await sendWhatsAppMessage({
           accountKey: delivery.accountId,
           remoteJid: delivery.destination!,
@@ -233,7 +265,7 @@ export async function processNotificationQueue({ limit = 50 }: { limit?: number 
       sent++;
       emitDeliveryStatus(delivery.id, "SENT");
     } catch (err: any) {
-      const message = err?.message ?? String(err);
+      const message = err?.code ? `${err.code}: ${err.message}` : err?.message ?? String(err);
       await prisma.notificationDelivery.update({
         where: { id: delivery.id },
         data: { status: "FAILED", lastError: message, attempts: { increment: 1 } },

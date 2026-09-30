@@ -81,16 +81,31 @@ export async function sendQuoteDocument(
 
   const results: DocumentSendResult[] = [];
 
-  // W3 (wa-multi): all travel-module sends go through the account named by
+  // W3 (travel-nare): all travel-module sends go through the account named by
   // TravelSettings.whatsappAccountKey (default 'nare') — never Marhaba. A
-  // misconfigured key fails every recipient with the configuration error
-  // (reported, never thrown, like every other delivery failure).
+  // misconfigured key or a disabled account fails every recipient with a
+  // coded, actionable WorkflowError naming the account (reported, never
+  // thrown, like every other delivery failure); the send can be retried later
+  // on the SAME account. Dynamic import: workflow.ts imports this module, so
+  // a static import of WorkflowError would close a cycle.
   let accountKey: string | null = null;
   let accountError: string | null = null;
   try {
-    accountKey = (await resolveTravelAccount()).key;
+    const account = await resolveTravelAccount();
+    if (!account.enabled) {
+      const { WorkflowError } = await import("@/lib/travel/workflow");
+      throw new WorkflowError(
+        "TRAVEL_WHATSAPP_ACCOUNT_DISABLED",
+        `Travel WhatsApp account "${account.key}" (${account.displayName}) is disabled. ` +
+          `Enable it under Admin → WhatsApp accounts; the send can be retried on the same account.`,
+        503,
+      );
+    }
+    accountKey = account.key;
   } catch (err: any) {
-    accountError = err?.message ?? String(err);
+    accountError = err?.code
+      ? `${err.code}: ${err.message}`
+      : `TRAVEL_WHATSAPP_ACCOUNT_NOT_CONFIGURED: ${err?.message ?? String(err)}`;
   }
 
   for (const userId of targets.userIds ?? []) {

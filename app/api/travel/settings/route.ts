@@ -35,6 +35,10 @@ const updateSettingsSchema = z.object({
   // Virtual validator group: user ids; membership validated against active
   // users in the handler (zod can't query the DB).
   validatorUserIds: z.array(z.string().min(1)).max(50).optional(),
+  // W3 (travel-nare): WhatsAppAccount.key every travel-module WhatsApp send
+  // goes through (default 'nare'); validated against existing accounts in the
+  // handler.
+  whatsappAccountKey: z.string().min(1).optional(),
 });
 
 export async function GET() {
@@ -91,6 +95,20 @@ export async function PUT(req: NextRequest) {
         );
       }
       settingsPatch.validatorUserIds = JSON.stringify(Array.from(new Set(validatorUserIds)));
+    }
+
+    // The travel WhatsApp account must reference an existing account row;
+    // account rows are managed via /api/whatsapp/accounts, not created here.
+    if (restPatch.whatsappAccountKey !== undefined) {
+      const account = await prisma.whatsAppAccount.findUnique({
+        where: { key: restPatch.whatsappAccountKey },
+      });
+      if (!account) {
+        return NextResponse.json(
+          { error: `unknown WhatsApp account key: ${restPatch.whatsappAccountKey}` },
+          { status: 400 },
+        );
+      }
     }
 
     if (activatePolicyId) {
