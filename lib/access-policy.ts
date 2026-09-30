@@ -24,11 +24,23 @@
  * deactivation, role change or sv mismatch therefore takes effect with the
  * same unexpired session token (a revoked user gets 401, the same as having
  * no session).
+ *
+ * W2 permission model: ActiveUser also carries the user's EFFECTIVE
+ * permissions (lib/permissions.ts — role preset + grants − denies from the
+ * UserPermission table), resolved from the same database read (the override
+ * rows load through the indexed (userId, key) relation in the one user
+ * query), so an override edit takes effect on the next request exactly like a
+ * role change. The gates below still enforce the interim role policy;
+ * permission-aware gates use requirePermission().
  */
 
 import type { Session } from "next-auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  effectivePermissions,
+  type PermissionKey,
+} from "@/lib/permissions";
 
 export function canUseInbox(role: string | null | undefined): boolean {
   return role === "ADMIN" || role === "USER";
@@ -45,6 +57,8 @@ export interface ActiveUser {
   role: string;
   /** Current session version: the User.sessionVersion column. */
   sessionVersion: number;
+  /** Effective W2 permissions: role preset + grants − denies, from the current DB row. */
+  permissions: ReadonlySet<PermissionKey>;
 }
 
 /**
@@ -85,6 +99,9 @@ export async function getActiveUserById(
       role: true,
       active: true,
       sessionVersion: true,
+      // Per-user grant/deny overrides (UserPermission), fetched in the same
+      // user read via the indexed (userId, key) relation.
+      permissions: { select: { key: true, allowed: true } },
     },
   });
   if (!user || !user.active) return null;
@@ -92,7 +109,8 @@ export async function getActiveUserById(
   if (expectedSessionVersion !== undefined && sessionVersion !== expectedSessionVersion) {
     return null;
   }
-  return { id: user.id, email: user.email, name: user.name, role: user.role, sessionVersion };
+  const permissions = effectivePermissions(user.role, user.permissions);
+  return { id: user.id, email: user.email, name: user.name, role: user.role, sessionVersion, permissions };
 }
 
 /**
@@ -135,5 +153,17 @@ export async function requireWhatsAppAdminAccess(session: Session | null): Promi
   const user = await getActiveUser(session);
   if (!user) return denied(401, "Unauthorized");
   if (!canAdministerWhatsApp(user.role)) return denied(401, "Unauthorized");
+  return { allowed: true, user };
+}
+
+/**
+ * Permission-aware gate (W2): 401 without an active session (including stale
+ * session versions), 403 when the user's effective permissions lack the key.
+ * Mirrors requireInboxAccess's status-code contract.
+ */
+export async function requirePermission(session: Session | null, key: PermissionKey): Promise<AccessDecision> {
+  const user = await getActiveUser(session);
+  if (!user) return denied(401, "Unauthorized");
+  if (!user.permissions.has(key)) return denied(403, "Forbidden");
   return { allowed: true, user };
 }

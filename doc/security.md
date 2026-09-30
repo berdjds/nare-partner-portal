@@ -207,6 +207,28 @@ version 0, and the first bump revokes those legacy tokens too. Per-device tokens
 (arrive with W2) are still not individually addressable: revocation is always
 all-sessions-of-a-user.
 
+**Permission model (W2 core).** `lib/permissions.ts` defines the closed set of
+permission keys (`admin.users`, `admin.settings`, `whatsapp.inbox.view`,
+`whatsapp.inbox.send`, `whatsapp.admin`, `travel.access`, `travel.create`,
+`travel.review`, `travel.issue`, `travel.client_docs.download`,
+`travel.client_docs.send`, `travel.internal.view`, `travel.internal.download`),
+a default preset per role and the effective-permission resolution: **(role
+preset ∪ grants) − denies** — deny has the highest precedence, a grant adds a
+key the preset lacks. Presets reproduce the interim role policy exactly, with
+one decided exception (D2): the internal keys (`travel.internal.view`,
+`travel.internal.download`) are preset for ADMIN only, so non-admins have no
+internal-cost access until the owner confirms the proposed-permissions
+migration (D3). Per-user overrides live in the `UserPermission` table (one row
+per `(userId, key)`, `allowed` = grant/deny; rows with unknown keys are
+ignored and can never widen access). `getActiveUser()` /
+`getActiveUserById()` resolve the effective set from the same database read
+that checks role, active and session version (the override rows load through
+the indexed `(userId, key)` relation in the one user query), so an override
+edit takes effect on the next request, and `requirePermission(session, key)`
+gates on it (401 without an active session, 403 without the key). Enforcement
+sites still check the interim role predicates above until they are wired to
+these keys.
+
 **Rate limiting and media validation.** Still open (see below).
 
 ## Security Checklist Before Production
