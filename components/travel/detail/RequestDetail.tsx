@@ -30,6 +30,7 @@ interface RequestDetailProps {
   requestId: string;
   role: string;
   userId: string;
+  permissions: string[];
 }
 
 /** Underline-style trigger for page-level tab bars (segmented is the ui default). */
@@ -42,6 +43,9 @@ export interface DetailContext {
   isLatestVersion: boolean;
   role: string;
   userId: string;
+  /** W2: permission keys of the signed-in user; tabs hide actions the server
+   *  would deny (e.g. travel.review, travel.issue, document downloads). */
+  permissions: string[];
   isOwner: boolean;
   isAdmin: boolean;
   /** Settings-level quote currency — fallback only. */
@@ -63,7 +67,7 @@ export interface DetailContext {
   refresh: () => void;
 }
 
-export default function RequestDetail({ requestId, role, userId }: RequestDetailProps) {
+export default function RequestDetail({ requestId, role, userId, permissions }: RequestDetailProps) {
   const { toast } = useToast();
   const [detail, setDetail] = useState<TravelRequestDetail | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
@@ -159,7 +163,10 @@ export default function RequestDetail({ requestId, role, userId }: RequestDetail
     (isOwner || isAdmin) && ["DRAFT", "CHANGES_REQUESTED"].includes(detail.status) && isLatestVersion;
   const canRevise =
     (isOwner || isAdmin) &&
-    ["CHANGES_REQUESTED", "APPROVED", "ISSUED", "REJECTED"].includes(latest.status);
+    ["CHANGES_REQUESTED", "APPROVED", "ISSUED", "REJECTED"].includes(latest.status) &&
+    // W2: the server gates createRevision on travel.create (same key as
+    // createRequest) — hide the action when the key is missing.
+    permissions.includes("travel.create");
 
   const ctx: DetailContext = {
     detail,
@@ -167,6 +174,7 @@ export default function RequestDetail({ requestId, role, userId }: RequestDetail
     isLatestVersion,
     role,
     userId,
+    permissions,
     isOwner,
     isAdmin,
     quoteCurrency,

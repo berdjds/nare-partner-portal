@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { POLICY_TYPES, ROLE_ADMIN, ROLE_ADVISOR, ROLE_VALIDATOR } from "@/lib/travel/contracts";
 import { calculate } from "@/lib/travel/engine";
-import { redactScenarioResult } from "@/lib/travel/redact";
+import { canViewInternal, redactScenarioResult } from "@/lib/travel/redact";
 import { buildEngineInputForVersion } from "@/lib/travel/resolve";
 import { buildTraceRows } from "@/lib/travel/trace-table";
 import { getTravelActor, travelError, unauthorized } from "../../../guard";
@@ -78,12 +78,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const result = calculate(input);
     const quoteCurrency = input.fx.quoteCurrency;
 
-    if (actor.role === ROLE_ADVISOR && !isOwner) {
-      // Sell-side fields only: internal costing never leaves this route for a
-      // non-owner advisor (v0.11.0: the OWNER prices their own request and sees
-      // the full result, including per-line net costs). Non-owner advisors are
-      // already 404'd above — this branch is defense in depth. traceRows carry
-      // the full costing breakdown, so they are never attached here either.
+    if (!canViewInternal(actor)) {
+      // int-lock: sell-side fields only — internal costing never leaves this
+      // route without the travel.internal.view permission (D2: admin-only
+      // preset; owners/validators need an explicit grant). traceRows carry the
+      // full costing breakdown, so they are never attached here either.
       return NextResponse.json({
         valid: result.valid,
         engineVersion: result.engineVersion,

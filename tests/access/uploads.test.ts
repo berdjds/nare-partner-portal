@@ -312,3 +312,57 @@ describe("routeUploadsRequest (unit)", () => {
     expect(routeUploadsRequest("GET", "/%")).toEqual({ kind: "bad-request" });
   });
 });
+
+describe("W2 permission overrides (perm-inbox)", () => {
+  // W2 replaces the W1 inbox-role check with the effective permission
+  // whatsapp.inbox.view (role preset + UserPermission overrides, deny wins).
+  // Overrides are resolved per request from the DB, so grant/deny changes take
+  // effect with the same unexpired cookie.
+
+  let viewDenied: { id: string; role: string };
+  let granted: { id: string; role: string };
+  let revoked: { id: string; role: string };
+
+  beforeAll(async () => {
+    viewDenied = await prisma.user.create({
+      data: { email: "upl-w2-viewdenied@test.io", name: "View Denied", password: "x", role: "USER" },
+    });
+    await prisma.userPermission.create({ data: { userId: viewDenied.id, key: "whatsapp.inbox.view", allowed: false } });
+
+    granted = await prisma.user.create({
+      data: { email: "upl-w2-granted@test.io", name: "Granted", password: "x", role: "ADVISOR" },
+    });
+    await prisma.userPermission.create({ data: { userId: granted.id, key: "whatsapp.inbox.view", allowed: true } });
+
+    // Third persona for the revocation test: its grant is deleted mid-test, so
+    // it must not be the one the 200 test above depends on.
+    revoked = await prisma.user.create({
+      data: { email: "upl-w2-revoked@test.io", name: "Revoked", password: "x", role: "ADVISOR" },
+    });
+    await prisma.userPermission.create({ data: { userId: revoked.id, key: "whatsapp.inbox.view", allowed: true } });
+  });
+
+  it("403 for a user denied whatsapp.inbox.view (deny beats the USER preset)", async () => {
+    const res = await get(`/uploads/${FILE_NAME}`, await cookieFor(viewDenied));
+    expect(res.status).toBe(403);
+    expect(await res.text()).not.toBe(FILE_CONTENT);
+  });
+
+  it("200 for a travel-only user granted whatsapp.inbox.view", async () => {
+    const res = await get(`/uploads/${FILE_NAME}`, await cookieFor(granted));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(FILE_CONTENT);
+  });
+
+  it("removing the grant revokes access on the next request", async () => {
+    const before = await get(`/uploads/${FILE_NAME}`, await cookieFor(revoked));
+    expect(before.status).toBe(200);
+    expect(await before.text()).toBe(FILE_CONTENT);
+
+    await prisma.userPermission.deleteMany({ where: { userId: revoked.id } });
+
+    const after = await get(`/uploads/${FILE_NAME}`, await cookieFor(revoked));
+    expect(after.status).toBe(403);
+    expect(await after.text()).not.toBe(FILE_CONTENT);
+  });
+});

@@ -11,13 +11,14 @@
  * 1. A valid, unexpired NextAuth session cookie (next-auth/jwt decode with
  *    NEXTAUTH_SECRET). Missing, malformed or expired → 401. NEXTAUTH_SECRET
  *    unset → fail closed (401), never serve unsigned.
- * 2. An ACTIVE user loaded from the database whose current role satisfies
- *    canUseInbox() (interim W1 policy — media belongs to the chat inbox) and
- *    whose current session version still matches the token's sv claim (W1b —
+ * 2. An ACTIVE user loaded from the database whose effective permissions hold
+ *    whatsapp.inbox.view (W2 — media belongs to the chat inbox) and whose
+ *    current session version still matches the token's sv claim (W1b —
  *    the User.sessionVersion column; bumping it with { increment: 1 } revokes
  *    previously issued tokens). A token with no
  *    sv claim reads as 0 and matches only a user that was never revoked.
- *    Unknown/deactivated/sv-mismatch → 401, valid but non-inbox role → 403.
+ *    Unknown/deactivated/sv-mismatch → 401, valid but without the permission
+ *    → 403.
  * 3. A normalized path strictly inside public/uploads/ (no traversal). The
  *    traversal/out-of-bounds and not-found cases all answer 404, so the
  *    response never leaks file existence to unauthorized callers: 401/403 are
@@ -34,7 +35,8 @@ import fs from "fs/promises";
 import path from "path";
 import { decode } from "next-auth/jwt";
 import mime from "mime-types";
-import { canUseInbox, getActiveUserById } from "@/lib/access-policy";
+import { getActiveUserById } from "@/lib/access-policy";
+import { hasPermission } from "@/lib/permissions";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 
@@ -178,7 +180,7 @@ export async function handleUploadsRequest(req: IncomingMessage, res: ServerResp
     sendJson(res, 401, { error: "Unauthorized" });
     return;
   }
-  if (!canUseInbox(user.role)) {
+  if (!hasPermission(user, "whatsapp.inbox.view")) {
     sendJson(res, 403, { error: "Forbidden" });
     return;
   }

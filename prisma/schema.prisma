@@ -21,6 +21,7 @@ model User {
 
   logs      Log[]
   messages  Message[] @relation("SentBy")
+  permissions UserPermission[]
 
   travelRequestsOwned      TravelRequest[]        @relation("TravelOwner")
   travelRequestsValidating TravelRequest[]        @relation("TravelValidator")
@@ -86,6 +87,21 @@ model WhatsAppSession {
   info      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// W2 permission model: per-user grant/deny overrides on top of the role
+// presets defined in code (lib/permissions.ts). One row per (user, key):
+// allowed=true grants, allowed=false denies; deny wins over grant and preset.
+model UserPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  allowed   Boolean
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
 }
 
 // =============================================================================

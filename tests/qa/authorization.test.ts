@@ -4,12 +4,15 @@
  * the server — not hidden buttons.
  *
  * - USER role: 401 on requests/settings/rates (and every other travel route)
- *   unless they hold an active validation assignment (v0.10.0 — see the last
- *   describe block).
+ *   unless they hold an active validation assignment AND the matching
+ *   permission grants (W2: the assignment path also requires travel.access /
+ *   travel.review / travel.internal.download — see the last describe block).
  * - ADVISOR: 403 on PUT settings and PATCH rates (ADMIN-only); may POST requests.
  * - VALIDATOR: 403 creating requests; 403 issuing (not owner/admin).
  * - Non-current validator: 403 NOT_ASSIGNED_VALIDATOR on review.
- * - INTERNAL documents: 403 for ADVISOR, 200 for VALIDATOR/ADMIN.
+ * - INTERNAL documents (D2): 403 for ADVISOR; 403 for VALIDATOR without an
+ *   explicit travel.internal.download grant; 200 for a granted VALIDATOR and
+ *   for ADMIN (the key is in the ADMIN preset only).
  * - ADVISOR list scope: sees only own requests.
  */
 
@@ -172,7 +175,7 @@ describe("request creation and workflow actions", () => {
 });
 
 describe("document kind authorization", () => {
-  it("INTERNAL documents reject ADVISOR (403) and allow VALIDATOR/ADMIN; CLIENT allows any travel role", async () => {
+  it("INTERNAL requires travel.internal.download (D2): 403 for ADVISOR and ungranted VALIDATOR, 200 for granted VALIDATOR/ADMIN; CLIENT allows any travel role", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "qa-docs-"));
     const file = path.join(dir, "doc.pdf");
     writeFileSync(file, "%PDF-1.4 qa");
@@ -199,8 +202,24 @@ describe("document kind authorization", () => {
     expect(clientRes.status).toBe(200);
     expect(clientRes.headers.get("Content-Type")).toBe("application/pdf");
 
+    // D2: travel.internal.download is in the ADMIN preset only, so a plain
+    // VALIDATOR (no grant) is now refused INTERNAL downloads.
     session(fx.validator);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(403);
+
+    // ...but an explicit grant re-opens them for a VALIDATOR.
+    const grantedValidator = await prisma.user.create({
+      data: {
+        email: "validator-granted@test.io",
+        name: "Granted Validator",
+        password: "x",
+        role: "VALIDATOR",
+        permissions: { create: [{ key: "travel.internal.download", allowed: true }] },
+      },
+    });
+    session(grantedValidator);
     expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(200);
+
     session(fx.admin);
     expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(200);
 
@@ -242,13 +261,23 @@ describe("assigned USER-role validator (v0.10.0)", () => {
     expect((await assignableRoute.GET()).status).toBe(401);
   });
 
-  it("module access opens with an assignment; lists and details are scoped", async () => {
+  it("module access opens with an assignment plus grants; lists and details are scoped", async () => {
     const { request, version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
     await saveContent(prisma, actorOf(fx.advisor), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
     await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.plainUser.id });
     const { hash } = await workflow.submit(actorOf(fx.advisor), request.id);
 
+    // W2: an assignment alone no longer opens the module — travel.access is
+    // required on top of the assignment.
     session(fx.plainUser);
+    expect((await requestsRoute.GET(req("http://t/api/travel/requests"))).status).toBe(401);
+
+    // W2: assignment + admin grants unlock; the assignment stays a runtime
+    // record-level check on top of the permissions.
+    for (const key of ["travel.access", "travel.internal.download", "travel.review"]) {
+      await prisma.userPermission.create({ data: { userId: fx.plainUser.id, key, allowed: true } });
+    }
+
     const list = await (await requestsRoute.GET(req("http://t/api/travel/requests"))).json();
     expect(list.map((r: any) => r.id)).toEqual([request.id]);
 
@@ -256,8 +285,9 @@ describe("assigned USER-role validator (v0.10.0)", () => {
     const own = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     expect(own.status).toBe(200);
 
-    // ...and the assignment also unlocks the INTERNAL document download
-    // (submit rendered one; a USER role alone would be forbidden).
+    // ...and the travel.internal.download grant unlocks the INTERNAL document
+    // download (submit rendered one; a USER role without the grant would be
+    // forbidden — D2).
     const internalDoc = await prisma.quoteDocument.findUnique({
       where: { idempotencyKey: `internal-${version.id}` },
     });
@@ -274,7 +304,7 @@ describe("assigned USER-role validator (v0.10.0)", () => {
     });
     expect(denied.status).toBe(404);
 
-    // Review through the route works with role USER.
+    // Review through the route works with role USER plus the travel.review grant.
     const ok = await reviewRoute.POST(
       req(`http://t/api/travel/versions/${version.id}/review`, {
         method: "POST",
@@ -295,12 +325,13 @@ describe("assigned USER-role validator (v0.10.0)", () => {
 });
 
 describe("WhatsApp document delivery (v0.10.0)", () => {
-  it("sends per recipient; INTERNAL is restricted to validators/admins", async () => {
+  it("sends CLIENT per recipient; INTERNAL is rejected for every actor (int-lock)", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "qa-send-"));
     const file = path.join(dir, "doc.pdf");
     writeFileSync(file, "%PDF-1.4 qa");
 
     const { request, version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
+    await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
     const mkDoc = (kind: string, key: string) =>
       prisma.quoteDocument.create({
         data: {
@@ -319,6 +350,9 @@ describe("WhatsApp document delivery (v0.10.0)", () => {
       data: { email: "recip@test.io", name: "Recip", password: "x", role: "USER", phone: "37400000099" },
     });
 
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp");
+    const waMock = vi.mocked(sendWhatsAppMessage);
+
     session(fx.advisor); // the request owner may trigger delivery
     const noRecipients = await documentSendRoute.POST(
       req(`http://t/api/travel/documents/${client.id}/send`, { method: "POST", body: {} }),
@@ -326,17 +360,23 @@ describe("WhatsApp document delivery (v0.10.0)", () => {
     );
     expect(noRecipients.status).toBe(400);
 
-    // INTERNAL to a plain user: per-recipient refusal (margins inside).
-    const internalRes = await documentSendRoute.POST(
-      req(`http://t/api/travel/documents/${internal.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
-      { params: Promise.resolve({ id: internal.id }) },
-    );
-    expect(internalRes.status).toBe(200);
-    const internalResults = (await internalRes.json()).results;
-    expect(internalResults[0].ok).toBe(false);
-    expect(internalResults[0].error).toContain("restricted");
+    // int-lock: INTERNAL is rejected for every actor that passes the record
+    // rule — owner, ADMIN and the assigned validator alike — and nothing
+    // reaches WhatsApp.
+    for (const who of [fx.advisor, fx.admin, fx.validator]) {
+      waMock.mockClear();
+      session(who);
+      const res = await documentSendRoute.POST(
+        req(`http://t/api/travel/documents/${internal.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
+        { params: Promise.resolve({ id: internal.id }) },
+      );
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toContain("INTERNAL");
+      expect(waMock).not.toHaveBeenCalled();
+    }
 
-    // CLIENT to the same user succeeds (mocked WhatsApp sender).
+    // CLIENT to a plain user still succeeds (mocked WhatsApp sender).
+    session(fx.advisor);
     const clientRes = await documentSendRoute.POST(
       req(`http://t/api/travel/documents/${client.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
       { params: Promise.resolve({ id: client.id }) },
@@ -381,7 +421,7 @@ describe("validator group + infant settings (v0.11.0)", () => {
     await put({ infantMaxAge: 2, validatorUserIds: [] });
   });
 
-  it("INTERNAL documents can be delivered to validator-group members of any role", async () => {
+  it("validator-group membership no longer grants INTERNAL delivery (int-lock)", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "qa-send-group-"));
     const file = path.join(dir, "doc.pdf");
     writeFileSync(file, "%PDF-1.4 qa");
@@ -398,8 +438,8 @@ describe("validator group + infant settings (v0.11.0)", () => {
         idempotencyKey: "send-group-internal",
       },
     });
-    // A USER-role group member: without membership this exact send is refused
-    // (covered in the delivery block above).
+    // A USER-role group member: membership used to grant INTERNAL delivery;
+    // int-lock removes that — nobody receives an INTERNAL sheet over WhatsApp.
     const member = await prisma.user.create({
       data: { email: "groupmember@test.io", name: "Group Member", password: "x", role: "USER", phone: "37400000098" },
     });
@@ -408,14 +448,20 @@ describe("validator group + infant settings (v0.11.0)", () => {
       data: { validatorUserIds: JSON.stringify([member.id]) },
     });
     try {
-      session(fx.advisor); // request owner triggers delivery
+      session(fx.advisor); // request owner triggers the send attempt
       const res = await documentSendRoute.POST(
         req(`http://t/api/travel/documents/${internal.id}/send`, { method: "POST", body: { userIds: [member.id] } }),
         { params: Promise.resolve({ id: internal.id }) },
       );
-      expect(res.status).toBe(200);
-      const { results } = await res.json();
-      expect(results[0].ok).toBe(true);
+      expect(res.status).toBe(403);
+
+      // The shared sender refuses too when called directly, so group-targeted
+      // code paths cannot bypass the route gate either.
+      const { sendQuoteDocument } = await import("@/lib/travel/whatsapp-docs");
+      const results = await sendQuoteDocument(internal.id, { userIds: [member.id] }, fx.advisor.id);
+      expect(results).toHaveLength(1);
+      expect(results[0].ok).toBe(false);
+      expect(results[0].error).toContain("INTERNAL");
     } finally {
       await prisma.travelSettings.update({ where: { id: "default" }, data: { validatorUserIds: "[]" } });
     }

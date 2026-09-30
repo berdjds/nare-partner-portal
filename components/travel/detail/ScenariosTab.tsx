@@ -487,9 +487,9 @@ export default function ScenariosTab({ ctx }: { ctx: DetailContext }) {
   // ---- render -------------------------------------------------------------------
 
   // Prices come from the shared summary (ctx.quoteResults) — this tab no longer
-  // runs its own calculation. v0.11.0: the request owner sees internal costing
-  // too (the initiator prices the request); other advisors are redacted server-side.
-  const canSeeInternal = ctx.isAdmin || ctx.role === "VALIDATOR" || ctx.isOwner;
+  // runs its own calculation. Internal costing is gated on the admin-granted
+  // travel.internal.view permission; other users are redacted server-side.
+  const canSeeInternal = ctx.permissions.includes("travel.internal.view");
   // ISO dates compare lexicographically; check-out must be strictly after check-in.
   const hasInvalidStayDates = scenarios.some((sc) => sc.stays.some((t) => !(t.checkOut > t.checkIn)));
 
@@ -661,8 +661,9 @@ export default function ScenariosTab({ ctx }: { ctx: DetailContext }) {
                       {result.nights} night{result.nights === 1 ? "" : "s"} / {result.days} days
                     </span>
                   </div>
-                  {/* Internal costing is redacted for advisors — render it only
-                      when the result actually carries those fields. */}
+                  {/* Internal costing is redacted for users without
+                      travel.internal.view — render it only when the result
+                      actually carries those fields. */}
                   {canSeeInternal && result.totals && (
                     <div className="mt-2 flex flex-wrap gap-3 border-t pt-2 text-xs text-muted-foreground">
                       <span>Internal — cost {money(result.totals.costQuote, currency)}</span>
@@ -672,7 +673,7 @@ export default function ScenariosTab({ ctx }: { ctx: DetailContext }) {
                   )}
                   {!canSeeInternal && (
                     <p className="mt-2 border-t pt-2 text-xs text-muted-foreground">
-                      Internal costing is visible to the request owner, validators and admins.
+                      Internal costing requires an admin-granted permission.
                     </p>
                   )}
                   {result.issues.length > 0 && (

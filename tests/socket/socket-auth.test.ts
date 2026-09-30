@@ -19,6 +19,11 @@
  *  - revalidation: a token's exp disconnects the socket, and the 60s loop
  *    disconnects on deactivation or loss of inbox access; a promotion
  *    (USER -> ADMIN) re-syncs room membership instead (fake timers).
+ *  - W2 permission model (perm-inbox): the handshake, room assignment and the
+ *    60s revalidation all follow the CURRENT effective permissions
+ *    (role preset + UserPermission grants − denies, deny always wins) instead
+ *    of the bare role — per-user grants of whatsapp.inbox.view /
+ *    whatsapp.admin open the socket and rooms, denies close them.
  */
 
 import { createServer, type Server as HttpServer } from "http";
@@ -251,7 +256,7 @@ describe("session gate (io.use handshake)", () => {
     expect(outcome).toBe("unauthorized");
   });
 
-  it("refuses ADVISOR and VALIDATOR until W2 grants inbox access", async () => {
+  it("refuses ADVISOR and VALIDATOR (their presets hold no socket-eligible permission)", async () => {
     for (const who of [advisor, validator]) {
       const outcome = await connectOutcome(
         makeClient(shared.url, { cookie: await cookieFor(who), origin: "http://localhost:3000" })
@@ -615,5 +620,244 @@ describe("allowedSocketOrigins / isSocketOriginAllowed (unit)", () => {
     process.env.NEXTAUTH_URL = "not a url";
     expect(allowedSocketOrigins()).toEqual([]);
     expect(isSocketOriginAllowed("http://localhost:3000")).toBe(false);
+  });
+});
+
+describe("W2 permission handshake (perm-inbox)", () => {
+  it("refuses a USER denied whatsapp.inbox.view (deny beats the preset)", async () => {
+    // Deny always wins, even over the role preset: USER's preset holds
+    // whatsapp.inbox.view, so without the deny row this user would connect.
+    const deniedUser = await prisma.user.create({
+      data: { email: "sock-w2-deny-view@test.io", name: "DenyView", password: "x", role: "USER" },
+    });
+    await prisma.userPermission.create({ data: { userId: deniedUser.id, key: "whatsapp.inbox.view", allowed: false } });
+
+    const outcome = await connectOutcome(
+      makeClient(shared.url, { cookie: await cookieFor(deniedUser), origin: "http://localhost:3000" })
+    );
+    expect(outcome).toBe("unauthorized");
+    expect(shared.sio.sockets.sockets.size).toBe(0);
+  });
+
+  it("connects a travel-only user granted whatsapp.inbox.view, inbox room only", async () => {
+    // ADVISOR's preset has no socket-eligible keys; the grant alone opens the
+    // socket — proof the gate follows effective permissions, not the role.
+    const grantedAdvisor = await prisma.user.create({
+      data: { email: "sock-w2-grant-view@test.io", name: "GrantView", password: "x", role: "ADVISOR" },
+    });
+    await prisma.userPermission.create({ data: { userId: grantedAdvisor.id, key: "whatsapp.inbox.view", allowed: true } });
+
+    const socket = makeClient(shared.url, { cookie: await cookieFor(grantedAdvisor), origin: "http://localhost:3000" });
+    // Attach BEFORE connecting: the initial whatsapp_state is emitted in the
+    // same tick as the CONNECT packet and may be delivered batched with it.
+    const statePayloads: any[] = [];
+    const messages: any[] = [];
+    const adminOnly: any[] = [];
+    socket.on("whatsapp_state", (p) => statePayloads.push(p));
+    socket.on("message", (p) => messages.push(p));
+    socket.on("admin_only_probe", (p) => adminOnly.push(p));
+
+    expect(await connectOutcome(socket)).toBe("connected");
+
+    // Inbox-only: availability as the exact payload (fakeWaState is "qr", so
+    // connected is false) — never the full state with qrSvg.
+    await vi.waitFor(() => expect(statePayloads.length).toBe(1));
+    expect(statePayloads[0]).toEqual({ connected: false });
+
+    const srv = serverSocketFor(shared.sio, grantedAdvisor.id);
+    expect(srv).toBeDefined();
+    expect(Array.from(srv!.rooms).sort()).toEqual([INBOX_ROOM, srv!.id].sort());
+
+    // Room scoping still applies to granted sockets: admins-room traffic never
+    // arrives, inbox traffic does.
+    shared.sio.to(ADMINS_ROOM).emit("admin_only_probe", { secret: true });
+    shared.sio.to(ADMINS_ROOM).emit("whatsapp_state", hooks.getWhatsAppState());
+    shared.sio.to(INBOX_ROOM).emit("message", { id: "m-w2", body: "inbox for granted advisor" });
+    await sleep(300);
+
+    expect(messages).toEqual([{ id: "m-w2", body: "inbox for granted advisor" }]);
+    expect(adminOnly).toEqual([]);
+    expect(statePayloads).toHaveLength(1);
+    expect(JSON.stringify(statePayloads)).not.toContain("qrSvg");
+
+    socket.disconnect();
+    await waitForSocketCount(shared.sio, 0);
+  });
+
+  it("connects an ADVISOR granted only whatsapp.admin: admins room only, receives full state incl qrSvg, no inbox messages", async () => {
+    // whatsapp.admin alone is socket-eligible: the socket lands in 'admins'
+    // without 'inbox' — the QR/status channel decoupled from the message feed.
+    const adminAdvisor = await prisma.user.create({
+      data: { email: "sock-w2-grant-admin@test.io", name: "GrantAdmin", password: "x", role: "ADVISOR" },
+    });
+    await prisma.userPermission.create({ data: { userId: adminAdvisor.id, key: "whatsapp.admin", allowed: true } });
+
+    const socket = makeClient(shared.url, { cookie: await cookieFor(adminAdvisor), origin: "http://localhost:3000" });
+    // Attach BEFORE connecting: the initial whatsapp_state is emitted in the
+    // same tick as the CONNECT packet and may be delivered batched with it.
+    const statePayloads: any[] = [];
+    const messages: any[] = [];
+    socket.on("whatsapp_state", (p) => statePayloads.push(p));
+    socket.on("message", (p) => messages.push(p));
+
+    expect(await connectOutcome(socket)).toBe("connected");
+
+    // Full initial state — the admins-room payload, qrSvg included.
+    await vi.waitFor(() => expect(statePayloads.length).toBe(1));
+    expect(statePayloads[0]).toEqual(hooks.getWhatsAppState());
+    expect(statePayloads[0].qrSvg).toBe("<svg>fake-pairing-qr</svg>");
+
+    const srv = serverSocketFor(shared.sio, adminAdvisor.id);
+    expect(srv).toBeDefined();
+    expect(Array.from(srv!.rooms).sort()).toEqual([ADMINS_ROOM, srv!.id].sort());
+
+    // Not in 'inbox': message traffic never arrives, admins traffic does.
+    shared.sio.to(INBOX_ROOM).emit("message", { id: "m-w2-admin", body: "must not arrive" });
+    shared.sio.to(ADMINS_ROOM).emit("whatsapp_state", hooks.getWhatsAppState());
+    await sleep(300);
+
+    expect(messages).toEqual([]);
+    expect(statePayloads).toHaveLength(2);
+
+    socket.disconnect();
+    await waitForSocketCount(shared.sio, 0);
+  });
+});
+
+describe("W2 permission revalidation (perm-inbox, fake timers)", () => {
+  it("disconnects within 60s when whatsapp.inbox.view is removed", async () => {
+    const u = await prisma.user.create({ data: { email: "sock-w2-rev-view@test.io", name: "RevView", password: "x", role: "USER" } });
+    vi.useFakeTimers();
+    const server = await startServer();
+    try {
+      const socket = makeClient(server.url, { cookie: await cookieFor(u), origin: "http://localhost:3000" });
+      expect(await connectOutcome(socket)).toBe("connected");
+      expect(server.sio.sockets.sockets.size).toBe(1);
+
+      // Deny beats the USER preset: after this row the user holds no
+      // socket-eligible permission, so the next pass must disconnect.
+      await prisma.userPermission.create({ data: { userId: u.id, key: "whatsapp.inbox.view", allowed: false } });
+      // Attach before advancing so a fast disconnect can never be missed.
+      const disconnected = waitDisconnect(socket);
+      await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB
+      vi.useRealTimers();
+      await disconnected;
+      await vi.waitFor(() => expect(server.sio.sockets.sockets.size).toBe(0));
+    } finally {
+      vi.useRealTimers();
+      await stopServer(server);
+    }
+  });
+
+  it("re-rooms within 60s when whatsapp.admin is removed from an ADMIN (stays connected, leaves 'admins')", async () => {
+    const u = await prisma.user.create({ data: { email: "sock-w2-rev-admin@test.io", name: "RevAdmin", password: "x", role: "ADMIN" } });
+    vi.useFakeTimers();
+    const server = await startServer();
+    try {
+      const socket = makeClient(server.url, { cookie: await cookieFor(u), origin: "http://localhost:3000" });
+      expect(await connectOutcome(socket)).toBe("connected");
+      const before = serverSocketFor(server.sio, u.id)!;
+      expect(before.rooms.has(ADMINS_ROOM)).toBe(true);
+
+      let disconnected = false;
+      socket.on("disconnect", () => {
+        disconnected = true;
+      });
+
+      // Deny beats even the ADMIN preset; whatsapp.inbox.view remains, so the
+      // socket must survive but drop out of 'admins'.
+      await prisma.userPermission.create({ data: { userId: u.id, key: "whatsapp.admin", allowed: false } });
+      await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB
+      // Revalidation resolves asynchronously (DB read + room sync) after the
+      // interval fires — back on real timers, give it a real moment to settle.
+      vi.useRealTimers();
+      await sleep(200);
+
+      expect(disconnected).toBe(false);
+      expect(server.sio.sockets.sockets.size).toBe(1);
+      const srv = serverSocketFor(server.sio, u.id)!;
+      expect(Array.from(srv.rooms).sort()).toEqual([INBOX_ROOM, srv.id].sort());
+
+      // Proof the room sync is real, not just the data structure: admins-room
+      // emits no longer arrive, inbox emits still do.
+      const inbox: any[] = [];
+      const adminOnly: any[] = [];
+      socket.on("message", (p) => inbox.push(p));
+      socket.on("admin_only_probe", (p) => adminOnly.push(p));
+      server.sio.to(ADMINS_ROOM).emit("admin_only_probe", { secret: true });
+      server.sio.to(INBOX_ROOM).emit("message", { id: "m-w2-rev" });
+      await sleep(300);
+      expect(adminOnly).toEqual([]);
+      expect(inbox).toEqual([{ id: "m-w2-rev" }]);
+
+      socket.disconnect();
+    } finally {
+      vi.useRealTimers();
+      await stopServer(server);
+    }
+  });
+
+  it("joins 'admins' within 60s when whatsapp.admin is granted", async () => {
+    const u = await prisma.user.create({ data: { email: "sock-w2-grant-admin-live@test.io", name: "GrantAdminLive", password: "x", role: "USER" } });
+    vi.useFakeTimers();
+    const server = await startServer();
+    try {
+      const socket = makeClient(server.url, { cookie: await cookieFor(u), origin: "http://localhost:3000" });
+      expect(await connectOutcome(socket)).toBe("connected");
+      expect(serverSocketFor(server.sio, u.id)!.rooms.has(ADMINS_ROOM)).toBe(false);
+
+      // The grant takes effect on the next pass without a reconnect.
+      await prisma.userPermission.create({ data: { userId: u.id, key: "whatsapp.admin", allowed: true } });
+      await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB
+      // Revalidation resolves asynchronously (DB read + room sync) after the
+      // interval fires — back on real timers, give it a real moment to settle.
+      vi.useRealTimers();
+      await sleep(200);
+
+      expect(server.sio.sockets.sockets.size).toBe(1);
+      const srv = serverSocketFor(server.sio, u.id)!;
+      expect(Array.from(srv.rooms).sort()).toEqual([ADMINS_ROOM, INBOX_ROOM, srv.id].sort());
+
+      // Admins-room traffic now reaches the socket.
+      const adminOnly: any[] = [];
+      socket.on("admin_only_probe", (p) => adminOnly.push(p));
+      server.sio.to(ADMINS_ROOM).emit("admin_only_probe", { secret: true });
+      await sleep(300);
+      expect(adminOnly).toEqual([{ secret: true }]);
+
+      socket.disconnect();
+    } finally {
+      vi.useRealTimers();
+      await stopServer(server);
+    }
+  });
+
+  it("disconnects within 60s when an admin-only user loses whatsapp.admin", async () => {
+    const u = await prisma.user.create({
+      data: { email: "sock-w2-lose-admin@test.io", name: "LoseAdmin", password: "x", role: "ADVISOR" },
+    });
+    // Grant BEFORE connecting: the ADVISOR preset has no socket-eligible keys,
+    // so this row is the only thing letting the handshake through.
+    await prisma.userPermission.create({ data: { userId: u.id, key: "whatsapp.admin", allowed: true } });
+    vi.useFakeTimers();
+    const server = await startServer();
+    try {
+      const socket = makeClient(server.url, { cookie: await cookieFor(u), origin: "http://localhost:3000" });
+      expect(await connectOutcome(socket)).toBe("connected");
+      expect(server.sio.sockets.sockets.size).toBe(1);
+
+      // Removing the override leaves the ADVISOR preset — nothing
+      // socket-eligible — so the next pass must disconnect.
+      await prisma.userPermission.deleteMany({ where: { userId: u.id } });
+      // Attach before advancing so a fast disconnect can never be missed.
+      const disconnected = waitDisconnect(socket);
+      await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB
+      vi.useRealTimers();
+      await disconnected;
+      await vi.waitFor(() => expect(server.sio.sockets.sockets.size).toBe(0));
+    } finally {
+      vi.useRealTimers();
+      await stopServer(server);
+    }
   });
 });

@@ -1,26 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { canAdministerWhatsApp, canUseInbox, getActiveUser, requireWhatsAppAdminAccess } from "@/lib/access-policy";
+import { getActiveUser, requireWhatsAppAdminAccess } from "@/lib/access-policy";
+import { hasPermission } from "@/lib/permissions";
 import { getWhatsAppState, logoutWhatsApp, initializeWhatsApp, restartWhatsApp } from "@/lib/whatsapp";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Interim W1 policy (lib/access-policy.ts): full connection details —
-  // including the pairing QR — are ADMIN-only. USER (and any future inbox
-  // role) sees availability strictly as { connected }. Travel-only roles get
-  // 403, deactivated users 401. Decided from the current DB role, so a role
-  // change takes effect on the next request.
+  // W2 permission policy (lib/permissions.ts): full connection details —
+  // including the pairing QR — require the effective whatsapp.admin
+  // permission. Anyone with whatsapp.inbox.view sees availability strictly as
+  // { connected }. Everyone else gets 403, deactivated users 401. Resolved
+  // from the current DB row, so an override edit takes effect on the next
+  // request.
   const user = await getActiveUser(session);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (canAdministerWhatsApp(user.role)) {
+  if (hasPermission(user, "whatsapp.admin")) {
     return NextResponse.json(getWhatsAppState());
   }
 
-  if (canUseInbox(user.role)) {
+  if (hasPermission(user, "whatsapp.inbox.view")) {
     return NextResponse.json({ connected: getWhatsAppState().state === "ready" });
   }
 
@@ -28,8 +30,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  // Stays ADMIN-only; non-admins (logged in or not) get the same 401 as before
-  // W1, now additionally enforced against the live DB role/active flag.
+  // Requires the effective whatsapp.admin permission; callers without it
+  // (logged in or not) get the same 401 as before W1, now additionally
+  // enforced against the live DB row and per-user overrides.
   const session = await getServerSession(authOptions);
   const access = await requireWhatsAppAdminAccess(session);
   if (!access.allowed) return access.response;

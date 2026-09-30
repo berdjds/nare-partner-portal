@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
+import { hasPermission } from "@/lib/permissions";
 import { ROLE_ADMIN, ROLE_VALIDATOR } from "@/lib/travel/contracts";
 import { getTravelActor, travelError, unauthorized } from "../../guard";
 
-// Streams a quotation PDF. CLIENT documents: request owner, the currently
-// assigned validator or ADMIN (others get 404 — existence is not disclosed);
-// INTERNAL: ADMIN/VALIDATOR roles, plus the assigned validator of any role
-// (the assignment itself grants internal visibility, v0.10.0). The filesystem
-// path is never exposed.
+// Streams a quotation PDF. W2 (perm-travel): the kind's permission key is
+// required first — CLIENT needs travel.client_docs.download, INTERNAL needs
+// travel.internal.download (D2: admin-only preset, so non-admins need an
+// explicit grant). The pre-W2 record rules stay as the minimum on top:
+// CLIENT documents: request owner, the currently assigned validator or ADMIN
+// (others get 404 — existence is not disclosed); INTERNAL: ADMIN/VALIDATOR
+// roles, plus the assigned validator of any role (the assignment itself
+// grants internal visibility, v0.10.0). The filesystem path is never exposed.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const actor = await getTravelActor();
@@ -22,6 +26,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (doc.kind === "INTERNAL") {
+      if (!hasPermission(actor, "travel.internal.download")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       let allowed = actor.role === ROLE_ADMIN || actor.role === ROLE_VALIDATOR;
       if (!allowed) {
         const assignment = await prisma.validationAssignment.findFirst({
@@ -33,18 +40,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       if (!allowed) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-    } else if (actor.role !== ROLE_ADMIN) {
-      const isOwner = doc.version.request.ownerId === actor.id;
-      let isAssignedValidator = false;
-      if (actor.role === ROLE_VALIDATOR) {
-        const assignment = await prisma.validationAssignment.findFirst({
-          where: { requestId: doc.version.requestId, active: true },
-          select: { validatorId: true },
-        });
-        isAssignedValidator = assignment?.validatorId === actor.id;
+    } else {
+      if (!hasPermission(actor, "travel.client_docs.download")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      if (!isOwner && !isAssignedValidator) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      if (actor.role !== ROLE_ADMIN) {
+        const isOwner = doc.version.request.ownerId === actor.id;
+        let isAssignedValidator = false;
+        if (actor.role === ROLE_VALIDATOR) {
+          const assignment = await prisma.validationAssignment.findFirst({
+            where: { requestId: doc.version.requestId, active: true },
+            select: { validatorId: true },
+          });
+          isAssignedValidator = assignment?.validatorId === actor.id;
+        }
+        if (!isOwner && !isAssignedValidator) {
+          return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
       }
     }
 

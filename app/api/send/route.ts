@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { sendWhatsAppMessage, getWhatsAppState } from "@/lib/whatsapp";
 import { writeAuditLog } from "@/lib/audit";
-import { requireInboxAccess } from "@/lib/access-policy";
+import { requirePermission } from "@/lib/access-policy";
 import { z } from "zod";
 
 const sendSchema = z.object({
@@ -17,9 +17,10 @@ const sendSchema = z.object({
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  // Interim W1 policy: sending is an inbox capability — ADMIN/USER only, from
-  // the current DB role (deactivated users get 401 like anonymous).
-  const access = await requireInboxAccess(session);
+  // W2 permission policy: sending requires the effective whatsapp.inbox.send
+  // permission (view and send are separate keys), resolved from the current
+  // DB row (deactivated users get 401 like anonymous).
+  const access = await requirePermission(session, "whatsapp.inbox.send");
   if (!access.allowed) return access.response;
 
   if (getWhatsAppState().state !== "ready") {

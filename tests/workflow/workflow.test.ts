@@ -450,20 +450,28 @@ describe("validator group (v0.11.0)", () => {
     }
   });
 
-  it("auto-sends the INTERNAL sheet to group members individually", async () => {
+  it("submit renders the INTERNAL sheet but never sends it via WhatsApp (int-lock)", async () => {
     const { sendWhatsAppMessage } = await import("@/lib/whatsapp");
     const mock = vi.mocked(sendWhatsAppMessage);
-    await setGroup([fx.validator.id, fx.plainUser.id]); // plainUser has no phone
+    await setGroup([fx.validator.id, fx.plainUser.id]);
     try {
-      const { request } = await draftWithContent(); // assigns fx.validator too
+      const { request, version } = await draftWithContent(); // assigns fx.validator too
       mock.mockClear();
       await workflow.submit(actorOf(fx.advisor), request.id);
+      // The costing sheet is still generated and rendered at submit time...
+      const internalDoc = await prisma.quoteDocument.findUnique({
+        where: { idempotencyKey: `internal-${version.id}` },
+      });
+      expect(internalDoc?.kind).toBe("INTERNAL");
+      expect(internalDoc?.filePath.endsWith(".pdf")).toBe(true);
+      // ...but int-lock: no WhatsApp document delivery and no
+      // QUOTE_DOCUMENT_SENT success audit for the INTERNAL sheet.
       const docSends = mock.mock.calls.filter(([arg]) => arg.type === "document");
-      // validator (assignee + group member, deduped) gets the PDF; plainUser
-      // is skipped (no phone on file) — exactly one document send.
-      expect(docSends).toHaveLength(1);
-      expect(docSends[0][0].remoteJid).toBe(fx.validator.phone);
-      expect(docSends[0][0].mediaMimeType).toBe("application/pdf");
+      expect(docSends).toHaveLength(0);
+      const sentAudit = await prisma.log.findFirst({
+        where: { action: "QUOTE_DOCUMENT_SENT", details: { contains: "INTERNAL" } },
+      });
+      expect(sentAudit).toBeNull();
     } finally {
       await setGroup([]);
     }

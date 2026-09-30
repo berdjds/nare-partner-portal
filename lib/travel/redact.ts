@@ -1,16 +1,33 @@
 /**
- * Advisor-facing redaction of engine results.
+ * Permission-gated redaction of internal costing from engine results.
  *
  * Internal costing (costQuote, profit, margin, category totals, nightly rates,
- * per-line net costs, trace, policy targets) is restricted to ADMIN/VALIDATOR
- * and — since v0.11.0 — the request OWNER (the initiator prices the request).
- * Non-owner advisors are 404'd by the routes before redaction is even
- * reachable, so these helpers remain as defense in depth.
+ * per-line net costs, trace, policy targets) and INTERNAL documents leave the
+ * travel APIs only for actors holding the `travel.internal.view` permission
+ * (int-lock). Under decision D2 — until the owner confirms the permissions
+ * migration — only ADMIN has the key in its role preset, so owners and
+ * validators see the redacted sell-side view unless explicitly granted the
+ * key via a UserPermission override. Non-owner advisors are 404'd by the
+ * routes before redaction is even reachable, so these helpers remain as
+ * defense in depth.
  */
 
+import type { PermissionKey } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
 import type { ScenarioResult } from "@/lib/travel/contracts";
 
-/** The exact sell-side fields a non-owner advisor may see per scenario. */
+/**
+ * Single gate for internal-cost visibility across the travel APIs (int-lock).
+ * Anything carrying an effective permission set qualifies; an absent set
+ * (e.g. an unresolved actor) never satisfies the key — redact by default.
+ */
+export function canViewInternal(
+  actor: { permissions?: ReadonlySet<PermissionKey> | undefined } | null | undefined,
+): boolean {
+  return hasPermission(actor, "travel.internal.view");
+}
+
+/** The exact sell-side fields an actor without `travel.internal.view` may see per scenario. */
 export interface AdvisorScenarioView {
   ref: string;
   label: string;
@@ -47,6 +64,45 @@ export function redactScenarioResultJson(resultJson: string | null): string | nu
   } catch {
     return JSON.stringify(redactScenarioResult({}));
   }
+}
+
+// ---------------------------------------------------------------------------
+// ServiceLine / StaySegment redaction (int-lock). The scenario RESULT blob is
+// redacted above; these two helpers cover the stored content rows that the
+// request-detail route also returns, which carry the same internal costing:
+// net unit/override rates, override reasons, rate provenance, and the
+// per-roomType rate-override JSON (rate + reason + actor).
+// ---------------------------------------------------------------------------
+
+const INTERNAL_SERVICE_LINE_KEYS = [
+  "unitRate", // net cost per unit
+  "overrideRate", // overridden net cost
+  "overrideReason", // internal note
+  "overrideById", // who overrode (attribution)
+  "sourceRef", // rate provenance, e.g. "Tour Calculator!C58"
+] as const;
+
+/**
+ * Strips the internal costing fields from a ServiceLine row, keeping the
+ * sell-side display fields (label, basis, quantity, currency, ...).
+ */
+export function redactServiceLine<T extends object>(
+  line: T,
+): Omit<T, (typeof INTERNAL_SERVICE_LINE_KEYS)[number]> {
+  const clone = { ...(line as Record<string, unknown>) };
+  for (const key of INTERNAL_SERVICE_LINE_KEYS) delete clone[key];
+  return clone as Omit<T, (typeof INTERNAL_SERVICE_LINE_KEYS)[number]>;
+}
+
+/**
+ * Nulls StaySegment.rateOverrides — a JSON map of per-roomType overridden net
+ * rates with reason and actor. Nulled rather than removed because the client
+ * detail types declare `rateOverrides: string | null`.
+ */
+export function redactStay<T extends object>(stay: T): Omit<T, "rateOverrides"> & { rateOverrides: null } {
+  return { ...(stay as Record<string, unknown>), rateOverrides: null } as Omit<T, "rateOverrides"> & {
+    rateOverrides: null;
+  };
 }
 
 // ---------------------------------------------------------------------------

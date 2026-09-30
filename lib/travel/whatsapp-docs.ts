@@ -2,17 +2,19 @@
  * WhatsApp delivery of rendered quotation PDFs.
  *
  * Shared by the manual send endpoint (app/api/travel/documents/[id]/send) and
- * the best-effort auto-send after submit()/issue() in workflow.ts. Delivery
- * failures are reported per recipient and never thrown — document generation
- * and workflow transitions must not depend on WhatsApp being connected.
+ * the best-effort auto-send after issue() in workflow.ts. Delivery failures
+ * are reported per recipient and never thrown — document generation and
+ * workflow transitions must not depend on WhatsApp being connected.
+ *
+ * int-lock: INTERNAL costing sheets are never delivered, to anyone, through
+ * any caller — the refusal lives here so no code path can bypass it.
  */
 
 import { readFile } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { getTravelSettings } from "@/lib/travel/settings";
-import { ROLE_ADMIN, ROLE_VALIDATOR, versionLabel } from "@/lib/travel/contracts";
+import { versionLabel } from "@/lib/travel/contracts";
 
 export interface DocumentSendResult {
   to: string;
@@ -24,11 +26,10 @@ export interface DocumentSendResult {
  * Sends the rendered PDF of a QuoteDocument to users (by id, resolved to
  * their WhatsApp phone) and/or WhatsApp groups (by @g.us jid).
  *
- * INTERNAL documents carry margins: they may only go to ADMIN/VALIDATOR
- * users, the request's currently assigned validator, or members of the
- * validator group in settings (v0.11.0 — membership grants internal
- * visibility, same as an assignment). Other recipients get a failure entry
- * instead of the document.
+ * int-lock: INTERNAL documents carry margins and are never sent via
+ * WhatsApp — every requested target gets a failure entry and the refusal is
+ * audited. This holds for already-generated documents too: the kind check
+ * runs at send time on the loaded document.
  */
 export async function sendQuoteDocument(
   documentId: string,
@@ -41,8 +42,7 @@ export async function sendQuoteDocument(
       version: {
         select: {
           versionNo: true,
-          requestId: true,
-          request: { select: { packageCode: true, ownerId: true } },
+          request: { select: { packageCode: true } },
         },
       },
     },
@@ -51,6 +51,20 @@ export async function sendQuoteDocument(
 
   const caption = `${doc.version.request.packageCode} ${versionLabel(doc.version.versionNo)} ${doc.kind}`;
   const filename = `${doc.version.request.packageCode}-${versionLabel(doc.version.versionNo)}-${doc.kind}.pdf`;
+
+  if (doc.kind === "INTERNAL") {
+    const error = "INTERNAL documents cannot be sent via WhatsApp";
+    const refused: DocumentSendResult[] = [
+      ...(targets.userIds ?? []).map((id) => ({ to: id, ok: false, error })),
+      ...(targets.groupJids ?? []).map((jid) => ({ to: jid, ok: false, error })),
+    ];
+    await writeAuditLog(
+      "QUOTE_DOCUMENT_SEND_REFUSED",
+      actorId,
+      `${caption} (${documentId}): WhatsApp delivery refused for ${refused.length} recipient(s) — ${error}`,
+    );
+    return refused;
+  }
 
   let mediaBase64: string | null = null;
   let loadError: string | null = null;
@@ -64,20 +78,6 @@ export async function sendQuoteDocument(
     }
   }
 
-  const assignment = await prisma.validationAssignment.findFirst({
-    where: { requestId: doc.version.requestId, active: true },
-    select: { validatorId: true },
-  });
-
-  // Validator-group membership (settings) grants INTERNAL visibility too.
-  let validatorGroup: string[] = [];
-  try {
-    const ids: unknown = JSON.parse((await getTravelSettings()).validatorUserIds);
-    if (Array.isArray(ids)) validatorGroup = ids.filter((x): x is string => typeof x === "string");
-  } catch {
-    validatorGroup = [];
-  }
-
   const results: DocumentSendResult[] = [];
 
   for (const userId of targets.userIds ?? []) {
@@ -88,16 +88,6 @@ export async function sendQuoteDocument(
     const label = user ? user.name || user.email : userId;
     if (!user || !user.active) {
       results.push({ to: label, ok: false, error: "user not found or inactive" });
-      continue;
-    }
-    if (
-      doc.kind === "INTERNAL" &&
-      user.role !== ROLE_ADMIN &&
-      user.role !== ROLE_VALIDATOR &&
-      user.id !== assignment?.validatorId &&
-      !validatorGroup.includes(user.id)
-    ) {
-      results.push({ to: label, ok: false, error: "internal documents are restricted to validators/admins" });
       continue;
     }
     if (!user.phone) {

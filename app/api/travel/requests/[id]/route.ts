@@ -4,7 +4,13 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ROLE_ADMIN, ROLE_ADVISOR, ROLE_VALIDATOR } from "@/lib/travel/contracts";
 import type { EngineInput, ScenarioResult } from "@/lib/travel/contracts";
-import { publicDocumentView, redactScenarioResultJson } from "@/lib/travel/redact";
+import {
+  canViewInternal,
+  publicDocumentView,
+  redactScenarioResultJson,
+  redactServiceLine,
+  redactStay,
+} from "@/lib/travel/redact";
 import { buildTraceRows, type TraceRow } from "@/lib/travel/trace-table";
 import { updateDraft, updateDraftSchema } from "@/lib/travel/workflow";
 import { writeAuditLog } from "@/lib/audit";
@@ -18,8 +24,9 @@ const patchBodySchema = z.object({
 // Full detail: agency, versions with scenarios/stays/lines, snapshot summary
 // (hash + validity, not the full result blob), assignments, decisions, and
 // document metadata without filesystem paths. Advisors get 404 for other
-// advisors' requests (IDOR). The request owner sees full costing (v0.11.0) —
-// redaction to sell-side fields would only apply to a non-owner advisor.
+// advisors' requests (IDOR). Internal costing and INTERNAL documents are
+// redacted for any actor without the travel.internal.view permission
+// (int-lock; D2: admin-only preset until the permissions migration).
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const actor = await getTravelActor();
@@ -76,11 +83,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
     }
-    const advisorView = actor.role === ROLE_ADVISOR;
-    // v0.11.0: the request owner sees full costing (per-line net costs — the
-    // initiator prices the request). Redaction remains for a hypothetical
-    // non-owner advisor; they are 404'd above, so this is defense in depth.
-    const redactResults = advisorView && request.ownerId !== actor.id;
+    // int-lock: internal costing (scenario resultJson, trace rows, service-line
+    // net rates/overrides/provenance, stay rateOverrides) is gated on the
+    // travel.internal.view permission, not on role or ownership (D2: only
+    // ADMIN's preset carries the key; owners/validators need an explicit
+    // UserPermission grant).
+    const redactResults = !canViewInternal(actor);
 
     // Fallback paying-pax for trace rows when a frozen scenario input lacks
     // its own traveler counts (mirrors the PDF renderer's request-level fallback).
@@ -124,10 +132,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
               createdAt: v.snapshot.createdAt,
             }
           : null;
+        // int-lock draft-editor carve-out: the owner/admin of an EDITABLE
+        // version (DRAFT / CHANGES_REQUESTED — the same gate updateDraft and
+        // saveVersionContent enforce) keeps service-line unit/override rates,
+        // overrideReason, sourceRef and stay rateOverrides, because the draft
+        // editor (ScenariosTab) round-trips exactly these fields when saving
+        // content; stripping them would silently wipe costing on the next
+        // save. For every other actor without travel.internal.view (the
+        // owner of a submitted request, assigned validators, ...) they are
+        // redacted below.
+        const versionEditable =
+          (actor.id === request.ownerId || actor.role === ROLE_ADMIN) &&
+          ["DRAFT", "CHANGES_REQUESTED"].includes(v.status);
+        const redactCostFields = redactResults && !versionEditable;
         return {
           ...v,
           quoteCurrency,
           snapshot: snapshotPublic,
+          serviceLines: redactCostFields ? v.serviceLines.map(redactServiceLine) : v.serviceLines,
           scenarios: v.scenarios.map((sc) => {
             // traceRows (v0.15.0): the frozen calculation breakdown, rebuilt
             // from the snapshot's inputs + this scenario's frozen result —
@@ -151,14 +173,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             }
             return {
               ...sc,
+              stays: redactCostFields ? sc.stays.map(redactStay) : sc.stays,
               resultJson: redactResults ? redactScenarioResultJson(sc.resultJson) : sc.resultJson,
               traceRows,
             };
           }),
           documents: v.documents
-            // INTERNAL documents carry margins — advisors never see them,
-            // not even as list metadata.
-            .filter((d) => !advisorView || d.kind !== "INTERNAL")
+            // INTERNAL documents carry margins — actors without
+            // travel.internal.view never see them, not even as list metadata.
+            .filter((d) => !redactResults || d.kind !== "INTERNAL")
             .map(publicDocumentView),
         };
       }),

@@ -2,7 +2,12 @@
  * Travel quotation workflow state machine.
  *
  * Every transition function takes the acting user as `{ id, role, ... }` and
- * enforces RBAC itself (routes stay thin). State changes, audit-relevant rows
+ * enforces RBAC itself (routes stay thin). Since W2 (perm-travel) the gated
+ * actions additionally require the matching effective permission
+ * (assertPermission: createRequest/createRevision → travel.create, review →
+ * travel.review, issue → travel.issue); the role and record-level rules below
+ * stay as the minimum — a permission can only narrow, never widen.
+ * State changes, audit-relevant rows
  * and notification outbox rows commit in ONE interactive transaction via
  * queueWorkflowEvent(), so a committed transition always has its event and a
  * rolled-back one never notifies.
@@ -38,6 +43,7 @@ import {
   type WorkflowEventType,
 } from "@/lib/travel/contracts";
 import { calculate } from "@/lib/travel/engine";
+import { type PermissionKey } from "@/lib/permissions";
 import { buildEngineInputForVersion } from "@/lib/travel/resolve";
 import { canonicalize, snapshotHash } from "@/lib/travel/snapshots";
 import { generatePackageCode } from "@/lib/travel/codes";
@@ -67,6 +73,14 @@ export interface WorkflowActor {
   role: string;
   name?: string | null;
   email?: string | null;
+  /**
+   * Effective W2 permissions (role preset + grants − denies), loaded from the
+   * database by the route guard (app/api/travel/guard.ts) on every request.
+   * When present, the workflow gates each action on its key (narrow-only).
+   * Direct callers that omit it (tests, internal tooling) keep the pre-W2
+   * role/record rules unchanged — see assertPermission().
+   */
+  permissions?: ReadonlySet<PermissionKey>;
 }
 
 /**
@@ -324,6 +338,27 @@ function assertRole(actor: WorkflowActor, roles: string[], code = "FORBIDDEN") {
   }
 }
 
+/**
+ * W2 permission gate (perm-travel): the role and record-level rules in this
+ * module stay as the MINIMUM — a permission can only narrow an action further
+ * (a deny override, or a preset that never included the key), never widen it
+ * past what the workflow already allows for that record.
+ *
+ * The gate applies only when the actor carries a RESOLVED effective set
+ * (actor.permissions). Every HTTP route builds its actor through
+ * getTravelActor() (app/api/travel/guard.ts), which loads the effective
+ * permissions from the database on each request, so all request traffic is
+ * gated per key. Callers that never resolved a set (undefined — tests and
+ * internal tooling) keep the pre-W2 role/record rules unchanged, the
+ * workflow's original contract for direct callers.
+ */
+function assertPermission(actor: WorkflowActor, key: PermissionKey) {
+  if (actor.permissions === undefined) return;
+  if (!actor.permissions.has(key)) {
+    throw new WorkflowError("FORBIDDEN", `missing permission ${key}`, 403);
+  }
+}
+
 function assertOwnerOrAdmin(actor: WorkflowActor, ownerId: string) {
   if (actor.role !== ROLE_ADMIN && actor.id !== ownerId) {
     throw new WorkflowError("FORBIDDEN", "only the owning advisor or an admin may do this", 403);
@@ -407,6 +442,7 @@ function assertTransition(from: string, allowed: QuoteStatus[], action: string) 
 
 export async function createRequest(actor: WorkflowActor, data: CreateRequestInput) {
   assertRole(actor, [ROLE_ADMIN, ROLE_ADVISOR]);
+  assertPermission(actor, "travel.create");
   const parsed = createRequestSchema.parse(data);
   if (parsed.endDate <= parsed.startDate) {
     throw new WorkflowError("DATE_ORDER", `endDate ${parsed.endDate} must be after startDate ${parsed.startDate}`);
@@ -946,8 +982,8 @@ export async function submit(actor: WorkflowActor, requestId: string) {
   // Company branding is frozen the same way: editing TravelSettings later must
   // not retroactively restyle an issued document.
   const branding = await getCompanyBranding();
-  // Loaded before the transaction: notification fan-out and the INTERNAL
-  // document delivery both include the validator group members.
+  // Loaded before the transaction: the notification fan-out includes the
+  // validator group members on top of owner + assigned validator.
   const groupIds = await validatorGroupIds();
 
   const inputsJson = canonicalize(input);
@@ -1085,10 +1121,9 @@ export async function submit(actor: WorkflowActor, requestId: string) {
   );
 
   // Outside the transaction: rendering is slow and must never roll back the
-  // submission. Delivery is best-effort (assigned validator + validator group
-  // members, individually); WhatsApp being offline must not fail a submit.
+  // submission. The INTERNAL costing sheet is only rendered here — int-lock:
+  // INTERNAL documents are never sent via WhatsApp, so there is no auto-send.
   await renderDocumentPdf(internalDocumentId);
-  await autoSendDocument(internalDocumentId, [assignment.validatorId, ...groupIds], actor.id);
 
   return { versionId: version.id, hash, result, quoteCurrency: input.fx.quoteCurrency ?? "USD" };
 }
@@ -1128,6 +1163,7 @@ export async function review(
   const version = await loadVersion(versionId);
   const request = version.request;
 
+  assertPermission(actor, "travel.review");
   assertTransition(version.status, ["PENDING_VALIDATION"], "review");
 
   // Decision rights belong to the CURRENT active assignment only — a
@@ -1338,6 +1374,7 @@ export async function issue(
   const version = await loadVersion(versionId);
   const request = version.request;
   assertOwnerOrAdmin(actor, request.ownerId);
+  assertPermission(actor, "travel.issue");
 
   const idempotencyKey = parsed.idempotencyKey ?? `issue-${versionId}`;
 
@@ -1673,6 +1710,9 @@ const REVISABLE_STATUSES: QuoteStatus[] = ["CHANGES_REQUESTED", "APPROVED", "ISS
 export async function createRevision(actor: WorkflowActor, requestId: string) {
   const request = await loadRequest(requestId);
   assertOwnerOrAdmin(actor, request.ownerId);
+  // Cloning into a new DRAFT version is creation: same key as createRequest
+  // ("create travel requests and quote versions").
+  assertPermission(actor, "travel.create");
 
   const latest = await prisma.quoteVersion.findFirst({
     where: { requestId },
