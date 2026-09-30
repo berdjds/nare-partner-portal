@@ -36,8 +36,12 @@ let advisor: { id: string; role: string };
 let validator: { id: string; role: string };
 let inactive: { id: string; role: string };
 
-async function cookieFor(u: { id: string; role: string }, maxAge = 60 * 60): Promise<string> {
-  const token = await encode({ token: { id: u.id, role: u.role }, secret: SECRET, maxAge });
+async function cookieFor(u: { id: string; role: string }, maxAge = 60 * 60, sv?: number): Promise<string> {
+  const token = await encode({
+    token: { id: u.id, role: u.role, ...(sv !== undefined ? { sv } : {}) },
+    secret: SECRET,
+    maxAge,
+  });
   return `next-auth.session-token=${token}`;
 }
 
@@ -127,6 +131,32 @@ describe("authentication", () => {
   it("401 for a deactivated user, even with a valid unexpired cookie", async () => {
     const res = await get(`/uploads/${FILE_NAME}`, await cookieFor(inactive));
     expect(res.status).toBe(401);
+  });
+
+  it("401 for a cookie whose sv no longer matches the user's session version; 200 for the current sv (W1b)", async () => {
+    // Dedicated user: the shared fixtures above are reused by other suites.
+    const bumped = await prisma.user.create({
+      data: { email: "upl-bumped@test.io", name: "Bumped", password: "x", role: "USER" },
+    });
+
+    // A fresh user sits at version 0; a token carrying sv 0 serves the file.
+    expect((await get(`/uploads/${FILE_NAME}`, await cookieFor(bumped, 60 * 60, 0))).status).toBe(200);
+
+    // Revoke all issued sessions: bump User.sessionVersion atomically (the
+    // same { increment: 1 } update revokeAllSessions performs).
+    await prisma.user.update({ where: { id: bumped.id }, data: { sessionVersion: { increment: 1 } } });
+
+    const stale = await get(`/uploads/${FILE_NAME}`, await cookieFor(bumped, 60 * 60, 0));
+    expect(stale.status).toBe(401);
+    expect(await stale.text()).not.toBe(FILE_CONTENT);
+
+    const current = await get(`/uploads/${FILE_NAME}`, await cookieFor(bumped, 60 * 60, 1));
+    expect(current.status).toBe(200);
+    expect(await current.text()).toBe(FILE_CONTENT);
+
+    // A pre-W1b token with no sv claim at all counts as 0 — a real version,
+    // not a bypass — so the revocation revokes it like any other stale token.
+    expect((await get(`/uploads/${FILE_NAME}`, await cookieFor(bumped))).status).toBe(401);
   });
 
   it("accepts the __Secure- prefixed cookie name used on HTTPS deployments", async () => {

@@ -14,6 +14,7 @@ model User {
   password  String
   role      String   @default("USER") // ADMIN | USER | ADVISOR | VALIDATOR
   active    Boolean  @default(true)
+  sessionVersion Int @default(0) // W1b session version; bump with { increment: 1 } to revoke all issued tokens
   phone     String? // WhatsApp notification destination (international format, no +)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

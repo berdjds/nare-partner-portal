@@ -190,9 +190,22 @@ so logout, expiry, deactivation or demotion all cut the socket promptly. The
 client (`hooks/useSocket.ts`) stops reconnecting after an `unauthorized`
 connect_error and disconnects on sign-out.
 
-**Known limit carried to W2.** A JWT copied before logout stays valid until it
-expires (NextAuth default 30 days) — the 60s revalidation only helps while the
-user row is deactivated or demoted. Per-session revocation arrives with W2.
+**Session revocation (W1b; RB1 closed).** Every token minted at login carries the
+user's session version (`sv`); each HTTP request, upload request and socket
+(re)validation re-reads the user row and refuses tokens whose `sv` no longer
+matches. Changing a user's password or role, deactivating them (`active=false`),
+the admin **Revoke sessions** action (`POST /api/users/[id]/revoke-sessions`,
+ADMIN only — 403 for other roles, audit action `SESSIONS_REVOKED`) and the user's
+own **Sign out everywhere** (`POST /api/auth/sign-out-everywhere`, audit action
+`SIGN_OUT_EVERYWHERE`) all bump `User.sessionVersion` atomically, so every
+previously issued token is useless on its next request. Session maxAge is capped
+at 7 days. Remaining limits: revocation applies on the NEXT request (nothing
+reaches into an in-flight one); open sockets disconnect on the next 60s
+revalidation pass, not instantly; tokens minted before W1b carry no `sv` claim
+and keep working until the user's FIRST version bump — a missing `sv` reads as
+version 0, and the first bump revokes those legacy tokens too. Per-device tokens
+(arrive with W2) are still not individually addressable: revocation is always
+all-sessions-of-a-user.
 
 **Rate limiting and media validation.** Still open (see below).
 

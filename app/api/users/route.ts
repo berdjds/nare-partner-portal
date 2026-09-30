@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveUser } from "@/lib/access-policy";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -38,7 +39,8 @@ const deleteSchema = z.object({
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ADMIN") {
+  const user = await getActiveUser(session);
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -52,7 +54,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ADMIN") {
+  const user = await getActiveUser(session);
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const hashed = await bcrypt.hash(parsed.data.password, 10);
-    const user = await prisma.user.create({
+    const created = await prisma.user.create({
       data: {
         email: parsed.data.email,
         name: parsed.data.name,
@@ -75,9 +78,9 @@ export async function POST(req: NextRequest) {
       select: { id: true, email: true, name: true, role: true, active: true, phone: true, createdAt: true },
     });
 
-    await writeAuditLog("USER_CREATED", session.user.id, `Created ${user.email}`);
+    await writeAuditLog("USER_CREATED", user.id, `Created ${created.email}`);
 
-    return NextResponse.json(user);
+    return NextResponse.json(created);
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to create user" }, { status: 500 });
   }
@@ -85,7 +88,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ADMIN") {
+  const user = await getActiveUser(session);
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -99,16 +103,35 @@ export async function PATCH(req: NextRequest) {
   const data: any = { ...rest };
   if (password) data.password = await bcrypt.hash(password, 10);
 
+  // W1b: account changes that must invalidate existing sessions (new
+  // password, role change, transition to inactive) bump sessionVersion, so
+  // every token minted before the change fails the sv comparison in
+  // getActiveUser() on its next request. No-op role/active values and
+  // name/email/phone-only edits do not bump. A missing row keeps the old
+  // behavior: the update below throws and the catch answers 500.
+  const current = await prisma.user.findUnique({
+    where: { id },
+    select: { role: true, active: true },
+  });
+  if (
+    current &&
+    (password ||
+      (parsed.data.role !== undefined && parsed.data.role !== current.role) ||
+      (parsed.data.active === false && current.active))
+  ) {
+    data.sessionVersion = { increment: 1 };
+  }
+
   try {
-    const user = await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id },
       data,
       select: { id: true, email: true, name: true, role: true, active: true, phone: true, createdAt: true },
     });
 
-    await writeAuditLog("USER_UPDATED", session.user.id, `Updated ${user.email}`);
+    await writeAuditLog("USER_UPDATED", user.id, `Updated ${updated.email}`);
 
-    return NextResponse.json(user);
+    return NextResponse.json(updated);
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to update user" }, { status: 500 });
   }
@@ -116,7 +139,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ADMIN") {
+  const user = await getActiveUser(session);
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -127,13 +151,13 @@ export async function DELETE(req: NextRequest) {
   }
 
   // Prevent self-deletion
-  if (id === session.user.id) {
+  if (id === user.id) {
     return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
   }
 
   try {
     await prisma.user.delete({ where: { id } });
-    await writeAuditLog("USER_DELETED", session.user.id, `Deleted user ${id}`);
+    await writeAuditLog("USER_DELETED", user.id, `Deleted user ${id}`);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to delete user" }, { status: 500 });

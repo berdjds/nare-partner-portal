@@ -12,8 +12,12 @@
  *    NEXTAUTH_SECRET). Missing, malformed or expired → 401. NEXTAUTH_SECRET
  *    unset → fail closed (401), never serve unsigned.
  * 2. An ACTIVE user loaded from the database whose current role satisfies
- *    canUseInbox() (interim W1 policy — media belongs to the chat inbox).
- *    Unknown/deactivated → 401, valid but non-inbox role → 403.
+ *    canUseInbox() (interim W1 policy — media belongs to the chat inbox) and
+ *    whose current session version still matches the token's sv claim (W1b —
+ *    the User.sessionVersion column; bumping it with { increment: 1 } revokes
+ *    previously issued tokens). A token with no
+ *    sv claim reads as 0 and matches only a user that was never revoked.
+ *    Unknown/deactivated/sv-mismatch → 401, valid but non-inbox role → 403.
  * 3. A normalized path strictly inside public/uploads/ (no traversal). The
  *    traversal/out-of-bounds and not-found cases all answer 404, so the
  *    response never leaks file existence to unauthorized callers: 401/403 are
@@ -30,8 +34,7 @@ import fs from "fs/promises";
 import path from "path";
 import { decode } from "next-auth/jwt";
 import mime from "mime-types";
-import { prisma } from "@/lib/prisma";
-import { canUseInbox } from "@/lib/access-policy";
+import { canUseInbox, getActiveUserById } from "@/lib/access-policy";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 
@@ -93,13 +96,18 @@ function readSessionCookie(req: IncomingMessage): string | null {
   return null;
 }
 
-/** Decodes and validates the session cookie; returns the user id or null. */
-async function readTokenUserId(req: IncomingMessage): Promise<string | null> {
+/**
+ * Decodes and validates the session cookie; returns the user id and the
+ * token's session version claim (W1b — tokens minted before W1b carry no sv
+ * and count as 0, which matches only a user that was never revoked),
+ * or null when there is no valid session.
+ */
+async function readTokenSession(req: IncomingMessage): Promise<{ id: string; sv: number } | null> {
   const secret = process.env.NEXTAUTH_SECRET;
   if (!secret) return null; // fail closed rather than serve media unsigned
   const token = readSessionCookie(req);
   if (!token) return null;
-  let payload: { exp?: number; id?: unknown; sub?: unknown } | null = null;
+  let payload: { exp?: number; id?: unknown; sub?: unknown; sv?: unknown } | null = null;
   try {
     payload = await decode({ token, secret });
   } catch {
@@ -111,7 +119,9 @@ async function readTokenUserId(req: IncomingMessage): Promise<string | null> {
   // absent exp can never slip through as "never expires".
   if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) return null;
   const id = payload.id ?? payload.sub;
-  return typeof id === "string" && id ? id : null;
+  if (typeof id !== "string" || !id) return null;
+  const sv = typeof payload.sv === "number" ? payload.sv : 0;
+  return { id, sv };
 }
 
 /**
@@ -153,17 +163,18 @@ function sendJson(res: ServerResponse, status: number, body: { error: string }):
  * always terminates the response (never falls through to the Next handler).
  */
 export async function handleUploadsRequest(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
-  const userId = await readTokenUserId(req);
-  if (!userId) {
+  const session = await readTokenSession(req);
+  if (!session) {
     sendJson(res, 401, { error: "Unauthorized" });
     return;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, active: true, role: true },
-  });
-  if (!user || !user.active) {
+  const user = await getActiveUserById(session.id, session.sv);
+  // An sv mismatch resolves exactly like an unknown/deactivated user, so the
+  // response never leaks which check failed. A token with no sv claim reads
+  // as 0 — a real version, not a bypass: it matches only while the user was
+  // never revoked.
+  if (!user) {
     sendJson(res, 401, { error: "Unauthorized" });
     return;
   }

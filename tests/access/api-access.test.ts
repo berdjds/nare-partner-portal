@@ -55,10 +55,17 @@ let validator: { id: string; email: string; name: string | null; role: string };
 let inactive: { id: string; email: string; name: string | null; role: string };
 let chat: { id: string; remoteJid: string };
 
-/** Session the way NextAuth returns it; `role` stands in for the JWT-claimed role. */
-function login(u: { id: string; email: string; name: string | null; role: string } | null, roleOverride?: string) {
+/** Session the way NextAuth returns it; `role` stands in for the JWT-claimed role, `sv` for the session-version claim (W1b). */
+function login(
+  u: { id: string; email: string; name: string | null; role: string } | null,
+  roleOverride?: string,
+  sv?: number,
+) {
   sessionRef.current = u
-    ? { user: { id: u.id, role: roleOverride ?? u.role, email: u.email, name: u.name }, expires: "2099-01-01" }
+    ? {
+        user: { id: u.id, role: roleOverride ?? u.role, email: u.email, name: u.name, ...(sv !== undefined ? { sv } : {}) },
+        expires: "2099-01-01",
+      }
     : null;
 }
 
@@ -329,5 +336,36 @@ describe("role change / deactivation takes effect on the next request (same unex
     expect((await res.json()).qrSvg).toBe("<svg>pairing-qr</svg>"); // now allowed: DB says ADMIN
 
     await prisma.user.update({ where: { id: user.id }, data: { role: "USER" } });
+  });
+});
+
+describe("session version revocation takes effect on the next request (W1b)", () => {
+  it("a stale sv loses the inbox (401 on /api/chats, /login on /) until the session carries the current sv", async () => {
+    // Dedicated user: the shared fixtures above are reused by other suites.
+    const bumped = await prisma.user.create({
+      data: { email: "acc-bumped@test.io", name: "Bumped", password: "x", role: "USER" },
+    });
+    login(bumped, undefined, 0);
+    expect((await chatsGET()).status).toBe(200);
+    expect(await redirectTarget(() => HomePage())).toBe("/dashboard");
+
+    // Revoke all issued sessions: bump User.sessionVersion atomically (the
+    // same { increment: 1 } update revokeAllSessions performs).
+    await prisma.user.update({ where: { id: bumped.id }, data: { sessionVersion: { increment: 1 } } });
+
+    login(bumped, undefined, 0); // the stale token still claims the old sv
+    expect((await chatsGET()).status).toBe(401);
+    expect(await redirectTarget(() => HomePage())).toBe("/login");
+
+    // A pre-W1b token without any sv claim counts as 0 — a real version, not
+    // a bypass — so the bump revokes it like any other stale token.
+    login(bumped);
+    expect((await chatsGET()).status).toBe(401);
+    expect(await redirectTarget(() => HomePage())).toBe("/login");
+
+    // Re-login at the current version restores access.
+    login(bumped, undefined, 1);
+    expect((await chatsGET()).status).toBe(200);
+    expect(await redirectTarget(() => HomePage())).toBe("/dashboard");
   });
 });

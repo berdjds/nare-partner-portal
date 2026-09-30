@@ -20,6 +20,19 @@ Standard NextAuth.js endpoints. The credentials provider accepts:
 }
 ```
 
+#### POST /api/auth/sign-out-everywhere
+
+Revokes every session of the caller (W1b): bumps the caller's `User.sessionVersion`,
+so every token minted before the call — including the one making the call — fails on
+its next request, and open sockets disconnect on the next 60s revalidation pass.
+
+**Access**: any active session (any role); only ever revokes the caller's own account
+(the id comes from the session, never from the request).
+
+**Response**: `{ "ok": true }`. Audit action `SIGN_OUT_EVERYWHERE`.
+
+**Errors**: `401` (no active session).
+
 ### Chats
 
 #### GET /api/chats
@@ -239,6 +252,11 @@ Updates a user.
 All fields except `id` are optional; `role` accepts `ADMIN` / `USER` / `ADVISOR` / `VALIDATOR`
 and `phone: null` clears the WhatsApp number.
 
+Changing the `password`, changing the `role`, or setting `active: false` also bumps the
+user's `sessionVersion` (W1b), revoking every session token minted before the change on
+its next request (see `doc/security.md`, "Session revocation"). Name/email/phone-only
+edits and no-op values do not bump.
+
 #### DELETE /api/users
 
 Deletes a user.
@@ -248,6 +266,18 @@ Deletes a user.
 **Query parameter**: `id`
 
 Admins cannot delete their own account.
+
+#### POST /api/users/[id]/revoke-sessions
+
+Revokes every session of the target user (W1b): bumps the target's
+`User.sessionVersion`, so every token minted before the call fails on its next
+request, and open sockets disconnect on the next 60s revalidation pass.
+
+**Access**: Admin only — active non-admin sessions get `403`, anonymous get `401`.
+
+**Response**: `{ "ok": true }`. Audit action `SESSIONS_REVOKED`, attributed to the admin.
+
+**Errors**: `401` (no active session), `403` (active non-admin), `404` (unknown user id).
 
 ### Logs
 

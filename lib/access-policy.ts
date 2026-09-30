@@ -12,10 +12,18 @@
  *
  * Trust boundary: every gate below reloads the user from the database on each
  * request. The user must exist and be active, and the CURRENT database role
- * decides — the role baked into the JWT at login is never consulted. A
- * deactivation or role change therefore takes effect on the very next request,
- * even with the same unexpired session token (a revoked user gets 401, the
- * same as having no session).
+ * decides — the role baked into the JWT at login is never consulted. The gate
+ * also compares the token's session version (`sv`) against the user's current
+ * session version (W1b, the User.sessionVersion column). Revoking every
+ * session of a user means bumping that column atomically with
+ * { increment: 1 } (see revokeAllSessions below), which revokes every token
+ * issued before the bump on the very next request. A missing sv claim reads
+ * as 0, so a legacy token keeps working only while the user was never
+ * revoked; the first revocation revokes legacy tokens too. Role and active
+ * changes need no version bump: the row re-read already applies them. A
+ * deactivation, role change or sv mismatch therefore takes effect with the
+ * same unexpired session token (a revoked user gets 401, the same as having
+ * no session).
  */
 
 import type { Session } from "next-auth";
@@ -35,34 +43,71 @@ export interface ActiveUser {
   email: string;
   name: string | null;
   role: string;
+  /** Current session version: the User.sessionVersion column. */
+  sessionVersion: number;
+}
+
+/**
+ * Revokes every session of a user: bumps User.sessionVersion atomically, so
+ * every token minted before this call (including pre-W1b legacy tokens, whose
+ * missing sv claim reads as 0) fails the version comparison on the very next
+ * HTTP request, upload request or socket revalidation pass.
+ */
+export async function revokeAllSessions(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { sessionVersion: { increment: 1 } },
+  });
 }
 
 /**
  * Resolves a user id to the current, active user row. Returns null when the
- * user no longer exists or was deactivated — the caller must treat the
- * request as unauthenticated, never fall back to the JWT role. Shared by
+ * user no longer exists, was deactivated, or — when expectedSessionVersion is
+ * given — the user's current session version (the User.sessionVersion column)
+ * no longer equals the token's sv claim (a token issued before a revocation
+ * must resolve as unauthenticated). A missing sv claim reads as 0, which is a
+ * real version, not a bypass: it matches only users that were never revoked,
+ * so the first revocation revokes legacy tokens too. The caller must treat
+ * null as unauthenticated, never fall back to the JWT role. Shared by
  * getActiveUser() and the Socket.io handshake (which decodes the JWT itself
  * and never has a Session object).
  */
-export async function getActiveUserById(id: string): Promise<ActiveUser | null> {
+export async function getActiveUserById(
+  id: string,
+  expectedSessionVersion?: number
+): Promise<ActiveUser | null> {
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, name: true, role: true, active: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      active: true,
+      sessionVersion: true,
+    },
   });
   if (!user || !user.active) return null;
-  return user;
+  const sessionVersion = user.sessionVersion;
+  if (expectedSessionVersion !== undefined && sessionVersion !== expectedSessionVersion) {
+    return null;
+  }
+  return { id: user.id, email: user.email, name: user.name, role: user.role, sessionVersion };
 }
 
 /**
  * Resolves a session to the current, active user row. Returns null when there
- * is no session user id, the user no longer exists, or the user was
- * deactivated — in all three cases the caller must treat the request as
- * unauthenticated (401), never fall back to the JWT role.
+ * is no session user id, the user no longer exists, the user was deactivated,
+ * or the token's sv claim no longer matches the user's current session
+ * version — in all cases the caller must treat the request as unauthenticated
+ * (401), never fall back to the JWT role. A token minted before W1b has no sv
+ * claim; it counts as version 0 and therefore matches only a user that was
+ * never revoked.
  */
 export async function getActiveUser(session: Session | null): Promise<ActiveUser | null> {
   const id = session?.user?.id;
   if (!id) return null;
-  return getActiveUserById(id);
+  return getActiveUserById(id, session?.user?.sv ?? 0);
 }
 
 export type AccessDecision =

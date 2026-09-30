@@ -1,30 +1,34 @@
 /**
  * Shared guard + error mapping for /api/travel routes.
  *
- * Every travel route requires a session whose role is in TRAVEL_ROLES
- * (ADMIN / ADVISOR / VALIDATOR) — or any user holding an active validation
- * assignment (v0.10.0). Finer-grained RBAC lives in the workflow layer
- * (lib/travel/workflow.ts), which throws WorkflowError with an HTTP status
- * that travelError() maps verbatim.
+ * Every travel route requires a session whose current database role is in
+ * TRAVEL_ROLES (ADMIN / ADVISOR / VALIDATOR) — or any user holding an active
+ * validation assignment (v0.10.0). Role and session version are re-read from
+ * the database via getActiveUser(), never trusted from the JWT, so a revoked
+ * or stale token is rejected here. Finer-grained RBAC lives in the workflow
+ * layer (lib/travel/workflow.ts), which throws WorkflowError with an HTTP
+ * status that travelError() maps verbatim.
  */
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { ZodError } from "zod";
 import { authOptions } from "@/lib/auth";
+import { getActiveUser } from "@/lib/access-policy";
 import { canAccessTravel } from "@/lib/travel/access";
 import { WorkflowError, type WorkflowActor } from "@/lib/travel/workflow";
 import { ResolutionError } from "@/lib/travel/resolve";
 
 export async function getTravelActor(): Promise<WorkflowActor | null> {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return null;
-  if (!(await canAccessTravel(session.user.id, session.user.role))) return null;
+  const user = await getActiveUser(session);
+  if (!user) return null;
+  if (!(await canAccessTravel(user.id, user.role))) return null;
   return {
-    id: session.user.id,
-    role: session.user.role,
-    name: session.user.name,
-    email: session.user.email,
+    id: user.id,
+    role: user.role,
+    name: user.name,
+    email: user.email,
   };
 }
 

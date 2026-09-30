@@ -267,6 +267,23 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
           </Badge>
           <Button
             variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground"
+            title="Revoke every session on all devices, then sign out"
+            onClick={async () => {
+              try {
+                await axios.post("/api/auth/sign-out-everywhere");
+              } catch {
+                // Best effort: the local sign-out below still ends this session.
+              }
+              disconnectSocket();
+              signOut({ callbackUrl: "/login" });
+            }}
+          >
+            Sign out everywhere
+          </Button>
+          <Button
+            variant="ghost"
             size="icon"
             onClick={() => {
               disconnectSocket();
