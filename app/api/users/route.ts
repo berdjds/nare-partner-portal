@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { getActiveUser } from "@/lib/access-policy";
+import { hasPermission, INTERNAL_PERMISSION_KEYS } from "@/lib/permissions";
+import { getPermissionsMigrationConfirmation } from "@/lib/permissions-report";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -40,7 +42,7 @@ const deleteSchema = z.object({
 export async function GET() {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
-  if (!user || user.role !== "ADMIN") {
+  if (!user || !hasPermission(user, "admin.users")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,7 +57,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
-  if (!user || user.role !== "ADMIN") {
+  if (!user || !hasPermission(user, "admin.users")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
-  if (!user || user.role !== "ADMIN") {
+  if (!user || !hasPermission(user, "admin.users")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -111,8 +113,64 @@ export async function PATCH(req: NextRequest) {
   // behavior: the update below throws and the catch answers 500.
   const current = await prisma.user.findUnique({
     where: { id },
-    select: { role: true, active: true },
+    select: { id: true, role: true, active: true },
   });
+
+  // W2 guards, evaluated before any update and without audit entries:
+  // an admin cannot demote or deactivate themselves through the user API
+  // (permission self-edits are likewise rejected by /api/permissions), and
+  // the last active administrator cannot be demoted or deactivated — that
+  // would lock everyone out of user management.
+  if (current) {
+    if (current.id === user.id) {
+      if (parsed.data.role !== undefined && parsed.data.role !== current.role) {
+        return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 });
+      }
+      if (parsed.data.active === false) {
+        return NextResponse.json({ error: "Cannot deactivate yourself" }, { status: 400 });
+      }
+    }
+    if (
+      current.role === "ADMIN" &&
+      current.active &&
+      ((parsed.data.role !== undefined && parsed.data.role !== "ADMIN") || parsed.data.active === false)
+    ) {
+      const otherAdmins = await prisma.user.count({
+        where: { role: "ADMIN", active: true, id: { not: current.id } },
+      });
+      if (otherAdmins === 0) {
+        return NextResponse.json(
+          { error: "Cannot demote or deactivate the last active administrator" },
+          { status: 400 },
+        );
+      }
+    }
+    // D2/D3 internal lock, demote path: while the proposed-permissions report
+    // is unconfirmed, demoting an ADMIN who still holds an internal-cost grant
+    // row would hand that key to a non-admin (the permissions PUT cannot grant
+    // it in this state, but legacy rows may exist). Deactivation is safe — an
+    // inactive account passes no gate either way.
+    if (
+      current.role === "ADMIN" &&
+      parsed.data.role !== undefined &&
+      parsed.data.role !== "ADMIN" &&
+      !(await getPermissionsMigrationConfirmation())
+    ) {
+      const internalGrants = await prisma.userPermission.count({
+        where: { userId: current.id, key: { in: Array.from(INTERNAL_PERMISSION_KEYS) }, allowed: true },
+      });
+      if (internalGrants > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Remove internal-cost grants before demoting: internal permissions stay admin-only until the proposed-permissions report is confirmed",
+          },
+          { status: 400 },
+        );
+      }
+    }
+  }
+
   if (
     current &&
     (password ||
@@ -140,7 +198,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
-  if (!user || user.role !== "ADMIN") {
+  if (!user || !hasPermission(user, "admin.users")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -150,9 +208,30 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
+  // Load the target up front: a missing id must answer 404, not fall into the
+  // 500 catch when the delete below throws.
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, role: true, active: true },
+  });
+  if (!target) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
   // Prevent self-deletion
   if (id === user.id) {
     return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
+  }
+
+  // W2: deleting the last active administrator would lock everyone out of
+  // user management (same rationale as the PATCH last-admin guard).
+  if (target.role === "ADMIN" && target.active) {
+    const otherAdmins = await prisma.user.count({
+      where: { role: "ADMIN", active: true, id: { not: target.id } },
+    });
+    if (otherAdmins === 0) {
+      return NextResponse.json({ error: "Cannot delete the last active administrator" }, { status: 400 });
+    }
   }
 
   try {

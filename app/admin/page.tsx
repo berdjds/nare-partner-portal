@@ -15,5 +15,5 @@ export default async function AdminPage() {
   // The WhatsApp connection controls require the effective whatsapp.admin
   // permission; an admin denied the key still manages users but the server
   // already withholds the state details, QR and reconnect/logout actions.
-  return <AdminDashboard canAdminWhatsApp={hasPermission(user, "whatsapp.admin")} />;
+  return <AdminDashboard canAdminWhatsApp={hasPermission(user, "whatsapp.admin")} currentUserId={user.id} />;
 }

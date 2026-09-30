@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSocket } from "@/hooks/useSocket";
 import { useToast } from "@/components/ui/toast";
+import UserPermissionsDialog from "@/components/admin/UserPermissionsDialog";
 
 interface User {
   id: string;
@@ -32,7 +33,7 @@ interface Log {
   user: { email: string; name: string } | null;
 }
 
-export default function AdminDashboard({ canAdminWhatsApp }: { canAdminWhatsApp: boolean }) {
+export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { canAdminWhatsApp: boolean; currentUserId: string }) {
   const { connected, unauthorized, whatsAppState, disconnectSocket } = useSocket();
   const { toast } = useToast();
 
@@ -40,6 +41,7 @@ export default function AdminDashboard({ canAdminWhatsApp }: { canAdminWhatsApp:
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(false);
   const [buildInfo, setBuildInfo] = useState<{ version?: string; startedAt?: string } | null>(null);
+  const [permissionsUserId, setPermissionsUserId] = useState<string | null>(null);
 
   const [newUser, setNewUser] = useState({
     email: "",
@@ -186,6 +188,9 @@ export default function AdminDashboard({ canAdminWhatsApp }: { canAdminWhatsApp:
           </Button>
           <Button variant="outline" onClick={() => (window.location.href = "/travel")}>
             Travel
+          </Button>
+          <Button variant="outline" onClick={() => (window.location.href = "/admin/permissions")}>
+            Permissions report
           </Button>
           <Button variant="outline" onClick={handleSignOutEverywhere}>
             Sign out everywhere
@@ -353,6 +358,18 @@ export default function AdminDashboard({ canAdminWhatsApp }: { canAdminWhatsApp:
                                 </form>
                               </DialogContent>
                             </Dialog>
+                            {/* The server also rejects self-changes (400);
+                                the button is disabled up front so the admin
+                                cannot accidentally lock themselves out. */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={user.id === currentUserId}
+                              title={user.id === currentUserId ? "You cannot change your own permissions" : undefined}
+                              onClick={() => setPermissionsUserId(user.id)}
+                            >
+                              Permissions
+                            </Button>
                             <Button size="sm" variant="outline" onClick={() => handleRevokeSessions(user.id, user.email)}>
                               Revoke sessions
                             </Button>
@@ -403,6 +420,8 @@ export default function AdminDashboard({ canAdminWhatsApp }: { canAdminWhatsApp:
           </Card>
         </TabsContent>
       </Tabs>
+
+      <UserPermissionsDialog userId={permissionsUserId} onClose={() => setPermissionsUserId(null)} />
     </div>
   );
 }

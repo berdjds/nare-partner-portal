@@ -255,8 +255,42 @@ CLIENT download/send on `travel.client_docs.download` /
 `travel.client_docs.send` (the send key is deliberately separate from
 `whatsapp.inbox.send`, so a travel-only user can send a client quotation
 without inbox access) and INTERNAL download on `travel.internal.download`
-(D2: validators need an explicit grant). The admin surfaces still check the
-interim role predicates above until their own wiring task lands.
+(D2: validators need an explicit grant).
+
+**Permission administration (W2 perm-admin).** User management itself is now
+gated on the effective `admin.users` permission, not the raw role:
+`/api/users` keeps its historical 401-for-everything semantics, while
+`/api/users/[id]/revoke-sessions` keeps its 401/403 split — an ADMIN denied
+`admin.users` loses both, and a non-admin granted the key gains them. The
+permission matrix lives under `/api/permissions` (`requirePermission(session,
+"admin.users")`, 401/403): `GET` returns every user with their overrides,
+role preset and resolved effective set plus the `internalLocked` flag; `PUT`
+writes per-user overrides (`allowed: true/false`, `null` resets to the preset
+by deleting the row) after validating keys against the closed set. Guard
+rails, all enforced server-side and writing no audit entry on rejection: a
+user cannot change their own permissions (the users API likewise rejects self
+role-changes and self-deactivation), and the last active administrator cannot
+be demoted, deactivated, deleted or stripped of `admin.users`. Every applied
+change runs in a transaction, bumps the target's `User.sessionVersion` (open
+sessions and sockets pick up the new set on the next request / revalidation
+pass) and writes a `PERMISSIONS_UPDATED` audit row naming the target and the
+changed keys — never credentials. No-op saves neither bump nor audit. The D3
+migration is served by `/api/permissions/report`: `GET` lists every existing
+user with the preset they would receive; the single `POST` Confirm action is
+recorded once (a second call answers 409) as a
+`PERMISSIONS_MIGRATION_CONFIRMED` audit row, whose presence is the
+confirmation state (`lib/permissions-report.ts` — the schema gains no table
+for this one-off flag). Until that confirmation exists, `PUT` rejects
+granting the internal-cost keys to ANY user with 403, ADMIN-role targets
+included — their preset already holds the keys, and an orphan grant row would
+survive a later demotion (D2). For the same reason, `PATCH /api/users`
+answers 400 when a role change away from ADMIN would leave the user holding
+an internal-cost grant row while the report is unconfirmed; removing the row
+first (or confirming the report) unblocks the demotion. Denies and resets are
+always accepted because they only narrow access. The admin UI
+exposes the matrix as a per-user Permissions dialog in the existing users tab
+(own row disabled) and the report at `/admin/permissions` (page gated on
+`admin.users`, like the API).
 
 **Rate limiting and media validation.** Still open (see below).
 
