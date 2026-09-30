@@ -25,6 +25,7 @@ import {
 } from "@/lib/travel/contracts";
 import { sendEmail } from "@/lib/email";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { DEFAULT_TRAVEL_ACCOUNT_KEY } from "@/lib/whatsapp-accounts";
 import { INBOX_ROOM } from "@/lib/socket-auth";
 import type { Prisma, User } from "@prisma/client";
 
@@ -68,20 +69,33 @@ export async function queueWorkflowEvent(
     if (r && !uniqueRecipients.has(r.id)) uniqueRecipients.set(r.id, r);
   }
 
+  // W3 (wa-multi): every WHATSAPP delivery of this event sends through the
+  // account named by TravelSettings.whatsappAccountKey (default 'nare'). The
+  // account is recorded on the delivery row at queue time and is part of the
+  // dedup key, so retries always reuse the SAME account and never fall back
+  // to Marhaba. Read through tx so the value commits with the event.
+  let whatsappAccountId = DEFAULT_TRAVEL_ACCOUNT_KEY;
+  const settings = await tx.travelSettings.findUnique({ where: { id: "default" } });
+  if (settings?.whatsappAccountKey) whatsappAccountId = settings.whatsappAccountKey;
+
   for (const recipient of Array.from(uniqueRecipients.values())) {
     for (const channel of NOTIFICATION_CHANNELS) {
       const destination = channel === "EMAIL" ? recipient.email : recipient.phone;
       const body = renderNotificationBody(payload, channel);
+      const isWhatsApp = channel === "WHATSAPP";
       await tx.notificationDelivery.create({
         data: {
           eventId: event.id,
           recipientId: recipient.id,
           channel,
           destination: destination ?? null,
-          dedupKey: `${event.id}:${recipient.id}:${channel}`,
+          dedupKey: isWhatsApp
+            ? `${whatsappAccountId}:${event.id}:${recipient.id}:${channel}`
+            : `${event.id}:${recipient.id}:${channel}`,
           status: destination ? "QUEUED" : "SKIPPED_NO_DESTINATION",
           lastError: destination ? null : `user has no ${channel === "EMAIL" ? "email" : "phone"}`,
           body,
+          ...(isWhatsApp ? { accountId: whatsappAccountId } : {}),
         },
       });
     }
@@ -192,9 +206,13 @@ export async function processNotificationQueue({ limit = 50 }: { limit?: number 
         });
         providerId = res.providerId;
       } else {
-        // Throws when the WhatsApp client is not ready — caught below, so the
-        // delivery becomes FAILED and stays retryable.
+        // W3 (wa-multi): sends through the account recorded on the delivery
+        // (TravelSettings.whatsappAccountKey at queue time) — never a
+        // fallback account. Throws when that account's client is not ready —
+        // caught below, so the delivery becomes FAILED and stays retryable
+        // on the SAME account.
         const msg: any = await sendWhatsAppMessage({
+          accountKey: delivery.accountId,
           remoteJid: delivery.destination!,
           body: delivery.body,
           type: "text",

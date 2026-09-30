@@ -47,8 +47,10 @@ integration again in different ways. Fixes shipped in v0.2.0–v0.2.6:
 5. **Audit log FK violation (P2003)** — `prisma.log.create` with a stale session user id
    threw and broke message sending. Fix: `lib/audit.ts` `writeAuditLog()` retries with
    `userId: null` and never throws.
-6. **Init robustness** — `initializeWhatsApp()` retries up to 5 times with full teardown
-   between attempts, and concurrent callers share one in-flight attempt loop.
+6. **Init robustness** — `initializeWhatsApp()` retries client startup failures up to 5
+   times with full teardown between attempts, and concurrent callers share one in-flight
+   attempt loop. Configuration errors (account missing or disabled) are not transient and
+   reject immediately, before any client is built.
 
 Also shipped: build version + uptime on the admin page, mobile-friendly dashboard layout,
 contact phone numbers stored on chats (`Chat.phone`), and "Developed by Hayk FZC" branding.

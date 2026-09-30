@@ -14,6 +14,10 @@
  *  - room scoping: the server joins 'inbox' (ADMIN/USER) and 'admins' (ADMIN
  *    only); inbox users receive message/chat_update and availability
  *    { connected } but never the full whatsapp_state (info/qrSvg); admins do.
+ *    W3 (wa-multi): rooms are per account ('inbox:<key>' / 'admins:<key>',
+ *    INBOX_ROOM/ADMINS_ROOM are marhaba's) and every whatsapp_state payload
+ *    carries accountKey; an ADMIN preset holds the nare keys too, so an admin
+ *    socket sits in all four rooms and gets both accounts' initial states.
  *  - no client-to-server surface: emitting join/subscribe/send-style events
  *    gains no room and triggers no action (ignored + logged via onAny).
  *  - revalidation: a token's exp disconnects the socket, and the 60s loop
@@ -38,8 +42,10 @@ import { revokeAllSessions } from "@/lib/access-policy";
 import {
   ADMINS_ROOM,
   INBOX_ROOM,
+  adminsRoom,
   allowedSocketOrigins,
   attachSocketAuth,
+  inboxRoom,
   isSocketOriginAllowed,
   socketAllowRequest,
 } from "@/lib/socket-auth";
@@ -314,9 +320,10 @@ describe("room scoping and payloads", () => {
 
     expect(await connectOutcome(socket)).toBe("connected");
 
-    // Initial state: availability only, as the exact payload.
+    // Initial state: availability only, as the exact accountKey-tagged payload
+    // for the one account the USER preset may view (marhaba).
     await vi.waitFor(() => expect(statePayloads.length).toBe(1));
-    expect(statePayloads[0]).toEqual({ connected: false });
+    expect(statePayloads[0]).toEqual({ accountKey: "marhaba", connected: false });
 
     const srv = serverSocketFor(shared.sio, user.id);
     expect(srv).toBeDefined();
@@ -351,7 +358,7 @@ describe("room scoping and payloads", () => {
       socket.on("whatsapp_state", (p) => statePayloads.push(p));
       expect(await connectOutcome(socket)).toBe("connected");
       await vi.waitFor(() => expect(statePayloads.length).toBe(1));
-      expect(statePayloads[0]).toEqual({ connected: true });
+      expect(statePayloads[0]).toEqual({ accountKey: "marhaba", connected: true });
       socket.disconnect();
       await waitForSocketCount(shared.sio, 0);
     } finally {
@@ -364,18 +371,26 @@ describe("room scoping and payloads", () => {
     const statePayloads: any[] = [];
     socket.on("whatsapp_state", (p) => statePayloads.push(p));
     expect(await connectOutcome(socket)).toBe("connected");
-    await vi.waitFor(() => expect(statePayloads.length).toBe(1));
-    expect(statePayloads[0]).toEqual(hooks.getWhatsAppState());
-    expect(statePayloads[0].qrSvg).toBe("<svg>fake-pairing-qr</svg>");
-    expect(statePayloads[0].info).toContain("fake state");
-    expect(statePayloads[0].state).toBe("qr");
+    // W3: the ADMIN preset holds both accounts' keys, so the initial state is
+    // emitted per account — availability first, then the full state, for
+    // marhaba and nare alike.
+    await vi.waitFor(() => expect(statePayloads.length).toBe(4));
+    expect(statePayloads[0]).toEqual({ accountKey: "marhaba", connected: false });
+    expect(statePayloads[1]).toEqual({ accountKey: "marhaba", ...hooks.getWhatsAppState() });
+    expect(statePayloads[1].qrSvg).toBe("<svg>fake-pairing-qr</svg>");
+    expect(statePayloads[1].info).toContain("fake state");
+    expect(statePayloads[1].state).toBe("qr");
+    expect(statePayloads[2]).toEqual({ accountKey: "nare", connected: false });
+    expect(statePayloads[3]).toEqual({ accountKey: "nare", ...hooks.getWhatsAppState() });
 
     const srv = serverSocketFor(shared.sio, admin.id);
-    expect(Array.from(srv!.rooms).sort()).toEqual([ADMINS_ROOM, INBOX_ROOM, srv!.id].sort());
+    expect(Array.from(srv!.rooms).sort()).toEqual(
+      [ADMINS_ROOM, INBOX_ROOM, adminsRoom("nare"), inboxRoom("nare"), srv!.id].sort()
+    );
 
     // Subsequent full-state broadcasts reach the admin socket.
     shared.sio.to(ADMINS_ROOM).emit("whatsapp_state", hooks.getWhatsAppState());
-    await vi.waitFor(() => expect(statePayloads.length).toBe(2));
+    await vi.waitFor(() => expect(statePayloads.length).toBe(5));
     socket.disconnect();
     await waitForSocketCount(shared.sio, 0);
   });
@@ -572,12 +587,16 @@ describe("revalidation", () => {
       vi.useRealTimers();
       await sleep(200);
 
-      // Promotion keeps the socket alive and lands it in 'admins' without a
-      // reconnect — the counterpart of the ADVISOR demotion disconnect above.
+      // Promotion keeps the socket alive and lands it in the admins rooms
+      // without a reconnect — the counterpart of the ADVISOR demotion
+      // disconnect above. W3: the ADMIN preset holds both accounts' keys, so
+      // the socket sits in all four account rooms.
       expect(disconnected).toBe(false);
       expect(server.sio.sockets.sockets.size).toBe(1);
       const srv = serverSocketFor(server.sio, promo.id)!;
-      expect(Array.from(srv.rooms).sort()).toEqual([ADMINS_ROOM, INBOX_ROOM, srv.id].sort());
+      expect(Array.from(srv.rooms).sort()).toEqual(
+        [ADMINS_ROOM, INBOX_ROOM, adminsRoom("nare"), inboxRoom("nare"), srv.id].sort()
+      );
       socket.disconnect();
     } finally {
       vi.useRealTimers();
@@ -659,10 +678,11 @@ describe("W2 permission handshake (perm-inbox)", () => {
 
     expect(await connectOutcome(socket)).toBe("connected");
 
-    // Inbox-only: availability as the exact payload (fakeWaState is "qr", so
-    // connected is false) — never the full state with qrSvg.
+    // Inbox-only: availability as the exact accountKey-tagged payload
+    // (fakeWaState is "qr", so connected is false) — never the full state
+    // with qrSvg.
     await vi.waitFor(() => expect(statePayloads.length).toBe(1));
-    expect(statePayloads[0]).toEqual({ connected: false });
+    expect(statePayloads[0]).toEqual({ accountKey: "marhaba", connected: false });
 
     const srv = serverSocketFor(shared.sio, grantedAdvisor.id);
     expect(srv).toBeDefined();
@@ -702,9 +722,10 @@ describe("W2 permission handshake (perm-inbox)", () => {
 
     expect(await connectOutcome(socket)).toBe("connected");
 
-    // Full initial state — the admins-room payload, qrSvg included.
+    // Full initial state — the admins-room payload, accountKey-tagged, qrSvg
+    // included.
     await vi.waitFor(() => expect(statePayloads.length).toBe(1));
-    expect(statePayloads[0]).toEqual(hooks.getWhatsAppState());
+    expect(statePayloads[0]).toEqual({ accountKey: "marhaba", ...hooks.getWhatsAppState() });
     expect(statePayloads[0].qrSvg).toBe("<svg>fake-pairing-qr</svg>");
 
     const srv = serverSocketFor(shared.sio, adminAdvisor.id);
@@ -764,8 +785,9 @@ describe("W2 permission revalidation (perm-inbox, fake timers)", () => {
         disconnected = true;
       });
 
-      // Deny beats even the ADMIN preset; whatsapp.inbox.view remains, so the
-      // socket must survive but drop out of 'admins'.
+      // Deny beats even the ADMIN preset — but only for the marhaba admin key:
+      // whatsapp.inbox.view and the nare keys remain, so the socket must
+      // survive, drop out of marhaba's 'admins' room and keep the nare rooms.
       await prisma.userPermission.create({ data: { userId: u.id, key: "whatsapp.admin", allowed: false } });
       await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB
       // Revalidation resolves asynchronously (DB read + room sync) after the
@@ -776,7 +798,9 @@ describe("W2 permission revalidation (perm-inbox, fake timers)", () => {
       expect(disconnected).toBe(false);
       expect(server.sio.sockets.sockets.size).toBe(1);
       const srv = serverSocketFor(server.sio, u.id)!;
-      expect(Array.from(srv.rooms).sort()).toEqual([INBOX_ROOM, srv.id].sort());
+      expect(Array.from(srv.rooms).sort()).toEqual(
+        [INBOX_ROOM, adminsRoom("nare"), inboxRoom("nare"), srv.id].sort()
+      );
 
       // Proof the room sync is real, not just the data structure: admins-room
       // emits no longer arrive, inbox emits still do.

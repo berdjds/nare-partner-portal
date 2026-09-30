@@ -12,7 +12,8 @@
  *    NEXTAUTH_SECRET). Missing, malformed or expired → 401. NEXTAUTH_SECRET
  *    unset → fail closed (401), never serve unsigned.
  * 2. An ACTIVE user loaded from the database whose effective permissions hold
- *    whatsapp.inbox.view (W2 — media belongs to the chat inbox) and whose
+ *    an inbox view permission (W2/W3 — media belongs to the chat inboxes:
+ *    whatsapp.inbox.view or whatsapp.nare.view) and whose
  *    current session version still matches the token's sv claim (W1b —
  *    the User.sessionVersion column; bumping it with { increment: 1 } revokes
  *    previously issued tokens). A token with no
@@ -180,7 +181,10 @@ export async function handleUploadsRequest(req: IncomingMessage, res: ServerResp
     sendJson(res, 401, { error: "Unauthorized" });
     return;
   }
-  if (!hasPermission(user, "whatsapp.inbox.view")) {
+  // W3 (wa-multi): media belongs to the chat inboxes — any account's view
+  // permission (whatsapp.inbox.view for marhaba, whatsapp.nare.view for
+  // nare) may stream uploads.
+  if (!hasPermission(user, "whatsapp.inbox.view") && !hasPermission(user, "whatsapp.nare.view")) {
     sendJson(res, 403, { error: "Forbidden" });
     return;
   }

@@ -1,53 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { getActiveUser, requireWhatsAppAdminAccess } from "@/lib/access-policy";
-import { hasPermission } from "@/lib/permissions";
+import { getActiveUser } from "@/lib/access-policy";
+import { accountPermissions } from "@/lib/permissions";
+import { MARHABA_ACCOUNT_KEY } from "@/lib/whatsapp-accounts";
 import { getWhatsAppState, logoutWhatsApp, initializeWhatsApp, restartWhatsApp } from "@/lib/whatsapp";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // W2 permission policy (lib/permissions.ts): full connection details —
-  // including the pairing QR — require the effective whatsapp.admin
-  // permission. Anyone with whatsapp.inbox.view sees availability strictly as
-  // { connected }. Everyone else gets 403, deactivated users 401. Resolved
-  // from the current DB row, so an override edit takes effect on the next
-  // request.
+  // W2/W3 permission policy: full connection details — including the pairing
+  // QR — require the account's admin permission (whatsapp.admin for marhaba,
+  // whatsapp.nare.admin for nare). Anyone with the account's view permission
+  // sees availability strictly as { connected } (the pre-W3 payload shape —
+  // the account is identified by the ?account= query, not the response).
+  // Everyone else gets 403, deactivated users 401. Resolved from the current
+  // DB row, so an override edit takes effect on the next request.
   const user = await getActiveUser(session);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (hasPermission(user, "whatsapp.admin")) {
-    return NextResponse.json(getWhatsAppState());
+  const accountKey = new URL(req.url).searchParams.get("account") || MARHABA_ACCOUNT_KEY;
+  const perms = accountPermissions(accountKey);
+  if (!perms) {
+    return NextResponse.json({ error: `Unknown WhatsApp account: ${accountKey}` }, { status: 400 });
   }
 
-  if (hasPermission(user, "whatsapp.inbox.view")) {
-    return NextResponse.json({ connected: getWhatsAppState().state === "ready" });
+  if (user.permissions.has(perms.admin)) {
+    return NextResponse.json(getWhatsAppState(accountKey));
+  }
+
+  if (user.permissions.has(perms.view)) {
+    return NextResponse.json({ connected: getWhatsAppState(accountKey).state === "ready" });
   }
 
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
 export async function POST(req: NextRequest) {
-  // Requires the effective whatsapp.admin permission; callers without it
-  // (logged in or not) get the same 401 as before W1, now additionally
-  // enforced against the live DB row and per-user overrides.
+  // Requires the account's admin permission; callers without it (logged in or
+  // not) get the same 401 as before W1, now additionally enforced against the
+  // live DB row, per-user overrides and the target account.
   const session = await getServerSession(authOptions);
-  const access = await requireWhatsAppAdminAccess(session);
-  if (!access.allowed) return access.response;
+  const user = await getActiveUser(session);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
+  const accountKey = typeof body.account === "string" && body.account ? body.account : MARHABA_ACCOUNT_KEY;
+  const perms = accountPermissions(accountKey);
+  if (!perms) {
+    return NextResponse.json({ error: `Unknown WhatsApp account: ${accountKey}` }, { status: 400 });
+  }
+  if (!user.permissions.has(perms.admin)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (body.action === "logout") {
-    await logoutWhatsApp();
+    await logoutWhatsApp(accountKey);
     // Re-initialize after logout so a new QR is generated
-    setTimeout(() => initializeWhatsApp().catch(() => null), 1000);
-    return NextResponse.json({ ok: true, ...getWhatsAppState() });
+    setTimeout(() => initializeWhatsApp(accountKey).catch(() => null), 1000);
+    return NextResponse.json({ ok: true, ...getWhatsAppState(accountKey) });
   }
 
   if (body.action === "reconnect") {
-    setTimeout(() => restartWhatsApp().catch((e) => console.error("[API /whatsapp/status] reconnect error:", e)), 1000);
-    return NextResponse.json({ ok: true, ...getWhatsAppState() });
+    setTimeout(
+      () => restartWhatsApp(accountKey).catch((e) => console.error("[API /whatsapp/status] reconnect error:", e)),
+      1000
+    );
+    return NextResponse.json({ ok: true, ...getWhatsAppState(accountKey) });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

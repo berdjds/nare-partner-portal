@@ -14,6 +14,7 @@ import { readFile } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { resolveTravelAccount } from "@/lib/whatsapp-accounts";
 import { versionLabel } from "@/lib/travel/contracts";
 
 export interface DocumentSendResult {
@@ -80,6 +81,18 @@ export async function sendQuoteDocument(
 
   const results: DocumentSendResult[] = [];
 
+  // W3 (wa-multi): all travel-module sends go through the account named by
+  // TravelSettings.whatsappAccountKey (default 'nare') — never Marhaba. A
+  // misconfigured key fails every recipient with the configuration error
+  // (reported, never thrown, like every other delivery failure).
+  let accountKey: string | null = null;
+  let accountError: string | null = null;
+  try {
+    accountKey = (await resolveTravelAccount()).key;
+  } catch (err: any) {
+    accountError = err?.message ?? String(err);
+  }
+
   for (const userId of targets.userIds ?? []) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -107,8 +120,10 @@ export async function sendQuoteDocument(
 
   async function deliver(destination: string, label: string): Promise<DocumentSendResult> {
     if (loadError) return { to: label, ok: false, error: loadError };
+    if (accountError || !accountKey) return { to: label, ok: false, error: accountError ?? "travel WhatsApp account not configured" };
     try {
       await sendWhatsAppMessage({
+        accountKey,
         remoteJid: destination,
         body: caption,
         type: "document",
