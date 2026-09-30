@@ -6,7 +6,8 @@ import { getTravelActor, travelError, unauthorized } from "../../guard";
 // Hard delete of a pricing policy version (ADMIN). Guarded: the engine always
 // needs at least one policy, and deleting the ACTIVE one would leave quotes
 // without pricing rules — activate another version first.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -14,7 +15,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   }
 
   try {
-    const policy = await prisma.pricingPolicyVersion.findUnique({ where: { id: params.id } });
+    const policy = await prisma.pricingPolicyVersion.findUnique({ where: { id } });
     if (!policy) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const total = await prisma.pricingPolicyVersion.count();

@@ -44,7 +44,9 @@ A versioned B2B travel package costing and quotation module inside WAControl:
   documents (authorized download), notifications (list/retry/process).
 - `app/travel/**` + `components/travel/**` — requests workspace, review queue, templates,
   catalog/settings, notifications UI; nav buttons in both existing dashboards.
-- `tests/` — vitest suites: engine, travel-db, workflow, pdf (see "Verification").
+- `tests/` — vitest suites: engine, travel-db, workflow, pdf, qa, access, auth,
+  messaging, email, socket, deploy (`npm test` = `vitest run`; the deploy suite
+  covers the deploy gate and the recovery runbook).
 
 ## Reuse of existing WAControl features
 

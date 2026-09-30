@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { review, reviewSchema } from "@/lib/travel/workflow";
 import { getTravelActor, travelError, unauthorized } from "../../../guard";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    const result = await review(actor, params.id, parsed.data);
+    const result = await review(actor, id, parsed.data);
     return NextResponse.json(result);
   } catch (err) {
     return travelError(err, "[API /travel/versions/[id]/review]");

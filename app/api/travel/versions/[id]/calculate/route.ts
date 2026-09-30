@@ -30,7 +30,8 @@ const previewSchema = z.object({
 // snapshot (only submit() binds a snapshot to the version). Access is limited
 // to the request owner, the currently assigned validator and ADMIN — anything
 // else gets 404 so version ids do not disclose request ownership.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const version = await prisma.quoteVersion.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { request: { select: { id: true, ownerId: true } } },
     });
     if (!version) {
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
     }
 
-    const input = await buildEngineInputForVersion(params.id, {
+    const input = await buildEngineInputForVersion(id, {
       policyOverride: parsed.data.policy,
       quoteCurrencyOverride: parsed.data.quoteCurrency,
     });

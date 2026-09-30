@@ -10,7 +10,8 @@ const verifySchema = z.object({
 
 // Marks staged import rows VERIFIED by id (ADMIN). Rows stay in the batch;
 // activation into the catalog is a separate import-layer concern.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -25,13 +26,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const res = await prisma.importRow.updateMany({
-      where: { id: { in: parsed.data.rowIds }, batchId: params.id, status: "STAGED" },
+      where: { id: { in: parsed.data.rowIds }, batchId: id, status: "STAGED" },
       data: { status: "VERIFIED" },
     });
     await writeAuditLog(
       "IMPORT_ROWS_VERIFIED",
       actor.id,
-      `Verified ${res.count} row(s) in import batch ${params.id}`,
+      `Verified ${res.count} row(s) in import batch ${id}`,
     );
     return NextResponse.json({ verified: res.count });
   } catch (err) {

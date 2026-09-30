@@ -61,17 +61,24 @@ React hook for Socket.io connection.
 ```typescript
 import { useSocket } from "@/hooks/useSocket";
 
-const { socket, connected, whatsAppState, lastEvent } = useSocket();
+const { socket, connected, unauthorized, whatsAppState, lastEvent, disconnectSocket } = useSocket();
 ```
 
 **Returns**:
 - `socket` — Socket.io client instance.
 - `connected` — Boolean connection status.
-- `whatsAppState` — Current WhatsApp state and QR code SVG.
+- `unauthorized` — True after the server refused the handshake (`unauthorized`
+  connect_error: missing/forged/expired session or disallowed origin). The
+  hook stops reconnecting in that case; the dashboards show "Session expired".
+- `whatsAppState` — Current WhatsApp state. Admins receive the full payload
+  (`state`, `info`, `qrSvg`); non-admin inbox users only receive
+  `{ connected: boolean }` (interim W1 policy).
 - `lastEvent` — Last `message` or `chat_update` event payload.
+- `disconnectSocket` — Disconnects the socket; the dashboards call it on
+  sign-out so the session cookie is not used after logout.
 
 The hook connects to `/api/socket` and listens for:
-- `connect` / `disconnect`
+- `connect` / `disconnect` / `connect_error`
 - `whatsapp_state`
 - `message`
 - `chat_update`

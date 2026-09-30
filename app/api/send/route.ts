@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { sendWhatsAppMessage, getWhatsAppState } from "@/lib/whatsapp";
 import { writeAuditLog } from "@/lib/audit";
+import { requireInboxAccess } from "@/lib/access-policy";
 import { z } from "zod";
 
 const sendSchema = z.object({
@@ -16,7 +17,10 @@ const sendSchema = z.object({
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Interim W1 policy: sending is an inbox capability — ADMIN/USER only, from
+  // the current DB role (deactivated users get 401 like anonymous).
+  const access = await requireInboxAccess(session);
+  if (!access.allowed) return access.response;
 
   if (getWhatsAppState().state !== "ready") {
     console.log("[API /send] rejected: WhatsApp not ready");
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
     const result = await sendWhatsAppMessage(parsed.data);
     console.log("[API /send] sendWhatsAppMessage result:", result);
 
-    await writeAuditLog("SEND_MESSAGE", session.user.id, `Sent ${parsed.data.type} to ${parsed.data.remoteJid}`);
+    await writeAuditLog("SEND_MESSAGE", access.user.id, `Sent ${parsed.data.type} to ${parsed.data.remoteJid}`);
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

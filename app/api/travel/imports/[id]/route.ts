@@ -3,13 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { getTravelActor, travelError, unauthorized } from "../../guard";
 
 // Batch detail: rows with their issues.
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
 
   try {
     const batch = await prisma.importBatch.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { rows: { orderBy: { sourceRef: "asc" } } },
     });
     if (!batch) return NextResponse.json({ error: "Not found" }, { status: 404 });

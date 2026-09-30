@@ -38,7 +38,8 @@ function parseTemplateJson<S extends z.ZodTypeAny>(raw: string, schema: S, label
 // into priced shared ServiceLines via the day-linked sync. scenariosJson holds
 // stays with RELATIVE dates (checkInOffset/nights) resolved against the new
 // request startDate here, replacing the skeleton "Option A"/TBD stay.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN" && actor.role !== "ADVISOR") {
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const template = await prisma.packageTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { versions: { orderBy: { versionNo: "desc" } } },
     });
     if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });

@@ -13,6 +13,9 @@ export const authOptions: NextAuthOptions = {
   adapter: undefined, // credentials provider requires no adapter for JWT
   session: {
     strategy: "jwt",
+    // 7 days instead of the 30-day default — W1b revocation (the sv claim)
+    // only takes effect on re-reads, so token lifetime should not be generous.
+    maxAge: 7 * 24 * 60 * 60,
   },
   providers: [
     CredentialsProvider({
@@ -27,6 +30,16 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            password: true,
+            role: true,
+            active: true,
+            // W1b session version: minted into the JWT as the sv claim.
+            sessionVersion: true,
+          },
         });
 
         if (!user || !user.active) return null;
@@ -39,6 +52,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          sv: user.sessionVersion,
         };
       },
     }),
@@ -48,6 +62,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.sv = user.sv ?? 0;
       }
       return token;
     },
@@ -55,6 +70,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
+        session.user.sv = typeof token.sv === "number" ? token.sv : 0;
       }
       return session;
     },

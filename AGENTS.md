@@ -4,12 +4,13 @@
 
 WAControl is a web dashboard for reading and sending WhatsApp messages through
 WhatsApp Web automation (QR-code login). It includes role-based login (ADMIN /
-USER), an admin panel for managing the WhatsApp connection and users, audit
-logs, and a real-time chat UI.
+USER / ADVISOR / VALIDATOR), an admin panel for managing the WhatsApp
+connection and users, audit logs, a real-time chat UI, and a B2B travel
+module.
 
 Key facts:
 
-- **Node.js + TypeScript, Next.js 14 (App Router)** on **port 3000**.
+- **Node.js + TypeScript, Next.js 15 (App Router) + React 19** on **port 3000**.
 - The app runs on a **custom server (`server.ts`, executed with `tsx`)** that
   combines Next.js, an HTTP server, and Socket.io. Never rely on plain
   `next dev` / `next start` — Socket.io and the WhatsApp client would not
@@ -36,11 +37,17 @@ npm run dev            # dev server (custom server with Socket.io) on :3000
 npm run build          # next build
 npm run start          # production: NODE_ENV=production tsx server.ts
 npm run db:reset       # prisma migrate reset --force && db:seed (destroys data)
+npm test               # run the Vitest suite (vitest run)
 ```
 
-Type-checking: `npx tsc --noEmit` (strict mode is on). There is **no test
-suite and no linter configured** — do not add test/lint scaffolding unless
-asked. `npm run build` is the standard verification step.
+Type-checking: `npx tsc --noEmit` (strict mode is on). **Tests: `npm test`**
+runs the Vitest suite (`vitest run`; config `vitest.config.ts`, JSX compiled
+via `tsconfig.test.json`). Suites under `tests/`: access, auth, deploy,
+email, engine, messaging, pdf, qa, socket, travel-db, workflow — DB-backed
+suites push the Prisma schema to throwaway SQLite files in `/tmp`. There is
+no linter configured. `npm run build` is the standard build verification; CI
+runs `tsc --noEmit`, the Vitest suite and `next build` on every push to
+`main` before deploying (see "Deployment").
 
 Environment variables: `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`,
 `ADMIN_EMAIL`, `ADMIN_PASSWORD`, optional `PUPPETEER_EXECUTABLE_PATH` (system
@@ -61,23 +68,36 @@ Chromium, used in Docker). See `.env.example`.
 - `lib/auth.ts` — NextAuth options (credentials + JWT; `role` is carried in
   the token/session). `lib/prisma.ts` — Prisma singleton. `lib/audit.ts` —
   `writeAuditLog()` (never throws). `lib/utils.ts` — `cn()` class merging.
+  `lib/access-policy.ts` — the W1 interim access policy (inbox-role gates;
+  every gate re-reads the user row from the DB). `lib/socket-auth.ts` —
+  Socket.io origin/session gates, server-managed rooms and revalidation.
+  `lib/uploads.ts` — authenticated `/uploads/*` media streaming. `lib/travel/`
+  — the B2B travel module (see `doc/travel/IMPLEMENTATION.md`).
 - `app/` — App Router pages: `page.tsx` (role-based redirect), `login/`,
-  `admin/` (ADMIN only), `dashboard/` (chat UI), `calculator/` (embeds a
-  static HTML calculator from `doc/temp/`). Pages guard with
-  `getServerSession(authOptions)` + `redirect`.
-- `app/api/` — route handlers. All require a session; `/api/users`,
-  `/api/logs`, and `/api/whatsapp/status` additionally require `role ===
-  "ADMIN"`. Request bodies are validated with **zod**. Endpoints: `chats`
-  (GET), `messages` (GET), `send` (POST), `users` (GET/POST/PATCH/DELETE),
-  `logs` (GET), `whatsapp/status` (GET state; POST actions: reconnect/logout),
-  `auth/[...nextauth]`.
+  `admin/` (ADMIN only), `dashboard/` (chat UI; inbox roles only — everyone
+  else is redirected to `/travel`), `travel/` (B2B travel module),
+  `calculator/` (embeds a static HTML calculator from `doc/temp/`). Pages
+  guard with `getServerSession(authOptions)` + `redirect` and the interim
+  access policy.
+- `app/api/` — route handlers. All require a session; the chat APIs
+  (`chats`, `messages`, `send`) additionally require an active inbox role
+  (ADMIN/USER) via `requireInboxAccess()`; `users` and `logs` require
+  `role === "ADMIN"`; `whatsapp/status` GET returns full details to ADMIN and
+  `{ connected }` to USER (POST reconnect/logout is ADMIN-only). The travel
+  module APIs live under `app/api/travel/`. Request bodies are validated with
+  **zod**. Endpoints: `chats` (GET), `messages` (GET), `send` (POST),
+  `users` (GET/POST/PATCH/DELETE), `logs` (GET), `whatsapp/status` (GET
+  state; POST actions: reconnect/logout), `travel/**`, `auth/[...nextauth]`.
 - `components/` — `ui/` (shadcn-style primitives), `admin/AdminDashboard.tsx`,
-  `dashboard/ChatDashboard.tsx`, `calculator/CalculatorFrame.tsx`.
+  `dashboard/ChatDashboard.tsx`, `travel/` (travel module UI),
+  `calculator/CalculatorFrame.tsx`.
 - `hooks/useSocket.ts` — client hook subscribing to Socket.io events
   (`whatsapp_state`, `message`, `chat_update`).
 - `prisma/schema.prisma` — models: `User`, `Chat`, `Message`, `Log`,
-  `WhatsAppSession`. There are **no migrations**; the schema is applied with
-  `prisma db push`.
+  `WhatsAppSession`, plus the travel module models (requests, quote versions,
+  scenarios/stays/lines, catalog + rate versions, documents, workflow events,
+  notification deliveries, settings). There are **no migrations**; the schema
+  is applied with `prisma db push`.
 - `doc/` — detailed project docs (`architecture.md`, `api-reference.md`,
   `authentication.md`, `database.md`, `deployment.md`, `security.md`,
   `current-issues.md`, `troubleshooting.md`, etc.). Keep them in sync when
@@ -150,11 +170,21 @@ the code and must not be regressed:
   `wacontrol-data` (SQLite), `wacontrol-uploads` (media), and
   `wacontrol-auth` (WhatsApp session). Secrets come from env vars prefixed
   `WACONTROL_*`.
-- **deploy-vps.sh** / **deploy.sh** (identical scripts): package the source
-  into a tarball, `scp` it to the VPS (root@213.136.80.87, key
-  `~/.ssh/wacontrol_deploy`), build the image there, and restart via
-  `docker compose`. These scripts hard-code production host details — treat
-  them as ops tooling, not library code.
+- **CI/CD** — pushes to `main` run `.github/workflows/ci-cd.yml`: a test job
+  (`npm ci`, `prisma generate`, `tsc --noEmit`, `vitest run`, `next build`),
+  then a deploy job that uploads the source and pipes `scripts/vps-deploy.sh`
+  to the VPS over ssh. The deploy gate builds the candidate image while the
+  app keeps serving, tags the running image as `previous`, stops all writers
+  (**write freeze**), archives a verified backup of the data dirs, runs
+  trial A (candidate on a data copy) and trial B (rollback compatibility of
+  the previous image), cuts over, and rolls back or prints the manual
+  recovery procedure on failure. Seeds are bootstrap-only (they self-skip
+  when data exists). Details: `doc/deployment.md`.
+- **Manual fallback** — `deploy-vps.sh` / `deploy.sh` (identical scripts):
+  package the source into a tarball, `scp` it to the VPS
+  (root@213.136.80.87, key `~/.ssh/wacontrol_deploy`), build the image there,
+  and restart via `docker compose`. These scripts hard-code production host
+  details — treat them as ops tooling, not library code.
 
 ## Security considerations
 
@@ -172,5 +202,19 @@ the code and must not be regressed:
 - The linked phone must stay online; only messages arriving while the client
   is `ready` are captured in real time (plus a bounded backfill of 20 chats ×
   50 messages after `ready`).
-- Socket.io CORS is `origin: "*"`; media files under `public/uploads/` are
-  publicly reachable URLs — be mindful of what is stored there.
+- **Interim access policy (W1, until W2 grants per-user inbox access)** —
+  `lib/access-policy.ts`: only ADMIN/USER may open the chat inbox; ADVISOR and
+  VALIDATOR are travel-only. Every gate re-reads the user row from the
+  database, so deactivation or a role change takes effect on the next request
+  (a revoked user gets 401). Full WhatsApp status details (state, info,
+  pairing QR) are ADMIN-only; USER sees availability as `{ connected }`.
+- Socket.io (`/api/socket`) is no longer open: the handshake must come from an
+  allowed origin (the `NEXTAUTH_URL` origin plus `SOCKET_ALLOWED_ORIGINS`)
+  and carry a valid NextAuth session cookie for an active inbox-role user; the
+  server places sockets into `inbox`/`admins` rooms and the full
+  `whatsapp_state` (with the pairing QR) goes to `admins` only
+  (`lib/socket-auth.ts`).
+- Media under `public/uploads/` is no longer publicly reachable: the custom
+  server intercepts `/uploads/*` and streams files only to authenticated,
+  active inbox-role users, with `Cache-Control: private, no-store`
+  (`lib/uploads.ts`). Full policy: `doc/security.md`.

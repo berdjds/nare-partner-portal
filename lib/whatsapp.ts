@@ -1,7 +1,8 @@
 import { Client, LocalAuth, MessageMedia } from "whatsapp-web.js";
-import type { Socket as ServerSocket, Server as SocketServer } from "socket.io";
+import type { Server as SocketServer } from "socket.io";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
+import { ADMINS_ROOM, INBOX_ROOM, attachSocketAuth } from "@/lib/socket-auth";
 import QRCode from "qrcode";
 import fs from "fs/promises";
 import path from "path";
@@ -207,12 +208,14 @@ async function persistMessage(msg: any, fromMe: boolean, opts: { emit?: boolean 
     });
 
     if (emit) {
-      state.io?.emit("message", {
+      // Inbox-scoped: only ADMIN/USER sockets may see message content
+      // (lib/socket-auth.ts places sockets in the rooms).
+      state.io?.to(INBOX_ROOM).emit("message", {
         ...messageRecord,
         chat: chatRecord,
       });
 
-      state.io?.emit("chat_update", chatRecord);
+      state.io?.to(INBOX_ROOM).emit("chat_update", chatRecord);
 
       // Audit incoming messages (outgoing dashboard sends are already logged
       // as SEND_MESSAGE by /api/send; backfill batches are not logged).
@@ -245,13 +248,26 @@ function getTypeMessageType(msg: any): string {
 
 export function setSocketServer(io: SocketServer) {
   state.io = io;
-  io.on("connection", (socket: ServerSocket) => {
-    socket.emit("whatsapp_state", {
-      state: state.state,
-      qrSvg: state.qrSvg,
-      info: state.info,
-    });
+  // Authentication, origin checking, room scoping and revalidation live in
+  // lib/socket-auth.ts; the state payloads are injected so that module stays
+  // free of this file (dual-bundler cycle, AGENTS.md pitfall 1).
+  attachSocketAuth(io, {
+    getWhatsAppState: () => getWhatsAppState(),
+    isConnected: () => state.state === "ready",
   });
+}
+
+/**
+ * Pushes the current WhatsApp state to the rooms allowed to see it: the full
+ * state (info + pairing qrSvg) goes to 'admins' only, while plain inbox users
+ * only ever get availability as { connected }. The inbox room is emitted to
+ * FIRST because ADMIN sockets sit in both rooms and must end up with the
+ * full state as the last whatsapp_state they receive.
+ */
+function broadcastWhatsAppState() {
+  if (!state.io) return;
+  state.io.to(INBOX_ROOM).emit("whatsapp_state", { connected: state.state === "ready" });
+  state.io.to(ADMINS_ROOM).emit("whatsapp_state", getWhatsAppState());
 }
 
 export function getWhatsAppState() {
@@ -299,7 +315,7 @@ async function backfillChats(client: Client) {
   }
   console.log(`[WhatsApp] backfill complete: ${synced}/${recent.length} chats synced.`);
   // Notify dashboards to refetch the chat list once, instead of per message.
-  state.io?.emit("chat_update", { backfill: true });
+  state.io?.to(INBOX_ROOM).emit("chat_update", { backfill: true });
 }
 
 // client.initialize() can fail transiently — most notably when the page
@@ -324,7 +340,7 @@ export function initializeWhatsApp(): Promise<Client> {
         console.error(`[WhatsApp] initialize attempt ${attempt}/${MAX_INIT_ATTEMPTS} failed:`, e);
         if (attempt < MAX_INIT_ATTEMPTS) {
           state.info = `Initialization failed (attempt ${attempt}/${MAX_INIT_ATTEMPTS}). Retrying...`;
-          state.io?.emit("whatsapp_state", getWhatsAppState());
+          broadcastWhatsAppState();
           await new Promise((r) => setTimeout(r, INIT_RETRY_DELAY_MS));
         }
       }
@@ -332,7 +348,7 @@ export function initializeWhatsApp(): Promise<Client> {
 
     state.state = "disconnected";
     state.info = "Initialization failed after repeated attempts. Use Reconnect to try again.";
-    state.io?.emit("whatsapp_state", getWhatsAppState());
+    broadcastWhatsAppState();
     throw lastError;
   })().finally(() => {
     state.initPromise = null;
@@ -376,7 +392,7 @@ async function initializeOnce() {
       state.qrSvg = null;
       state.info = "Failed to generate QR code.";
     }
-    state.io?.emit("whatsapp_state", getWhatsAppState());
+    broadcastWhatsAppState();
   });
 
   client.on("authenticated", () => {
@@ -384,7 +400,7 @@ async function initializeOnce() {
     state.state = "authenticated";
     state.qrSvg = null;
     state.info = "Authenticated. Loading chats...";
-    state.io?.emit("whatsapp_state", getWhatsAppState());
+    broadcastWhatsAppState();
 
     // If the client stays in "authenticated" without reaching "ready", the
     // WhatsApp Web app-state sync has stalled — common after a plain restart
@@ -413,7 +429,7 @@ async function initializeOnce() {
     state.state = "auth_failure";
     state.info = `Authentication failure: ${msg}`;
     writeAuditLog("WA_AUTH_FAILURE", null, String(msg).slice(0, 200));
-    state.io?.emit("whatsapp_state", getWhatsAppState());
+    broadcastWhatsAppState();
   });
 
   client.on("ready", async () => {
@@ -429,7 +445,7 @@ async function initializeOnce() {
       update: { connected: true, info: state.info },
       create: { sessionId: "default", connected: true, info: state.info },
     });
-    state.io?.emit("whatsapp_state", getWhatsAppState());
+    broadcastWhatsAppState();
     state.ownPushname = (client.info as any)?.pushname || null;
     if (state.ownPushname) console.log("[WhatsApp] own pushname:", state.ownPushname);
     let waVersion = "unknown";
@@ -459,7 +475,7 @@ async function initializeOnce() {
       update: { connected: false, info: state.info },
       create: { sessionId: "default", connected: false, info: state.info },
     });
-    state.io?.emit("whatsapp_state", getWhatsAppState());
+    broadcastWhatsAppState();
   });
 
   client.on("message_create", async (msg: any) => {
@@ -506,7 +522,7 @@ export async function logoutWhatsApp() {
   state.state = "disconnected";
   state.qrSvg = null;
   state.info = "Logged out. Re-initializing...";
-  state.io?.emit("whatsapp_state", getWhatsAppState());
+  broadcastWhatsAppState();
 }
 
 // Tears down the current client (without logging out of WhatsApp) and
@@ -528,7 +544,7 @@ export async function restartWhatsApp() {
   state.state = "initializing";
   state.qrSvg = null;
   state.info = "Re-initializing WhatsApp client...";
-  state.io?.emit("whatsapp_state", getWhatsAppState());
+  broadcastWhatsAppState();
   return initializeWhatsApp();
 }
 

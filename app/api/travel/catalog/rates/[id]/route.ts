@@ -36,7 +36,8 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   ARCHIVED: [],
 };
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -50,7 +51,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   try {
-    const rate = await prisma.rateVersion.findUnique({ where: { id: params.id } });
+    const rate = await prisma.rateVersion.findUnique({ where: { id: id } });
     if (!rate) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (parsed.data.status && parsed.data.status !== rate.status) {
@@ -73,7 +74,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const amountEdited = nextAmount !== undefined && nextAmount !== rate.amount;
 
     const updated = await prisma.rateVersion.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...(parsed.data.status ? { status: parsed.data.status } : {}),
         ...(nextAmount !== undefined ? { amount: nextAmount } : {}),
@@ -88,7 +89,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     });
 
     if (parsed.data.status && parsed.data.status !== rate.status) {
-      await writeAuditLog("RATE_UPDATED", actor.id, `Rate ${params.id}: ${rate.status} → ${updated.status}`);
+      await writeAuditLog("RATE_UPDATED", actor.id, `Rate ${id}: ${rate.status} → ${updated.status}`);
     }
     if (amountEdited && rate.status === "VERIFIED") {
       // Correcting a verified rate is allowed, but it must stand out in the
@@ -96,13 +97,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       await writeAuditLog(
         "RATE_AMOUNT_EDITED",
         actor.id,
-        `Rate ${params.id}: amount ${rate.amount ?? "TBC"} → ${updated.amount ?? "TBC"} ${updated.currency} (was VERIFIED)`,
+        `Rate ${id}: amount ${rate.amount ?? "TBC"} → ${updated.amount ?? "TBC"} ${updated.currency} (was VERIFIED)`,
       );
     } else if (amountEdited) {
       await writeAuditLog(
         "RATE_UPDATED",
         actor.id,
-        `Rate ${params.id}: amount ${rate.amount ?? "TBC"} → ${updated.amount ?? "TBC"} ${updated.currency}`,
+        `Rate ${id}: amount ${rate.amount ?? "TBC"} → ${updated.amount ?? "TBC"} ${updated.currency}`,
       );
     }
     return NextResponse.json(updated);

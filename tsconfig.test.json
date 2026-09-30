@@ -1,0 +1,13 @@
+{
+  // Test-only tsconfig for Vitest (vitest.config.ts `tsconfig` option). The
+  // base tsconfig sets jsx: "preserve" because Next.js compiles JSX itself;
+  // vitest, however, executes page modules directly through Vite's oxc
+  // transform, which honors this setting and would leave raw JSX in the
+  // output that the SSR import-analysis parse cannot handle. Tests therefore
+  // compile JSX with the automatic runtime instead. Everything else is
+  // inherited unchanged.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  }
+}

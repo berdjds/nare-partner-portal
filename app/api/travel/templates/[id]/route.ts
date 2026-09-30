@@ -10,7 +10,8 @@ import { getTravelActor, travelError, unauthorized } from "../../guard";
 // explicitly rather than relying on the schema's onDelete: Cascade so the
 // endpoint behaves the same on databases whose FKs predate the cascade
 // annotation.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
   if (actor.role !== "ADMIN") {
@@ -19,7 +20,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   try {
     const template = await prisma.packageTemplate.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { versions: { select: { id: true } } },
     });
     if (!template) {

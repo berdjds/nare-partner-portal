@@ -2,7 +2,7 @@
 
 ## Authentication
 
-All API routes except the NextAuth endpoints require an active session cookie. Routes that require admin access check `session.user.role === "ADMIN"`.
+All API routes except the NextAuth endpoints require an active session cookie. Role checks follow the interim W1 access policy (`lib/access-policy.ts`, see `doc/security.md`): the user is re-loaded from the database on every request and the current role decides, so deactivation or a role change takes effect on the next request. Admin-only routes check the database role, not the JWT.
 
 ## HTTP Routes
 
@@ -20,13 +20,26 @@ Standard NextAuth.js endpoints. The credentials provider accepts:
 }
 ```
 
+#### POST /api/auth/sign-out-everywhere
+
+Revokes every session of the caller (W1b): bumps the caller's `User.sessionVersion`,
+so every token minted before the call — including the one making the call — fails on
+its next request, and open sockets disconnect on the next 60s revalidation pass.
+
+**Access**: any active session (any role); only ever revokes the caller's own account
+(the id comes from the session, never from the request).
+
+**Response**: `{ "ok": true }`. Audit action `SIGN_OUT_EVERYWHERE`.
+
+**Errors**: `401` (no active session).
+
 ### Chats
 
 #### GET /api/chats
 
 Returns all chats ordered by most recent message.
 
-**Access**: Any authenticated user.
+**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
 
 **Response**:
 
@@ -58,7 +71,7 @@ Returns all chats ordered by most recent message.
 
 Returns messages for a chat.
 
-**Access**: Any authenticated user.
+**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
 
 **Query parameters**:
 - `chatId` — Chat ID (preferred)
@@ -96,7 +109,7 @@ At least one parameter is required.
 
 Sends a WhatsApp message. Can be used to start a new chat with an unsaved number.
 
-**Access**: Any authenticated user.
+**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
 
 **Request body**:
 
@@ -119,7 +132,7 @@ For text messages to a new number, only `remoteJid`, `body`, and `type` are requ
 { "ok": true }
 ```
 
-Error responses include status `401` (unauthorized), `503` (WhatsApp not ready), and `500` (send failure).
+Error responses include status `401` (unauthorized), `403` (travel-only roles), `503` (WhatsApp not ready), and `500` (send failure).
 
 ### WhatsApp Status
 
@@ -127,23 +140,35 @@ Error responses include status `401` (unauthorized), `503` (WhatsApp not ready),
 
 Returns the current WhatsApp connection state.
 
-**Access**: Any authenticated user.
+**Access**: ADMIN (full details) or USER (`connected` only), both from the current database role. Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
 
-**Response**:
+**Response (ADMIN)**:
 
 ```json
 {
   "state": "ready",
   "qrSvg": null,
-  "info": "WhatsApp client is ready."
+  "info": "WhatsApp client is ready.",
+  "version": "0.16.2",
+  "startedAt": "2026-09-28T00:00:00.000Z"
 }
 ```
+
+`qrSvg` carries the pairing QR code while unpaired — ADMIN only.
+
+**Response (USER)**:
+
+```json
+{ "connected": true }
+```
+
+Availability strictly as connected/not connected; no state text, info, QR, version or uptime.
 
 #### POST /api/whatsapp/status
 
 Performs an admin action on the WhatsApp session.
 
-**Access**: Admin only.
+**Access**: Admin only (current database role; everyone else gets 401).
 
 **Request body**:
 
@@ -156,6 +181,23 @@ or
 ```json
 { "action": "reconnect" }
 ```
+
+### Media
+
+#### GET /uploads/\<file\>
+
+Streams an uploaded message media file (stored under `public/uploads/`).
+
+**Access**: Served by the custom server (`server.ts` → `lib/uploads.ts`), which intercepts
+`/uploads/*` before Next.js's static handler. The pathname is percent-decoded, slash-collapsed
+and normalized before matching, so encoded spellings (`/%75ploads/…`, `/uploads%2F…`) are gated
+too; GET/HEAD only, other methods get `405`. Requires a valid, unexpired NextAuth session
+cookie plus an active ADMIN/USER database role. Responses carry the file's mime type and
+`Cache-Control: private, no-store`.
+
+**Errors**: `400` (undecodable URL), `401` (no, invalid, expired or revoked session),
+`403` (active non-inbox role), `404` (traversal or missing file), `405` (non-GET/HEAD method).
+Existing and missing files are indistinguishable to unauthorized callers.
 
 ### Users
 
@@ -210,6 +252,11 @@ Updates a user.
 All fields except `id` are optional; `role` accepts `ADMIN` / `USER` / `ADVISOR` / `VALIDATOR`
 and `phone: null` clears the WhatsApp number.
 
+Changing the `password`, changing the `role`, or setting `active: false` also bumps the
+user's `sessionVersion` (W1b), revoking every session token minted before the change on
+its next request (see `doc/security.md`, "Session revocation"). Name/email/phone-only
+edits and no-op values do not bump.
+
 #### DELETE /api/users
 
 Deletes a user.
@@ -219,6 +266,18 @@ Deletes a user.
 **Query parameter**: `id`
 
 Admins cannot delete their own account.
+
+#### POST /api/users/[id]/revoke-sessions
+
+Revokes every session of the target user (W1b): bumps the target's
+`User.sessionVersion`, so every token minted before the call fails on its next
+request, and open sockets disconnect on the next 60s revalidation pass.
+
+**Access**: Admin only — active non-admin sessions get `403`, anonymous get `401`.
+
+**Response**: `{ "ok": true }`. Audit action `SESSIONS_REVOKED`, attributed to the admin.
+
+**Errors**: `401` (no active session), `403` (active non-admin), `404` (unknown user id).
 
 ### Logs
 
@@ -234,6 +293,26 @@ Returns audit logs.
 
 Socket.io is available at path `/api/socket`.
 
+### Connection policy (W1)
+
+Since W1 the socket channel is gated exactly like the HTTP APIs (see
+`doc/security.md`, "Interim access policy"):
+
+- **Origin**: the handshake is accepted only when its `Origin` header exactly
+  equals the origin of `NEXTAUTH_URL` (plus comma-separated
+  `SOCKET_ALLOWED_ORIGINS`). Anything else — including a missing `Origin` — is
+  refused before the Socket.io handshake runs.
+- **Session**: the NextAuth session cookie is decoded (`NEXTAUTH_SECRET`) and
+  the user is loaded from the database; the socket connects only for an
+  ACTIVE `ADMIN` or `USER`. Anything else gets a `connect_error` with the
+  message `unauthorized` and never connects.
+- **Rooms**: the SERVER places each socket in `inbox` (ADMIN/USER) and ADMIN
+  sockets additionally in `admins`. No client-to-server handlers exist:
+  client-emitted events are ignored and logged.
+- **Revalidation**: the socket is disconnected when its session token expires
+  or when the periodic (60s) database re-check finds the user deactivated or
+  the role changed.
+
 ### Client Connection
 
 ```typescript
@@ -245,25 +324,41 @@ const socket = io({
 });
 ```
 
+WebSocket is listed first on purpose: the server only accepts allowed
+origins, and browsers always send the `Origin` header on WebSocket
+connections (same-origin GET polling requests may omit it).
+
 ### Server-to-Client Events
 
 #### `whatsapp_state`
 
-Sent on connection and whenever the WhatsApp state changes.
+Sent on connection and whenever the WhatsApp state changes. The payload
+depends on the socket's role (server-managed rooms):
+
+- ADMIN sockets (`admins` room) receive the full state:
 
 ```json
 {
   "state": "qr",
   "qrSvg": "<svg>...</svg>",
-  "info": "Scan the QR code with WhatsApp on your phone."
+  "info": "Scan the QR code with WhatsApp on your phone.",
+  "version": "0.16.2",
+  "startedAt": "2026-09-29T00:00:00.000Z"
 }
 ```
 
-Possible states: `initializing`, `qr`, `authenticated`, `ready`, `disconnected`, `auth_failure`.
+- Inbox-only (USER) sockets receive availability and nothing else:
+
+```json
+{ "connected": false }
+```
+
+Possible `state` values: `initializing`, `qr`, `authenticated`, `ready`, `disconnected`, `auth_failure`.
 
 #### `message`
 
-Sent when a new message is persisted.
+Sent when a new message is persisted. Delivered to the `inbox` room only
+(active ADMIN/USER sockets).
 
 ```json
 {
@@ -280,7 +375,8 @@ Sent when a new message is persisted.
 
 #### `chat_update`
 
-Sent when a chat record is created or updated.
+Sent when a chat record is created or updated. Delivered to the `inbox` room
+only.
 
 ```json
 {
@@ -293,7 +389,9 @@ Sent when a chat record is created or updated.
 
 ### Client-to-Server Events
 
-Currently, the server only emits events. Client actions should use the HTTP API.
+None. The server registers no client-to-server handlers and ignores (logs)
+anything a client emits — clients cannot join rooms, subscribe or act over the
+socket. Client actions must use the HTTP API.
 
 ---
 

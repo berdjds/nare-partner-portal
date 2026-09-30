@@ -33,7 +33,7 @@ interface Log {
 }
 
 export default function AdminDashboard() {
-  const { connected, whatsAppState } = useSocket();
+  const { connected, unauthorized, whatsAppState, disconnectSocket } = useSocket();
   const { toast } = useToast();
 
   const [users, setUsers] = useState<User[]>([]);
@@ -125,6 +125,27 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleRevokeSessions(id: string, email: string) {
+    if (!confirm(`Revoke all sessions of ${email}? Every device is signed out on its next request.`)) return;
+    try {
+      await axios.post(`/api/users/${id}/revoke-sessions`);
+      toast("Sessions revoked", "success");
+      fetchLogs();
+    } catch (err: any) {
+      toast(err?.response?.data?.error || "Failed to revoke sessions", "error");
+    }
+  }
+
+  async function handleSignOutEverywhere() {
+    try {
+      await axios.post("/api/auth/sign-out-everywhere");
+    } catch {
+      // Best effort: the local sign-out below still ends this session.
+    }
+    disconnectSocket();
+    signOut({ callbackUrl: "/login" });
+  }
+
   async function handleWhatsAppAction(action: "logout" | "reconnect") {
     setLoading(true);
     try {
@@ -162,7 +183,16 @@ export default function AdminDashboard() {
           <Button variant="outline" onClick={() => (window.location.href = "/travel")}>
             Travel
           </Button>
-          <Button variant="outline" onClick={() => signOut({ callbackUrl: "/login" })}>
+          <Button variant="outline" onClick={handleSignOutEverywhere}>
+            Sign out everywhere
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              disconnectSocket();
+              signOut({ callbackUrl: "/login" });
+            }}
+          >
             Sign out
           </Button>
         </div>
@@ -180,7 +210,7 @@ export default function AdminDashboard() {
             <CardHeader>
               <CardTitle>WhatsApp Connection</CardTitle>
               <CardDescription>
-                Socket: <Badge variant={connected ? "default" : "destructive"}>{connected ? "connected" : "offline"}</Badge>{" "}
+                Socket: <Badge variant={connected ? "default" : "destructive"}>{unauthorized ? "session expired" : connected ? "connected" : "offline"}</Badge>{" "}
                 State: <Badge variant={whatsAppState?.state === "ready" ? "default" : "outline"}>{whatsAppState?.state || "initializing"}</Badge>
               </CardDescription>
             </CardHeader>
@@ -304,6 +334,9 @@ export default function AdminDashboard() {
                                 </form>
                               </DialogContent>
                             </Dialog>
+                            <Button size="sm" variant="outline" onClick={() => handleRevokeSessions(user.id, user.email)}>
+                              Revoke sessions
+                            </Button>
                             <Button size="sm" variant="destructive" onClick={() => handleDeleteUser(user.id)}>
                               Delete
                             </Button>

@@ -131,7 +131,7 @@ beforeEach(() => session(null));
 
 function instantiate(body: unknown) {
   return instantiateRoute.POST(req(`http://t/api/travel/templates/${template.id}/instantiate`, { method: "POST", body }), {
-    params: { id: template.id },
+    params: Promise.resolve({ id: template.id }),
   });
 }
 
@@ -264,7 +264,7 @@ describe("template version PUT", () => {
   function put(versionId: string, body: unknown) {
     return versionRoute.PUT(
       req(`http://t/api/travel/templates/${template.id}/versions/${versionId}`, { method: "PUT", body }),
-      { params: { id: template.id, versionId } },
+      { params: Promise.resolve({ id: template.id, versionId }) },
     );
   }
 
@@ -280,7 +280,7 @@ describe("template version PUT", () => {
     session(fx.admin);
     const res = await versionRoute.PUT(
       req(`http://t/api/travel/templates/${other.id}/versions/${version.id}`, { method: "PUT", body: { name: "X" } }),
-      { params: { id: other.id, versionId: version.id } },
+      { params: Promise.resolve({ id: other.id, versionId: version.id }) },
     );
     expect(res.status).toBe(404);
   });

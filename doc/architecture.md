@@ -4,7 +4,7 @@
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| Framework | Next.js 14 (App Router) | Web application framework |
+| Framework | Next.js 15 (App Router) + React 19 | Web application framework |
 | Language | TypeScript 5 | Type safety |
 | Styling | TailwindCSS 3 + shadcn/ui-style Radix components | UI styling and components |
 | Authentication | NextAuth.js 4 (credentials) | User sessions |
@@ -22,7 +22,8 @@ WAControl/
 │   │   ├── page.tsx        # Root redirect
 │   │   ├── login/          # Login page
 │   │   ├── admin/          # Admin dashboard
-│   │   └── dashboard/      # Chat dashboard
+│   │   ├── dashboard/      # Chat dashboard
+│   │   └── travel/         # B2B travel module
 │   └── api/                # API route handlers
 │       ├── auth/[...nextauth]/
 │       ├── chats/
@@ -30,21 +31,25 @@ WAControl/
 │       ├── send/
 │       ├── users/
 │       ├── logs/
-│       └── whatsapp/status/
+│       ├── whatsapp/status/
+│       └── travel/         # Travel module API routes
 ├── components/             # React components
 │   ├── ui/                 # shadcn/ui base components
 │   ├── admin/              # Admin dashboard UI
-│   └── dashboard/          # Chat dashboard UI
+│   ├── dashboard/          # Chat dashboard UI
+│   └── travel/             # Travel module UI
 ├── lib/                    # Core business logic
 │   ├── auth.ts             # NextAuth configuration
 │   ├── prisma.ts           # Prisma singleton
 │   ├── utils.ts            # Tailwind class merging
-│   └── whatsapp.ts         # WhatsApp client service
+│   ├── whatsapp.ts         # WhatsApp client service
+│   └── travel/             # B2B travel module (engine, workflow, …)
 ├── hooks/                  # React hooks
 │   └── useSocket.ts        # Socket.io client hook
 ├── prisma/                 # Prisma schema and seed
 │   ├── schema.prisma
 │   └── seed.ts
+├── tests/                  # Vitest suites (npm test)
 ├── server.ts               # Custom Next.js + Socket.io server
 └── next.config.js          # Next.js configuration
 ```
@@ -55,7 +60,7 @@ WAControl/
 2. **Authentication**: Users sign in with email and password. NextAuth validates credentials against the `User` table and issues a JWT session.
 3. **WhatsApp Connection**: The admin scans a QR code. The `whatsapp-web.js` client authenticates and stores session data in `.wwebjs_auth/`.
 4. **Message Handling**: Incoming and outgoing messages are persisted to SQLite and broadcast via Socket.io.
-5. **Dashboard**: Authenticated users view chats, send messages, and admins manage users and connection state.
+5. **Dashboard**: Active ADMIN/USER view chats and send messages; ADVISOR/VALIDATOR work in the travel module; admins manage users and connection state.
 
 ## Server Architecture
 
@@ -63,8 +68,11 @@ The application uses a custom server entry point (`server.ts`) instead of the de
 
 ```
 HTTP Server
+├── GET/HEAD /uploads/* → lib/uploads.ts (authenticated media streaming,
+│   intercepted before the Next.js static handler)
 ├── Next.js request handler
-└── Socket.io server (path: /api/socket)
+└── Socket.io server (path: /api/socket, origin + session gated,
+    room-scoped — lib/socket-auth.ts)
     └── WhatsApp service events (message, chat_update, whatsapp_state)
 ```
 
@@ -73,7 +81,7 @@ HTTP Server
 1. WhatsApp Web emits a `message_create` event.
 2. `lib/whatsapp.ts` receives the message, downloads media if present, and saves it to `public/uploads/`.
 3. The chat and message are upserted in Prisma.
-4. Socket.io emits `message` and `chat_update` events to connected clients.
+4. Socket.io emits `message` and `chat_update` to the authenticated `inbox` room (ADMIN/USER sockets) and the full `whatsapp_state` only to the `admins` room.
 5. The dashboard UI updates the chat list and message thread.
 
 ## Data Flow for Outgoing Messages
@@ -94,11 +102,15 @@ Added 2026-09-21. See `doc/travel/IMPLEMENTATION.md` for the full decision recor
   (DB → engine DTO), `codes.ts` (transactional package codes), `snapshots.ts` (canonical JSON +
   sha256), `notifications.ts` (transactional outbox; email via `lib/email.ts`/nodemailer,
   WhatsApp via the existing client), `pdf/` (HTML→PDF via a dedicated puppeteer browser),
-  `import.ts` (workbook evidence staging), `settings.ts`.
+  `import.ts` (workbook evidence staging), `settings.ts`, plus `access.ts` (module RBAC),
+  `templates.ts`, `whatsapp-docs.ts` (document delivery), `reorder.ts`, `redact.ts` and
+  `trace-table.ts`.
 - `app/api/travel/` — route handlers following existing session/zod/audit conventions.
 - `app/travel/`, `components/travel/` — UI (requests workspace, review queue, templates,
   catalog, notifications).
 - `server.ts` additionally starts the notification worker and hourly overdue-validation sweep.
-- Tests: `tests/` (vitest): engine, travel-db, workflow, pdf, qa suites. `npm test`.
+- Tests: `tests/` (vitest; `npm test` = `vitest run`): engine, travel-db,
+  workflow, pdf, qa plus access, auth, messaging, email, socket and deploy
+  suites.
 - Documents are stored under `data/documents/` (not `public/uploads/`) and served through an
   authorized route.

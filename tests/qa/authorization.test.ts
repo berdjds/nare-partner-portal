@@ -113,11 +113,11 @@ describe("ADMIN-only mutations", () => {
     const rate = await prisma.rateVersion.findFirst({ where: { status: "VERIFIED" } });
     for (const who of [fx.advisor, fx.validator]) {
       session(who);
-      const res = await rateByIdRoute.PATCH(req(`http://t/api/travel/catalog/rates/${rate!.id}`, { method: "PATCH", body: { notes: "x" } }), { params: { id: rate!.id } });
+      const res = await rateByIdRoute.PATCH(req(`http://t/api/travel/catalog/rates/${rate!.id}`, { method: "PATCH", body: { notes: "x" } }), { params: Promise.resolve({ id: rate!.id }) });
       expect(res.status).toBe(403);
     }
     session(fx.admin);
-    const ok = await rateByIdRoute.PATCH(req(`http://t/api/travel/catalog/rates/${rate!.id}`, { method: "PATCH", body: { notes: "reviewed" } }), { params: { id: rate!.id } });
+    const ok = await rateByIdRoute.PATCH(req(`http://t/api/travel/catalog/rates/${rate!.id}`, { method: "PATCH", body: { notes: "reviewed" } }), { params: Promise.resolve({ id: rate!.id }) });
     expect(ok.status).toBe(200);
   });
 });
@@ -141,7 +141,7 @@ describe("request creation and workflow actions", () => {
     await workflow.review(actorOf(fx.validator), version.id, { action: "APPROVE", snapshotHash: hash });
 
     session(fx.validator);
-    const res = await issueRoute.POST(req(`http://t/api/travel/versions/${version.id}/issue`, { method: "POST", body: {} }), { params: { id: version.id } });
+    const res = await issueRoute.POST(req(`http://t/api/travel/versions/${version.id}/issue`, { method: "POST", body: {} }), { params: Promise.resolve({ id: version.id }) });
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.code).toBe("FORBIDDEN");
@@ -156,7 +156,7 @@ describe("request creation and workflow actions", () => {
     session(fx.validator2); // a validator, but not the assigned one
     const res = await reviewRoute.POST(
       req(`http://t/api/travel/versions/${version.id}/review`, { method: "POST", body: { action: "APPROVE", snapshotHash: hash } }),
-      { params: { id: version.id } },
+      { params: Promise.resolve({ id: version.id }) },
     );
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe("NOT_ASSIGNED_VALIDATOR");
@@ -165,7 +165,7 @@ describe("request creation and workflow actions", () => {
     session(fx.validator);
     const ok = await reviewRoute.POST(
       req(`http://t/api/travel/versions/${version.id}/review`, { method: "POST", body: { action: "APPROVE", snapshotHash: hash } }),
-      { params: { id: version.id } },
+      { params: Promise.resolve({ id: version.id }) },
     );
     expect(ok.status).toBe(200);
   });
@@ -194,19 +194,19 @@ describe("document kind authorization", () => {
     const client = await mkDoc("CLIENT", "qa-client");
 
     session(fx.advisor);
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: { id: internal.id } })).status).toBe(403);
-    const clientRes = await documentsRoute.GET(req(`http://t/api/travel/documents/${client.id}`), { params: { id: client.id } });
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(403);
+    const clientRes = await documentsRoute.GET(req(`http://t/api/travel/documents/${client.id}`), { params: Promise.resolve({ id: client.id }) });
     expect(clientRes.status).toBe(200);
     expect(clientRes.headers.get("Content-Type")).toBe("application/pdf");
 
     session(fx.validator);
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: { id: internal.id } })).status).toBe(200);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(200);
     session(fx.admin);
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: { id: internal.id } })).status).toBe(200);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(200);
 
     // USER role never reaches the kind check.
     session(fx.plainUser);
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${client.id}`), { params: { id: client.id } })).status).toBe(401);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${client.id}`), { params: Promise.resolve({ id: client.id }) })).status).toBe(401);
   });
 });
 
@@ -253,7 +253,7 @@ describe("assigned USER-role validator (v0.10.0)", () => {
     expect(list.map((r: any) => r.id)).toEqual([request.id]);
 
     // Detail opens for the assigned request...
-    const own = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: { id: request.id } });
+    const own = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     expect(own.status).toBe(200);
 
     // ...and the assignment also unlocks the INTERNAL document download
@@ -263,14 +263,14 @@ describe("assigned USER-role validator (v0.10.0)", () => {
     });
     expect(internalDoc).toBeTruthy();
     const dl = await documentsRoute.GET(req(`http://t/api/travel/documents/${internalDoc!.id}`), {
-      params: { id: internalDoc!.id },
+      params: Promise.resolve({ id: internalDoc!.id }),
     });
     expect(dl.status).toBe(200);
 
     // ...but existence of unrelated requests is not disclosed.
     const other = await workflow.createRequest(actorOf(advisor2 as any), createRequestInput(fx.agency.id));
     const denied = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${other.request.id}`), {
-      params: { id: other.request.id },
+      params: Promise.resolve({ id: other.request.id }),
     });
     expect(denied.status).toBe(404);
 
@@ -280,7 +280,7 @@ describe("assigned USER-role validator (v0.10.0)", () => {
         method: "POST",
         body: { action: "APPROVE", snapshotHash: hash },
       }),
-      { params: { id: version.id } },
+      { params: Promise.resolve({ id: version.id }) },
     );
     expect(ok.status).toBe(200);
   });
@@ -322,14 +322,14 @@ describe("WhatsApp document delivery (v0.10.0)", () => {
     session(fx.advisor); // the request owner may trigger delivery
     const noRecipients = await documentSendRoute.POST(
       req(`http://t/api/travel/documents/${client.id}/send`, { method: "POST", body: {} }),
-      { params: { id: client.id } },
+      { params: Promise.resolve({ id: client.id }) },
     );
     expect(noRecipients.status).toBe(400);
 
     // INTERNAL to a plain user: per-recipient refusal (margins inside).
     const internalRes = await documentSendRoute.POST(
       req(`http://t/api/travel/documents/${internal.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
-      { params: { id: internal.id } },
+      { params: Promise.resolve({ id: internal.id }) },
     );
     expect(internalRes.status).toBe(200);
     const internalResults = (await internalRes.json()).results;
@@ -339,7 +339,7 @@ describe("WhatsApp document delivery (v0.10.0)", () => {
     // CLIENT to the same user succeeds (mocked WhatsApp sender).
     const clientRes = await documentSendRoute.POST(
       req(`http://t/api/travel/documents/${client.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
-      { params: { id: client.id } },
+      { params: Promise.resolve({ id: client.id }) },
     );
     const clientResults = (await clientRes.json()).results;
     expect(clientResults[0].ok).toBe(true);
@@ -348,7 +348,7 @@ describe("WhatsApp document delivery (v0.10.0)", () => {
     session(fx.validator2);
     const denied = await documentSendRoute.POST(
       req(`http://t/api/travel/documents/${client.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
-      { params: { id: client.id } },
+      { params: Promise.resolve({ id: client.id }) },
     );
     expect(denied.status).toBe(404);
     expect(request.id).toBeTruthy();
@@ -411,7 +411,7 @@ describe("validator group + infant settings (v0.11.0)", () => {
       session(fx.advisor); // request owner triggers delivery
       const res = await documentSendRoute.POST(
         req(`http://t/api/travel/documents/${internal.id}/send`, { method: "POST", body: { userIds: [member.id] } }),
-        { params: { id: internal.id } },
+        { params: Promise.resolve({ id: internal.id }) },
       );
       expect(res.status).toBe(200);
       const { results } = await res.json();

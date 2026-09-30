@@ -3,12 +3,14 @@ name: CI/CD
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 # Serialize deployments: never run two VPS deploys concurrently.
 concurrency:
-  group: deploy-main
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.ref) || 'deploy-main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -45,7 +47,6 @@ jobs:
     env:
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
-      VPS_PATH: /root/productionapp
     steps:
       - uses: actions/checkout@v4
 
@@ -76,51 +77,21 @@ jobs:
           ssh-keyscan -H "${VPS_HOST}" >> ~/.ssh/known_hosts
 
       - name: Upload source
-        run: scp -i ~/.ssh/deploy_key "$RUNNER_TEMP/wacontrol-source.tar.gz" "${VPS_USER}@${VPS_HOST}:/tmp/"
+        run: scp -i ~/.ssh/deploy_key "$RUNNER_TEMP/wacontrol-source.tar.gz" "${VPS_USER}@${VPS_HOST}:/tmp/wacontrol-source.tar.gz"
 
-      - name: Build and restart on VPS
+      - name: Run deploy gate on VPS
+        # scripts/vps-deploy.sh ships inside the source tarball, so the VPS
+        # always runs the deploy gate that matches the candidate: build while
+        # the app serves, tag previous, assert exclusive data mounts, write
+        # freeze, verified backup, trial A (candidate on a data copy), trial B
+        # (rollback compatibility), cutover, then rollback or the manual
+        # recovery procedure on post-cutover failure. The script is piped to
+        # bash over ssh stdin; every `docker ... exec` inside it is guarded
+        # with `< /dev/null` so nothing swallows the remaining script.
         run: |
-          ssh -i ~/.ssh/deploy_key "${VPS_USER}@${VPS_HOST}" bash -s <<'ENDSSH'
-          set -e
-          cd /root/productionapp
-
-          mkdir -p wacontrol-src
-          rm -rf wacontrol-src/*
-          tar -xzf /tmp/wacontrol-source.tar.gz -C wacontrol-src
-          rm -f /tmp/wacontrol-source.tar.gz
-
-          # Keep the compose file in sync with the repo, backing up any local variant.
-          if ! cmp -s wacontrol-src/docker-compose.yml docker-compose.yml 2>/dev/null; then
-            cp docker-compose.yml "docker-compose.yml.bak-$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
-            cp wacontrol-src/docker-compose.yml docker-compose.yml
-          fi
-
-          cd wacontrol-src
-          docker build -t wacontrol:latest .
-
-          cd /root/productionapp
-          mkdir -p wacontrol-data wacontrol-uploads wacontrol-auth
-
-          docker stop wacontrol-app 2>/dev/null || true
-          docker rm wacontrol-app 2>/dev/null || true
-          docker compose up -d wacontrol_app
-
-          # db push happens in docker-entrypoint.sh at container start.
-          # Seeds are bootstrap-only and MUST be loud on failure — a silently
-          # skipped seed once left the production catalog empty.
-          # `< /dev/null` is critical: this script arrives on ssh stdin, and
-          # `docker compose exec` forwards stdin by default — without it the
-          # first exec eats the remaining lines of this script.
-          docker compose exec -T wacontrol_app npm run db:seed < /dev/null
-          # Travel module master data: bootstrap-only. The catalog seed
-          # self-skips when the catalog is populated (deleted/edited items
-          # must not be resurrected on deploy); reseed deliberately with
-          # SEED_FORCE=true. The workbook import (import-workbook.ts) is
-          # manual-only — the workbook is stale vs. curated production data.
-          docker compose exec -T wacontrol_app npx tsx scripts/seed-travel-catalog.ts < /dev/null
-
-          docker ps | grep wacontrol-app
-          ENDSSH
+          ssh -i ~/.ssh/deploy_key "${VPS_USER}@${VPS_HOST}" \
+            'WACONTROL_SOURCE_TARBALL=/tmp/wacontrol-source.tar.gz bash -s' \
+            < scripts/vps-deploy.sh
 
       - name: Health check
         run: |
