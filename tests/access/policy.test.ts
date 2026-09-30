@@ -18,10 +18,14 @@ let advisor: { id: string; email: string; name: string | null; role: string };
 let validator: { id: string; email: string; name: string | null; role: string };
 let inactive: { id: string; email: string; name: string | null; role: string };
 
-function sessionFor(u: { id: string; email: string; name: string | null; role: string } | null, roleOverride?: string) {
+function sessionFor(
+  u: { id: string; email: string; name: string | null; role: string } | null,
+  roleOverride?: string,
+  sv?: number,
+) {
   if (!u) return null;
   return {
-    user: { id: u.id, role: roleOverride ?? u.role, email: u.email, name: u.name },
+    user: { id: u.id, role: roleOverride ?? u.role, email: u.email, name: u.name, ...(sv !== undefined ? { sv } : {}) },
     expires: "2099-01-01",
   } as any;
 }
@@ -127,5 +131,64 @@ describe("requireWhatsAppAdminAccess", () => {
       expect(decision.allowed).toBe(false);
       if (!decision.allowed) expect(decision.response.status).toBe(401);
     }
+  });
+});
+
+describe("session version (W1b)", () => {
+  // The session version is the User.sessionVersion column; the fixtures above
+  // are created with the schema default, so they all sit at version 0.
+  it("getActiveUserById without an expected version returns the user and exposes the current sessionVersion", async () => {
+    const resolved = await policy.getActiveUserById(user.id);
+    expect(resolved).not.toBeNull();
+    expect(resolved!.id).toBe(user.id);
+    expect(resolved!.sessionVersion).toBe(0);
+  });
+
+  it("getActiveUserById matches only the expected version — 0 is a real version, not a bypass", async () => {
+    expect((await policy.getActiveUserById(user.id, 0))?.id).toBe(user.id);
+    expect(await policy.getActiveUserById(user.id, 1)).toBeNull();
+  });
+
+  it("getActiveUser treats a missing sv exactly like sv: 0", async () => {
+    // The pre-W1b session shape carries no sv at all — counts as 0.
+    expect(sessionFor(user).user).not.toHaveProperty("sv");
+    expect((await policy.getActiveUser(sessionFor(user)))?.id).toBe(user.id);
+    expect((await policy.getActiveUser(sessionFor(user, undefined, 0)))?.id).toBe(user.id);
+    // An sv that does not match the current version is refused.
+    expect(await policy.getActiveUser(sessionFor(user, undefined, 1))).toBeNull();
+  });
+
+  it("bumping the session version revokes sessions carrying the old sv — including legacy tokens with no sv claim", async () => {
+    // Dedicated user: the shared fixtures above are reused by other suites.
+    const bumped = await prisma.user.create({
+      data: { email: "pol-bumped@test.io", name: "Bumped", password: "x", role: "USER" },
+    });
+    expect((await policy.getActiveUser(sessionFor(bumped, undefined, 0)))?.id).toBe(bumped.id);
+
+    await policy.revokeAllSessions(bumped.id);
+
+    expect(await policy.getActiveUser(sessionFor(bumped, undefined, 0))).toBeNull();
+    expect((await policy.getActiveUser(sessionFor(bumped, undefined, 1)))?.id).toBe(bumped.id);
+    // Pre-W1b tokens carry no sv claim; they equal 0, which no longer matches
+    // after the bump — a legacy token is revoked like any other stale token.
+    expect(await policy.getActiveUser(sessionFor(bumped))).toBeNull();
+  });
+
+  it("requireInboxAccess with a stale sv answers 401 (revocation is indistinguishable from no session)", async () => {
+    const stale = await prisma.user.create({
+      data: { email: "pol-stale@test.io", name: "Stale", password: "x", role: "USER" },
+    });
+    await policy.revokeAllSessions(stale.id);
+
+    const decision = await policy.requireInboxAccess(sessionFor(stale, undefined, 0));
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) {
+      expect(decision.response.status).toBe(401);
+      expect((await decision.response.json()).error).toBe("Unauthorized");
+    }
+
+    const current = await policy.requireInboxAccess(sessionFor(stale, undefined, 1));
+    expect(current.allowed).toBe(true);
+    if (current.allowed) expect(current.user.id).toBe(stale.id);
   });
 });

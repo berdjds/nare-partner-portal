@@ -29,12 +29,17 @@
  *    whatsapp_state (info + pairing qrSvg) goes to 'admins' only.
  * 5. Revalidation: a socket is disconnected when its token's exp passes, and
  *    every REVALIDATE_INTERVAL_MS each open socket's user is reloaded from
- *    the database — deactivation or a role change disconnects it, and room
- *    membership is re-synced with the current role.
+ *    the database — deactivation, a role change, or a session-version (sv)
+ *    mismatch against the user's current version disconnects it, and
+ *    room membership is re-synced with the current role.
  *
- * Known limit (documented in doc/security.md, fixed in W2): a JWT copied
- * before logout stays valid until it expires (NextAuth default 30 days);
- * per-session revocation arrives with W2.
+ * Revocation (W1b, sv claim): sv is the user's session version — the
+ * User.sessionVersion column. Bumping it atomically with { increment: 1 }
+ * (revokeAllSessions in lib/access-policy.ts) invalidates every token issued
+ * before the bump on the next HTTP request and disconnects open sockets on
+ * the next revalidation pass. Tokens minted before W1b carry no sv claim;
+ * they count as 0 and therefore match only a user that was never revoked —
+ * the first revocation revokes legacy tokens too.
  */
 
 import type { IncomingMessage } from "http";
@@ -58,13 +63,16 @@ export const UNAUTHORIZED = "unauthorized";
 // gate works in dev and behind the production reverse proxy alike.
 const SESSION_COOKIE_NAMES = ["__Secure-next-auth.session-token", "next-auth.session-token"];
 
-// setTimeout overflows (fires immediately) beyond ~24.85 days, while NextAuth
-// session tokens default to 30 days — long expiries are re-armed instead.
+// setTimeout overflows (fires immediately) beyond ~24.85 days. W1b caps the
+// session maxAge at 7 days (lib/auth.ts), so expiries stay in range — the
+// re-arm below is kept as a defense in case the maxAge ever grows again.
 const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 export interface SocketAuthData {
   userId: string;
   role: string;
+  /** Token's session version claim (W1b); compared against the user's current session version. */
+  sv: number;
   /** Token expiry as unix seconds (from the decoded JWT). */
   exp: number;
 }
@@ -151,7 +159,7 @@ async function authenticateHandshake(req: IncomingMessage): Promise<SocketAuthDa
   if (!secret) return deny(); // fail closed rather than accept unsigned tokens
   const token = readSessionCookie(req);
   if (!token) return deny();
-  let payload: { exp?: number; id?: unknown; sub?: unknown } | null = null;
+  let payload: { exp?: number; id?: unknown; sub?: unknown; sv?: unknown } | null = null;
   try {
     payload = await decode({ token, secret });
   } catch {
@@ -164,9 +172,13 @@ async function authenticateHandshake(req: IncomingMessage): Promise<SocketAuthDa
   if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) return deny();
   const id = payload.id ?? payload.sub;
   if (typeof id !== "string" || !id) return deny();
-  const user = await getActiveUserById(id);
+  // Tokens minted before W1b carry no sv claim; they count as 0, which matches
+  // only a user that was never revoked (getActiveUserById always compares —
+  // 0 is a real version, not a bypass).
+  const sv = typeof payload.sv === "number" ? payload.sv : 0;
+  const user = await getActiveUserById(id, sv);
   if (!user || !canUseInbox(user.role)) return deny();
-  return { userId: user.id, role: user.role, exp: payload.exp };
+  return { userId: user.id, role: user.role, sv, exp: payload.exp };
 }
 
 /** io.use handshake middleware: authenticates and tags socket.data.user. */
@@ -213,9 +225,9 @@ export async function revalidateSocket(socket: ServerSocket): Promise<void> {
     socket.disconnect(true);
     return;
   }
-  const user = await getActiveUserById(auth.userId);
+  const user = await getActiveUserById(auth.userId, auth.sv);
   if (!user || !canUseInbox(user.role)) {
-    console.log("[Socket] user deactivated or role revoked — disconnecting", auth.userId);
+    console.log("[Socket] user deactivated, role revoked or session revoked — disconnecting", auth.userId);
     socket.disconnect(true);
     return;
   }

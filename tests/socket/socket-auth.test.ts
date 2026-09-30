@@ -95,8 +95,12 @@ let advisor: { id: string; role: string };
 let validator: { id: string; role: string };
 let inactive: { id: string; role: string };
 
-async function cookieFor(u: { id: string; role: string }, maxAge = 60 * 60): Promise<string> {
-  const token = await encode({ token: { id: u.id, role: u.role }, secret: SECRET, maxAge });
+async function cookieFor(u: { id: string; role: string }, maxAge = 60 * 60, sv?: number): Promise<string> {
+  const token = await encode({
+    token: { id: u.id, role: u.role, ...(sv !== undefined ? { sv } : {}) },
+    secret: SECRET,
+    maxAge,
+  });
   return `next-auth.session-token=${token}`;
 }
 
@@ -254,6 +258,36 @@ describe("session gate (io.use handshake)", () => {
       expect(outcome).toBe("unauthorized");
     }
     expect(shared.sio.sockets.sockets.size).toBe(0);
+  });
+
+  it("refuses a token whose sv no longer matches the user's session version; the current sv connects (W1b)", async () => {
+    // Dedicated user: the shared fixtures above are reused by other suites.
+    const bumped = await prisma.user.create({
+      data: { email: "sock-bumped@test.io", name: "Bumped", password: "x", role: "USER" },
+    });
+    // Revoke all issued sessions: bump User.sessionVersion atomically (the
+    // same { increment: 1 } update revokeAllSessions performs).
+    await prisma.user.update({ where: { id: bumped.id }, data: { sessionVersion: { increment: 1 } } });
+
+    // A stale sv claim (minted before the revocation) is refused.
+    const stale = await connectOutcome(
+      makeClient(shared.url, { cookie: await cookieFor(bumped, 60 * 60, 0), origin: "http://localhost:3000" })
+    );
+    expect(stale).toBe("unauthorized");
+    expect(shared.sio.sockets.sockets.size).toBe(0);
+
+    // A pre-W1b token with no sv claim at all counts as 0 — a real version,
+    // not a bypass — so the revocation revokes it like any other stale token.
+    const legacy = await connectOutcome(
+      makeClient(shared.url, { cookie: await cookieFor(bumped), origin: "http://localhost:3000" })
+    );
+    expect(legacy).toBe("unauthorized");
+    expect(shared.sio.sockets.sockets.size).toBe(0);
+
+    const socket = makeClient(shared.url, { cookie: await cookieFor(bumped, 60 * 60, 1), origin: "http://localhost:3000" });
+    expect(await connectOutcome(socket)).toBe("connected");
+    socket.disconnect();
+    await waitForSocketCount(shared.sio, 0);
   });
 });
 
@@ -435,6 +469,28 @@ describe("revalidation", () => {
       expect(await connectOutcome(socket)).toBe("connected");
 
       await prisma.user.update({ where: { id: deact.id }, data: { active: false } });
+      // Attach before advancing so a fast disconnect can never be missed.
+      const disconnected = waitDisconnect(socket);
+      await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB
+      vi.useRealTimers();
+      await disconnected;
+      await vi.waitFor(() => expect(server.sio.sockets.sockets.size).toBe(0));
+    } finally {
+      vi.useRealTimers();
+      await stopServer(server);
+    }
+  });
+
+  it("disconnects when a revocation moves the user's session version past the token's sv (W1b, fake timers)", async () => {
+    const revoked = await prisma.user.create({ data: { email: "sock-revoked@test.io", name: "Revoked", password: "x", role: "USER" } });
+    vi.useFakeTimers();
+    const server = await startServer();
+    try {
+      // Token carries the sv minted at login, matching the DB at connect time.
+      const socket = makeClient(server.url, { cookie: await cookieFor(revoked, 60 * 60, 0), origin: "http://localhost:3000" });
+      expect(await connectOutcome(socket)).toBe("connected");
+
+      await prisma.user.update({ where: { id: revoked.id }, data: { sessionVersion: { increment: 1 } } });
       // Attach before advancing so a fast disconnect can never be missed.
       const disconnected = waitDisconnect(socket);
       await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB

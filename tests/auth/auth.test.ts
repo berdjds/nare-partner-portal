@@ -71,6 +71,38 @@ describe("credentials authorize()", () => {
     expect(result.password).toBeUndefined();
   });
 
+  it("returns the user's session version as sv (W1b; 0 for a user that was never revoked)", async () => {
+    const result: any = await credentialsProvider().authorize({
+      email: activeAdmin.email,
+      password: PASSWORD,
+    });
+    expect(result).not.toBeNull();
+    expect(result.sv).toBe(0);
+    // Still no password leak alongside the new claim.
+    expect(result.password).toBeUndefined();
+  });
+
+  it("returns the bumped session version after a revocation event (W1b)", async () => {
+    const bumped = await prisma.user.create({
+      data: {
+        email: "auth-bumped@test.io",
+        name: "Auth Bumped",
+        password: bcrypt.hashSync(PASSWORD, 10),
+        role: "USER",
+      },
+    });
+    // Revoke all issued sessions: bump User.sessionVersion atomically (the
+    // same { increment: 1 } update revokeAllSessions performs).
+    await prisma.user.update({ where: { id: bumped.id }, data: { sessionVersion: { increment: 1 } } });
+
+    const result: any = await credentialsProvider().authorize({
+      email: bumped.email,
+      password: PASSWORD,
+    });
+    expect(result).not.toBeNull();
+    expect(result.sv).toBe(1);
+  });
+
   it("rejects a wrong password with null", async () => {
     const result = await credentialsProvider().authorize({
       email: activeAdmin.email,
@@ -121,6 +153,33 @@ describe("jwt callback", () => {
     expect(out.id).toBe(activeAdmin.id);
     expect(out.role).toBe("ADMIN");
   });
+
+  it("stores the user's session version on the token at sign-in (W1b)", async () => {
+    const token: any = {};
+    const out: any = await (authOptions.callbacks!.jwt as any)({
+      token,
+      user: { id: activeAdmin.id, email: activeAdmin.email, role: "ADMIN", sv: 3 },
+    });
+    expect(out).toBe(token);
+    expect(out.sv).toBe(3);
+  });
+
+  it("defaults token.sv to 0 when the signing-in user carries no sv (W1b)", async () => {
+    const token: any = {};
+    const out: any = await (authOptions.callbacks!.jwt as any)({
+      token,
+      user: { id: activeAdmin.id, email: activeAdmin.email, role: "ADMIN" },
+    });
+    expect(out).toBe(token);
+    expect(out.sv).toBe(0);
+  });
+
+  it("leaves an existing token.sv untouched on subsequent requests (no user argument, W1b)", async () => {
+    const token: any = { id: activeAdmin.id, role: "ADMIN", sv: 5, iat: 123 };
+    const out: any = await (authOptions.callbacks!.jwt as any)({ token });
+    expect(out).toBe(token);
+    expect(out.sv).toBe(5);
+  });
 });
 
 describe("session callback", () => {
@@ -135,8 +194,28 @@ describe("session callback", () => {
     expect(out.user.role).toBe("ADMIN");
   });
 
-  it("keeps jwt as the session strategy (credentials provider requires it)", () => {
-    expect(authOptions.session).toEqual({ strategy: "jwt" });
+  it("exposes sv on session.user from token.sv (W1b)", async () => {
+    const session: any = { user: {}, expires: "2099-01-01" };
+    const out: any = await (authOptions.callbacks!.session as any)({
+      session,
+      token: { id: activeAdmin.id, role: "ADMIN", sv: 3 },
+    });
+    expect(out).toBe(session);
+    expect(out.user.sv).toBe(3);
+  });
+
+  it("defaults session.user.sv to 0 when the token has no sv claim (W1b)", async () => {
+    const session: any = { user: {}, expires: "2099-01-01" };
+    const out: any = await (authOptions.callbacks!.session as any)({
+      session,
+      token: { id: activeAdmin.id, role: "ADMIN" },
+    });
+    expect(out).toBe(session);
+    expect(out.user.sv).toBe(0);
+  });
+
+  it("keeps jwt as the session strategy with a 7-day maxAge (credentials provider requires jwt, W1b)", () => {
+    expect(authOptions.session).toEqual({ strategy: "jwt", maxAge: 7 * 24 * 60 * 60 });
     expect(authOptions.adapter).toBeUndefined();
   });
 });
