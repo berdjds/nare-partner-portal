@@ -119,8 +119,9 @@ export default function ItineraryTab({ ctx }: { ctx: DetailContext }) {
 
   // Per-line net costs from the shared quote preview (v0.11.0). Day-linked
   // lines are shared across scenarios, so the first scenario's lines suffice.
-  // Absent for redacted advisors and pre-v0.11.0 snapshots — costs then hide.
-  const canSeeCosts = ctx.isAdmin || ctx.role === "VALIDATOR" || ctx.isOwner;
+  // Costs render only with the admin-granted travel.internal.view permission;
+  // the server redacts them for everyone else.
+  const canSeeCosts = ctx.permissions.includes("travel.internal.view");
   const costByKey = useMemo(() => {
     const map = new Map<string, ScenarioResultLine>();
     if (!canSeeCosts) return map;

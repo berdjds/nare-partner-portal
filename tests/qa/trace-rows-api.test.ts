@@ -8,6 +8,10 @@
  *   snapshot (inputsJson + per-scenario resultJson) for submitted versions —
  *   and never leaks the snapshot's inputsJson itself.
  * - Pre-submit versions carry no traceRows (there is no frozen snapshot yet).
+ * - Trace rows are full costing, so they follow the int-lock rule: only
+ *   actors holding travel.internal.view (a UserPermission grant here — D2
+ *   presets give it to ADMIN only) see them; everyone else gets the redacted
+ *   sell-side scenario view and no traceRows.
  */
 
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -31,6 +35,9 @@ vi.mock("@/lib/travel/pdf/render", () => ({
 let prisma: PrismaClient;
 let workflow: typeof import("@/lib/travel/workflow");
 let fx: Fixtures;
+// Owner with an explicit travel.internal.view grant (D2: the ADVISOR preset
+// does not carry it, so the fixture advisor gets the redacted view).
+let ownerInternal: { id: string; role: string; name: string | null; email: string };
 
 let calculateRoute: typeof import("@/app/api/travel/versions/[id]/calculate/route");
 let requestByIdRoute: typeof import("@/app/api/travel/requests/[id]/route");
@@ -50,21 +57,34 @@ beforeAll(async () => {
   prisma = await getPrisma();
   workflow = await import("@/lib/travel/workflow");
   fx = await seedFixtures(prisma);
+  ownerInternal = await prisma.user.create({
+    data: {
+      email: "owner-internal@test.io",
+      name: "Owner Internal",
+      password: "x",
+      role: "ADVISOR",
+      permissions: { create: [{ key: "travel.internal.view", allowed: true }] },
+    },
+  });
+  // The validator assertion below expects the frozen rows — grant the key.
+  await prisma.userPermission.create({
+    data: { userId: fx.validator.id, key: "travel.internal.view", allowed: true },
+  });
   calculateRoute = await import("@/app/api/travel/versions/[id]/calculate/route");
   requestByIdRoute = await import("@/app/api/travel/requests/[id]/route");
 });
 
-/** Draft request owned by the fixture advisor with one hotel scenario saved. */
-async function draftVersion() {
-  const { request, version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
-  await saveContent(prisma, actorOf(fx.advisor), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
+/** Draft request owned by the given advisor with one hotel scenario saved. */
+async function draftVersion(owner = ownerInternal) {
+  const { request, version } = await workflow.createRequest(actorOf(owner), createRequestInput(fx.agency.id));
+  await saveContent(prisma, actorOf(owner), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
   return { request, version };
 }
 
 describe("calculation trace rows", () => {
   it("calculate attaches a response-only traceRows breakdown per scenario", async () => {
     const { version } = await draftVersion();
-    session(fx.advisor);
+    session(ownerInternal);
     const res = await calculateRoute.POST(post(`http://localhost/api/travel/versions/${version.id}/calculate`, {}), {
       params: Promise.resolve({ id: version.id }),
     });
@@ -89,7 +109,7 @@ describe("calculation trace rows", () => {
 
   it("detail GET exposes no traceRows before submit", async () => {
     const { request } = await draftVersion();
-    session(fx.advisor);
+    session(ownerInternal);
     const res = await requestByIdRoute.GET(new NextRequest(`http://localhost/api/travel/requests/${request.id}`), {
       params: Promise.resolve({ id: request.id }),
     });
@@ -101,10 +121,10 @@ describe("calculation trace rows", () => {
 
   it("detail GET rebuilds the frozen traceRows from the snapshot after submit", async () => {
     const { request } = await draftVersion();
-    await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
-    await workflow.submit(actorOf(fx.advisor), request.id);
+    await workflow.assignValidator(actorOf(ownerInternal), request.id, { validatorId: fx.validator.id });
+    await workflow.submit(actorOf(ownerInternal), request.id);
 
-    session(fx.advisor);
+    session(ownerInternal);
     const res = await requestByIdRoute.GET(new NextRequest(`http://localhost/api/travel/requests/${request.id}`), {
       params: Promise.resolve({ id: request.id }),
     });
@@ -124,12 +144,49 @@ describe("calculation trace rows", () => {
     expect(version.snapshot).toBeTruthy();
     expect(version.snapshot.inputsJson).toBeUndefined();
 
-    // The assigned validator (full-costing role) sees the same frozen rows.
+    // The assigned validator (granted travel.internal.view) sees the same
+    // frozen rows.
     session(fx.validator);
     const resV = await requestByIdRoute.GET(new NextRequest(`http://localhost/api/travel/requests/${request.id}`), {
       params: Promise.resolve({ id: request.id }),
     });
     const bodyV = await resV.json();
     expect(bodyV.versions[0].scenarios[0].traceRows?.length).toBe(scenario.traceRows.length);
+  });
+
+  it("an owner without travel.internal.view gets redacted results and no traceRows (int-lock, D2)", async () => {
+    // fx.advisor is the request owner but has no grant — the ADVISOR preset
+    // does not carry travel.internal.view.
+    const { request, version } = await draftVersion(fx.advisor);
+    await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
+    await workflow.submit(actorOf(fx.advisor), request.id);
+
+    session(fx.advisor);
+    const res = await requestByIdRoute.GET(new NextRequest(`http://localhost/api/travel/requests/${request.id}`), {
+      params: Promise.resolve({ id: request.id }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const scenario = body.versions[0].scenarios[0];
+
+    expect(scenario.traceRows).toBeUndefined();
+    // resultJson is reduced to the sell-side shape: no costing, no trace.
+    const parsed = JSON.parse(scenario.resultJson);
+    expect(parsed.sell).toBeDefined();
+    expect(parsed.totals).toBeUndefined();
+    expect(parsed.lines).toBeUndefined();
+    expect(parsed.profit).toBeUndefined();
+    expect(parsed.margin).toBeUndefined();
+    expect(parsed.trace).toBeUndefined();
+
+    // The live calculate preview redacts the same way.
+    const calc = await calculateRoute.POST(post(`http://localhost/api/travel/versions/${version.id}/calculate`, {}), {
+      params: Promise.resolve({ id: version.id }),
+    });
+    expect(calc.status).toBe(200);
+    const calcBody = await calc.json();
+    expect(calcBody.scenarios[0].traceRows).toBeUndefined();
+    expect(calcBody.scenarios[0].totals).toBeUndefined();
+    expect(calcBody.scenarios[0].sell).toBeDefined();
   });
 });

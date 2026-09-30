@@ -5,6 +5,7 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
@@ -46,78 +47,115 @@ export default function DocumentsTab({ ctx }: { ctx: DetailContext }) {
     d.kind === "INTERNAL"
       ? ctx.permissions.includes("travel.internal.download")
       : ctx.permissions.includes("travel.client_docs.download");
+  // Internal costing sheets must never be offered for WhatsApp delivery
+  // (they carry margins); only CLIENT documents can be sent.
   const canSendDoc = (d: DocumentDetail) =>
-    canSend && (d.kind !== "CLIENT" || ctx.permissions.includes("travel.client_docs.send"));
+    d.kind === "CLIENT" && canSend && ctx.permissions.includes("travel.client_docs.send");
+
+  const clientDocs = docs.filter((d) => d.kind === "CLIENT");
+  const internalDocs = docs.filter((d) => d.kind === "INTERNAL");
+
+  function renderTable(rows: DocRow[], emptyText: string) {
+    return (
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-3">Version</TableHead>
+              <TableHead>Kind</TableHead>
+              <TableHead>State</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Issued at</TableHead>
+              <TableHead>SHA-256</TableHead>
+              <TableHead className="pr-3">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className="pl-3">{versionLabel(d.versionNo)}</TableCell>
+                <TableCell>
+                  {d.kind === "INTERNAL" ? (
+                    <Badge variant="warning">INTERNAL — not for client distribution</Badge>
+                  ) : (
+                    <Badge variant="neutral">CLIENT</Badge>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <StateBadge value={d.renderState} />
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(d.createdAt)}</TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(d.issuedAt)}</TableCell>
+                <TableCell className="font-mono text-xs">{shortHash(d.sha256)}</TableCell>
+                <TableCell className="pr-3">
+                  <div className="flex gap-2">
+                    {d.renderState === "READY" && canDownload(d) && (
+                      <a href={`/api/travel/documents/${d.id}`} target="_blank" rel="noreferrer">
+                        <Button size="sm" variant="outline">
+                          Download
+                        </Button>
+                      </a>
+                    )}
+                    {d.renderState === "READY" && canSendDoc(d) && (
+                      <Button size="sm" variant="outline" onClick={() => setSendDoc(d)}>
+                        Send via WhatsApp
+                      </Button>
+                    )}
+                    {d.renderState === "FAILED" && canRetry && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === d.id}
+                        onClick={() => handleRetry(d.versionId, d.id)}
+                      >
+                        {busyId === d.id ? "Retrying..." : "Retry render"}
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  {emptyText}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Documents</CardTitle>
-        <CardDescription>Generated documents for this request. The list is filtered to your role.</CardDescription>
+        <CardDescription>
+          Generated documents for this request. What you see is filtered by your permissions.
+        </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-3">Version</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>State</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Issued at</TableHead>
-                <TableHead>SHA-256</TableHead>
-                <TableHead className="pr-3">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {docs.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="pl-3">{versionLabel(d.versionNo)}</TableCell>
-                  <TableCell>{d.kind}</TableCell>
-                  <TableCell>
-                    <StateBadge value={d.renderState} />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(d.createdAt)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(d.issuedAt)}</TableCell>
-                  <TableCell className="font-mono text-xs">{shortHash(d.sha256)}</TableCell>
-                  <TableCell className="pr-3">
-                    <div className="flex gap-2">
-                      {d.renderState === "READY" && canDownload(d) && (
-                        <a href={`/api/travel/documents/${d.id}`} target="_blank" rel="noreferrer">
-                          <Button size="sm" variant="outline">
-                            Download
-                          </Button>
-                        </a>
-                      )}
-                      {d.renderState === "READY" && canSendDoc(d) && (
-                        <Button size="sm" variant="outline" onClick={() => setSendDoc(d)}>
-                          Send via WhatsApp
-                        </Button>
-                      )}
-                      {d.renderState === "FAILED" && canRetry && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busyId === d.id}
-                          onClick={() => handleRetry(d.versionId, d.id)}
-                        >
-                          {busyId === d.id ? "Retrying..." : "Retry render"}
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {docs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                    No documents yet — issue an approved version to generate the client PDF.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+      <CardContent className="space-y-6">
+        <section>
+          <h3 className="mb-2 text-sm font-medium">Client documents</h3>
+          {renderTable(clientDocs, "No client documents yet — issue an approved version to generate the client PDF.")}
+        </section>
+        {internalDocs.length > 0 && (
+          <section>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-medium">Internal costing sheets</h3>
+              <Badge variant="warning">INTERNAL — not for client distribution</Badge>
+            </div>
+            {/* Distribution caveat: the app gates the download, but cannot
+                control what an authorised user does with the file after. */}
+            <p className="mb-2 text-xs text-muted-foreground">
+              Downloads are restricted to admin-granted users. Once an authorised person downloads a file, the app
+              cannot stop them from sharing it — handle costing sheets accordingly.
+            </p>
+            {renderTable(internalDocs, "No internal costing sheets yet.")}
+          </section>
+        )}
       </CardContent>
       {sendDoc && <SendDocumentDialog doc={sendDoc} onClose={() => setSendDoc(null)} />}
     </Card>
@@ -134,7 +172,8 @@ interface GroupChat {
 /**
  * WhatsApp delivery picker: active users that have a phone on file, plus the
  * WhatsApp groups the linked account is in (from the dashboard chat list).
- * The server reports per-recipient success/failure.
+ * The server reports per-recipient success/failure. Only CLIENT documents
+ * reach this dialog — internal costing sheets never get a send action.
  */
 function SendDocumentDialog({ doc, onClose }: { doc: DocRow; onClose: () => void }) {
   const { toast } = useToast();
@@ -203,9 +242,7 @@ function SendDocumentDialog({ doc, onClose }: { doc: DocRow; onClose: () => void
             Send {versionLabel(doc.versionNo)} {doc.kind} PDF via WhatsApp
           </DialogTitle>
           <DialogDescription>
-            {doc.kind === "INTERNAL"
-              ? "Internal documents carry margins — delivery is restricted to validators and admins."
-              : "Pick recipients; each delivery is reported individually."}
+            Pick recipients; each delivery is reported individually.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-72 space-y-4 overflow-auto">

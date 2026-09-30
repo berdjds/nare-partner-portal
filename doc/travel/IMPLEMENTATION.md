@@ -30,8 +30,9 @@ A versioned B2B travel package costing and quotation module inside WAControl:
 - `lib/travel/workflow.ts` — DRAFT → PENDING_VALIDATION → APPROVED → ISSUED (+CHANGES_REQUESTED,
   REJECTED, ACCEPTED/DECLINED/EXPIRED, CANCELLED); assigned-validator-only decisions
   (self-validation allowed since v0.10.0), hash-bound approvals, transactional issue with
-  idempotency, revisions; INTERNAL document generated at submit with best-effort WhatsApp
-  delivery (v0.10.0).
+  idempotency, revisions; INTERNAL document generated and rendered at submit (v0.10.0) —
+  its best-effort WhatsApp delivery was removed by the W2 int-lock: INTERNAL documents
+  are never sent via WhatsApp, by anyone.
 - `lib/travel/notifications.ts` + `lib/email.ts` — transactional outbox (WorkflowEvent +
   per-recipient/channel NotificationDelivery, dedup keys), async worker (wired in `server.ts`),
   email via SMTP (nodemailer) and WhatsApp via existing `sendWhatsAppMessage`; missing
@@ -88,7 +89,9 @@ A versioned B2B travel package costing and quotation module inside WAControl:
    `dedupKey` unique) — same semantics, fewer tables.
 9. **Documents on local disk** under `TravelSettings.documentsDir` (`data/documents/`, Docker
    volume candidate), never under `public/uploads/` (which is publicly reachable). Downloads
-   stream through an authorized API route; INTERNAL documents are ADMIN/VALIDATOR only.
+   stream through an authorized API route; INTERNAL documents require the
+   `travel.internal.view` (list/preview/costs) and `travel.internal.download` (file)
+   permissions — admin-granted, off by default for non-admins (W2 int-lock, D2).
 10. **Vehicle checks at engine level only** — service resolution does not yet attach a vehicle
     assignment to versions (documented gap; engine validates `vehicleChecks` when provided).
 11. **Rate seasons stay textual** for imported catalog rates: free-text seasonal notes are
@@ -229,14 +232,19 @@ A versioned B2B travel package costing and quotation module inside WAControl:
     restricted to ADMIN/VALIDATOR roles or the assigned validator (margins inside). All
     delivery goes through `lib/travel/whatsapp-docs.ts`, never throws into the workflow, and
     writes `QUOTE_DOCUMENT_SENT` audit entries. Advisors never see INTERNAL documents, not
-    even as list metadata.
+    even as list metadata. **Superseded by the W2 int-lock:** INTERNAL documents are no
+    longer delivered at all — `submit()` only renders the sheet, the send route rejects
+    INTERNAL ids with 403 for every actor (including ADMIN), and `sendQuoteDocument()`
+    refuses INTERNAL for every target (users and groups) at send time, auditing the attempt
+    as `QUOTE_DOCUMENT_SEND_REFUSED`.
 26. **Virtual validator user group (v0.11.0).** The validator "group" is a list of users, not a
     WhatsApp group: `TravelSettings.validatorUserIds` (JSON array, validated as active users in
     the settings route) replaces the `validatorGroupJid` column (kept for data, unused). Submit
-    fans out text notifications to owner + assigned validator + group members (deduped) and the
-    INTERNAL costing sheet is WhatsApped to the assigned validator and each group member
-    individually; issue does the same with the CLIENT PDF. INTERNAL visibility in
-    `whatsapp-docs.ts` treats group membership like an assignment grant. `createRequest`
+    fans out text notifications to owner + assigned validator + group members (deduped) and
+    used to WhatsApp the INTERNAL costing sheet to the assigned validator and each group
+    member individually (removed by the W2 int-lock — INTERNAL sheets are never sent);
+    issue does the same with the CLIENT PDF. The former INTERNAL visibility rules in
+    `whatsapp-docs.ts` are gone with the int-lock. `createRequest`
     auto-assigns the first active group member as the validator (via `setValidator` semantics,
     quietly — no notification when nothing is replaced) so submit never blocks on a missing
     assignment. Decision rights stay with the single assigned validator; group membership only

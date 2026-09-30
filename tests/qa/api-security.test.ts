@@ -1,13 +1,17 @@
 /**
  * QA: route-level security fixes — advisor data scoping and leak prevention.
  *
- * - GET /travel/requests/[id]: other advisor → 404 (IDOR); the owner-advisor
- *   sees the full costing blob (v0.11.0 — the initiator prices the request);
- *   VALIDATOR likewise; documents expose renderState only, never filePath.
+ * - GET /travel/requests/[id]: other advisor → 404 (IDOR); internal costing
+ *   follows the int-lock rule — only actors holding travel.internal.view
+ *   (granted via UserPermission here; D2 presets give it to ADMIN only) see
+ *   the full costing blob, everyone else gets the redacted sell-side view;
+ *   documents expose renderState only, never filePath.
  * - POST /travel/versions/[id]/calculate: owner / assigned validator / ADMIN
- *   only (404 otherwise); advisor policy overrides are refused (403).
+ *   only (404 otherwise); advisor policy overrides are refused (403) even
+ *   with a travel.internal.view grant; the result is redacted without the key.
  * - POST /travel/requests/[id]/submit: the submitter is necessarily the owner
- *   or ADMIN, so the response carries the full engine result.
+ *   or ADMIN; the engine result in the response follows the same int-lock
+ *   redaction rule.
  * - GET /travel/documents/[id]: CLIENT docs restricted to owner / assigned
  *   validator / ADMIN (404 otherwise).
  * - GET /travel/settings: non-ADMIN sees only the active policy's currency.
@@ -39,7 +43,10 @@ let prisma: PrismaClient;
 let workflow: typeof import("@/lib/travel/workflow");
 let guard: typeof import("@/app/api/travel/guard");
 let fx: Fixtures;
-let advisor2: { id: string; role: string; name: string | null; email: string };
+let advisor2: Fixtures["advisor"];
+// Owner with an explicit travel.internal.view grant (D2: the ADVISOR preset
+// does not carry it, so the fixture advisor gets the redacted view).
+let advisorInternal: Fixtures["advisor"];
 
 let requestByIdRoute: typeof import("@/app/api/travel/requests/[id]/route");
 let calculateRoute: typeof import("@/app/api/travel/versions/[id]/calculate/route");
@@ -69,6 +76,21 @@ beforeAll(async () => {
   advisor2 = await prisma.user.create({
     data: { email: "sec-advisor2@test.io", name: "Advisor Two", password: "x", role: "ADVISOR" },
   });
+  advisorInternal = await prisma.user.create({
+    data: {
+      email: "sec-advisor-internal@test.io",
+      name: "Advisor Internal",
+      password: "x",
+      role: "ADVISOR",
+      permissions: { create: [{ key: "travel.internal.view", allowed: true }] },
+    },
+  });
+  // The full-costing validator assertions below expect the frozen data —
+  // grant the key (D2: the VALIDATOR preset does not carry it). fx.validator2
+  // stays ungranted for the redacted-view assertions.
+  await prisma.userPermission.create({
+    data: { userId: fx.validator.id, key: "travel.internal.view", allowed: true },
+  });
   requestByIdRoute = await import("@/app/api/travel/requests/[id]/route");
   calculateRoute = await import("@/app/api/travel/versions/[id]/calculate/route");
   submitRoute = await import("@/app/api/travel/requests/[id]/submit/route");
@@ -78,12 +100,12 @@ beforeAll(async () => {
 
 beforeEach(() => session(null));
 
-/** A submitted request owned by fx.advisor with fx.validator assigned. */
-async function submittedRequest() {
-  const { request, version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
-  await saveContent(prisma, actorOf(fx.advisor), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
-  await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
-  const { hash } = await workflow.submit(actorOf(fx.advisor), request.id);
+/** A submitted request owned by the given advisor with fx.validator assigned. */
+async function submittedRequest(owner = fx.advisor) {
+  const { request, version } = await workflow.createRequest(actorOf(owner), createRequestInput(fx.agency.id));
+  await saveContent(prisma, actorOf(owner), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
+  await workflow.assignValidator(actorOf(owner), request.id, { validatorId: fx.validator.id });
+  const { hash } = await workflow.submit(actorOf(owner), request.id);
   return { request, version, hash };
 }
 
@@ -95,9 +117,9 @@ describe("GET /travel/requests/[id] scoping", () => {
     expect(res.status).toBe(404);
   });
 
-  it("the owner-advisor sees the full costing blob incl. per-line net costs (v0.11.0)", async () => {
-    const { request } = await submittedRequest();
-    session(fx.advisor);
+  it("the owner-advisor with a travel.internal.view grant sees the full costing blob incl. per-line net costs", async () => {
+    const { request } = await submittedRequest(advisorInternal);
+    session(advisorInternal);
     const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -110,8 +132,31 @@ describe("GET /travel/requests/[id] scoping", () => {
     expect(body.versions[0].quoteCurrency).toBe("USD");
   });
 
-  it("a validator sees the full costing blob", async () => {
+  it("the owner-advisor WITHOUT a grant gets the redacted sell-side view (int-lock, D2)", async () => {
+    // fx.advisor owns the request but the ADVISOR preset has no
+    // travel.internal.view.
     const { request } = await submittedRequest();
+    session(fx.advisor);
+    const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const scenario = body.versions[0].scenarios[0];
+    const parsed = JSON.parse(scenario.resultJson);
+    expect(parsed.sell).toBe("342");
+    expect(parsed.totals).toBeUndefined();
+    expect(parsed.lines).toBeUndefined();
+    expect(parsed.profit).toBeUndefined();
+    expect(parsed.margin).toBeUndefined();
+    expect(parsed.trace).toBeUndefined();
+    expect(scenario.traceRows).toBeUndefined();
+    // Sell-side display data is still exposed.
+    expect(body.versions[0].quoteCurrency).toBe("USD");
+  });
+
+  it("a validator with a travel.internal.view grant sees the full costing blob; without it the view is redacted", async () => {
+    const { request } = await submittedRequest();
+
+    // fx.validator was granted the key in beforeAll.
     session(fx.validator);
     const res = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     expect(res.status).toBe(200);
@@ -120,6 +165,18 @@ describe("GET /travel/requests/[id] scoping", () => {
     expect(parsed.totals.costQuote).toBe("300");
     expect(parsed.profit).toBeDefined();
     expect(parsed.trace.length).toBeGreaterThan(0);
+
+    // fx.validator2 (VALIDATOR role, no grant) passes the record gate but gets
+    // the redacted sell-side view.
+    session(fx.validator2);
+    const resR = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
+    expect(resR.status).toBe(200);
+    const bodyR = await resR.json();
+    const parsedR = JSON.parse(bodyR.versions[0].scenarios[0].resultJson);
+    expect(parsedR.sell).toBe("342");
+    expect(parsedR.totals).toBeUndefined();
+    expect(parsedR.trace).toBeUndefined();
+    expect(bodyR.versions[0].scenarios[0].traceRows).toBeUndefined();
   });
 
   it("document metadata exposes renderState and never the file path", async () => {
@@ -162,7 +219,7 @@ describe("POST /travel/versions/[id]/calculate scoping", () => {
       (await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) })).status,
     ).toBe(404);
 
-    session(fx.validator);
+    session(fx.validator); // assigned; granted travel.internal.view in beforeAll
     const ok = await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) });
     expect(ok.status).toBe(200);
     const full = await ok.json();
@@ -175,18 +232,19 @@ describe("POST /travel/versions/[id]/calculate scoping", () => {
     ).toBe(200);
   });
 
-  it("the owner-advisor gets the full result (v0.11.0) but still no policy override", async () => {
-    const { version } = await submittedRequest();
+  it("the owner-advisor with a grant gets the full result but still no policy override (the override rule is role-based)", async () => {
+    const { version } = await submittedRequest(advisorInternal);
 
-    session(fx.advisor);
+    session(advisorInternal);
     const res = await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.quoteCurrency).toBe("USD");
-    // The owner prices their own request: full costing, including line costs.
+    // The granted owner prices their own request: full costing, including line costs.
     expect(body.scenarios[0].totals.costQuote).toBe("300");
     expect(Array.isArray(body.scenarios[0].lines)).toBe(true);
 
+    // travel.internal.view does not lift the ADVISOR policy-override ban.
     const withPolicy = await calculateRoute.POST(
       req(`http://t/api/travel/versions/${version.id}/calculate`, {
         method: "POST",
@@ -196,16 +254,48 @@ describe("POST /travel/versions/[id]/calculate scoping", () => {
     );
     expect(withPolicy.status).toBe(403);
   });
+
+  it("the owner-advisor WITHOUT a grant gets the redacted sell-side preview (int-lock, D2)", async () => {
+    const { version } = await submittedRequest();
+
+    session(fx.advisor);
+    const res = await calculateRoute.POST(req(`http://t/api/travel/versions/${version.id}/calculate`, { method: "POST" }), { params: Promise.resolve({ id: version.id }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.quoteCurrency).toBe("USD");
+    const scenario = body.scenarios[0];
+    expect(scenario.sell).toBe("342");
+    expect(scenario.totals).toBeUndefined();
+    expect(scenario.lines).toBeUndefined();
+    expect(scenario.profit).toBeUndefined();
+    expect(scenario.trace).toBeUndefined();
+    expect(scenario.traceRows).toBeUndefined();
+  });
 });
 
 describe("POST /travel/requests/[id]/submit response", () => {
-  it("the owner-advisor gets versionId/hash plus the full engine result (v0.11.0)", async () => {
-    const { request } = await (async () => {
-      const { request, version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
-      await saveContent(prisma, actorOf(fx.advisor), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
-      await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
-      return { request };
-    })();
+  // Builds an unsubmitted draft owned by `owner` with a validator assigned.
+  async function draftRequest(owner: { id: string; role: string; name: string | null; email: string }) {
+    const { request, version } = await workflow.createRequest(actorOf(owner), createRequestInput(fx.agency.id));
+    await saveContent(prisma, actorOf(owner), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
+    await workflow.assignValidator(actorOf(owner), request.id, { validatorId: fx.validator.id });
+    return { request };
+  }
+
+  it("the owner-advisor with a travel.internal.view grant gets versionId/hash plus the full engine result", async () => {
+    const { request } = await draftRequest(advisorInternal);
+
+    session(advisorInternal);
+    const res = await submitRoute.POST(req(`http://t/api/travel/requests/${request.id}/submit`, { method: "POST" }), { params: Promise.resolve({ id: request.id }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(body.quoteCurrency).toBe("USD");
+    expect(body.result.scenarios[0].totals.costQuote).toBe("300");
+  });
+
+  it("the owner-advisor WITHOUT a grant gets versionId/hash plus the redacted engine result (int-lock, D2)", async () => {
+    const { request } = await draftRequest(fx.advisor);
 
     session(fx.advisor);
     const res = await submitRoute.POST(req(`http://t/api/travel/requests/${request.id}/submit`, { method: "POST" }), { params: Promise.resolve({ id: request.id }) });
@@ -213,7 +303,12 @@ describe("POST /travel/requests/[id]/submit response", () => {
     const body = await res.json();
     expect(body.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(body.quoteCurrency).toBe("USD");
-    expect(body.result.scenarios[0].totals.costQuote).toBe("300");
+    const scenario = body.result.scenarios[0];
+    expect(scenario.sell).toBe("342");
+    expect(scenario.totals).toBeUndefined();
+    expect(scenario.lines).toBeUndefined();
+    expect(scenario.profit).toBeUndefined();
+    expect(scenario.trace).toBeUndefined();
   });
 });
 

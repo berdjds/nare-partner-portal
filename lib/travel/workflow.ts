@@ -982,8 +982,8 @@ export async function submit(actor: WorkflowActor, requestId: string) {
   // Company branding is frozen the same way: editing TravelSettings later must
   // not retroactively restyle an issued document.
   const branding = await getCompanyBranding();
-  // Loaded before the transaction: notification fan-out and the INTERNAL
-  // document delivery both include the validator group members.
+  // Loaded before the transaction: the notification fan-out includes the
+  // validator group members on top of owner + assigned validator.
   const groupIds = await validatorGroupIds();
 
   const inputsJson = canonicalize(input);
@@ -1121,10 +1121,9 @@ export async function submit(actor: WorkflowActor, requestId: string) {
   );
 
   // Outside the transaction: rendering is slow and must never roll back the
-  // submission. Delivery is best-effort (assigned validator + validator group
-  // members, individually); WhatsApp being offline must not fail a submit.
+  // submission. The INTERNAL costing sheet is only rendered here — int-lock:
+  // INTERNAL documents are never sent via WhatsApp, so there is no auto-send.
   await renderDocumentPdf(internalDocumentId);
-  await autoSendDocument(internalDocumentId, [assignment.validatorId, ...groupIds], actor.id);
 
   return { versionId: version.id, hash, result, quoteCurrency: input.fx.quoteCurrency ?? "USD" };
 }

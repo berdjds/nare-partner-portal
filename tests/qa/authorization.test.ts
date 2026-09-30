@@ -325,12 +325,13 @@ describe("assigned USER-role validator (v0.10.0)", () => {
 });
 
 describe("WhatsApp document delivery (v0.10.0)", () => {
-  it("sends per recipient; INTERNAL is restricted to validators/admins", async () => {
+  it("sends CLIENT per recipient; INTERNAL is rejected for every actor (int-lock)", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "qa-send-"));
     const file = path.join(dir, "doc.pdf");
     writeFileSync(file, "%PDF-1.4 qa");
 
     const { request, version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
+    await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
     const mkDoc = (kind: string, key: string) =>
       prisma.quoteDocument.create({
         data: {
@@ -349,6 +350,9 @@ describe("WhatsApp document delivery (v0.10.0)", () => {
       data: { email: "recip@test.io", name: "Recip", password: "x", role: "USER", phone: "37400000099" },
     });
 
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp");
+    const waMock = vi.mocked(sendWhatsAppMessage);
+
     session(fx.advisor); // the request owner may trigger delivery
     const noRecipients = await documentSendRoute.POST(
       req(`http://t/api/travel/documents/${client.id}/send`, { method: "POST", body: {} }),
@@ -356,17 +360,23 @@ describe("WhatsApp document delivery (v0.10.0)", () => {
     );
     expect(noRecipients.status).toBe(400);
 
-    // INTERNAL to a plain user: per-recipient refusal (margins inside).
-    const internalRes = await documentSendRoute.POST(
-      req(`http://t/api/travel/documents/${internal.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
-      { params: Promise.resolve({ id: internal.id }) },
-    );
-    expect(internalRes.status).toBe(200);
-    const internalResults = (await internalRes.json()).results;
-    expect(internalResults[0].ok).toBe(false);
-    expect(internalResults[0].error).toContain("restricted");
+    // int-lock: INTERNAL is rejected for every actor that passes the record
+    // rule — owner, ADMIN and the assigned validator alike — and nothing
+    // reaches WhatsApp.
+    for (const who of [fx.advisor, fx.admin, fx.validator]) {
+      waMock.mockClear();
+      session(who);
+      const res = await documentSendRoute.POST(
+        req(`http://t/api/travel/documents/${internal.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
+        { params: Promise.resolve({ id: internal.id }) },
+      );
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toContain("INTERNAL");
+      expect(waMock).not.toHaveBeenCalled();
+    }
 
-    // CLIENT to the same user succeeds (mocked WhatsApp sender).
+    // CLIENT to a plain user still succeeds (mocked WhatsApp sender).
+    session(fx.advisor);
     const clientRes = await documentSendRoute.POST(
       req(`http://t/api/travel/documents/${client.id}/send`, { method: "POST", body: { userIds: [recipient.id] } }),
       { params: Promise.resolve({ id: client.id }) },
@@ -411,7 +421,7 @@ describe("validator group + infant settings (v0.11.0)", () => {
     await put({ infantMaxAge: 2, validatorUserIds: [] });
   });
 
-  it("INTERNAL documents can be delivered to validator-group members of any role", async () => {
+  it("validator-group membership no longer grants INTERNAL delivery (int-lock)", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "qa-send-group-"));
     const file = path.join(dir, "doc.pdf");
     writeFileSync(file, "%PDF-1.4 qa");
@@ -428,8 +438,8 @@ describe("validator group + infant settings (v0.11.0)", () => {
         idempotencyKey: "send-group-internal",
       },
     });
-    // A USER-role group member: without membership this exact send is refused
-    // (covered in the delivery block above).
+    // A USER-role group member: membership used to grant INTERNAL delivery;
+    // int-lock removes that — nobody receives an INTERNAL sheet over WhatsApp.
     const member = await prisma.user.create({
       data: { email: "groupmember@test.io", name: "Group Member", password: "x", role: "USER", phone: "37400000098" },
     });
@@ -438,14 +448,20 @@ describe("validator group + infant settings (v0.11.0)", () => {
       data: { validatorUserIds: JSON.stringify([member.id]) },
     });
     try {
-      session(fx.advisor); // request owner triggers delivery
+      session(fx.advisor); // request owner triggers the send attempt
       const res = await documentSendRoute.POST(
         req(`http://t/api/travel/documents/${internal.id}/send`, { method: "POST", body: { userIds: [member.id] } }),
         { params: Promise.resolve({ id: internal.id }) },
       );
-      expect(res.status).toBe(200);
-      const { results } = await res.json();
-      expect(results[0].ok).toBe(true);
+      expect(res.status).toBe(403);
+
+      // The shared sender refuses too when called directly, so group-targeted
+      // code paths cannot bypass the route gate either.
+      const { sendQuoteDocument } = await import("@/lib/travel/whatsapp-docs");
+      const results = await sendQuoteDocument(internal.id, { userIds: [member.id] }, fx.advisor.id);
+      expect(results).toHaveLength(1);
+      expect(results[0].ok).toBe(false);
+      expect(results[0].error).toContain("INTERNAL");
     } finally {
       await prisma.travelSettings.update({ where: { id: "default" }, data: { validatorUserIds: "[]" } });
     }
