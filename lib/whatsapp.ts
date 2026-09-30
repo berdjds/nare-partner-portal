@@ -2,6 +2,7 @@ import { Client, LocalAuth, MessageMedia } from "whatsapp-web.js";
 import type { Server as SocketServer } from "socket.io";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
+import { MARHABA_ACCOUNT_ID } from "@/lib/whatsapp-accounts";
 import { ADMINS_ROOM, INBOX_ROOM, attachSocketAuth } from "@/lib/socket-auth";
 import QRCode from "qrcode";
 import fs from "fs/promises";
@@ -72,8 +73,11 @@ async function upsertChat(
   lastMessageAt?: Date,
   phone?: string | null
 ) {
+  // W3: until per-account clients land, every chat belongs to the Marhaba
+  // account; chat identity is the composite (accountId, remoteJid).
+  const chatWhere = { accountId_remoteJid: { accountId: MARHABA_ACCOUNT_ID, remoteJid } };
   const existing = await prisma.chat.findUnique({
-    where: { remoteJid },
+    where: chatWhere,
   });
 
   if (existing) {
@@ -81,11 +85,12 @@ async function upsertChat(
     if (name && !existing.name) updateData.name = name;
     if (profilePicUrl) updateData.profilePicUrl = profilePicUrl;
     if (phone && !existing.phone) updateData.phone = phone;
-    return prisma.chat.update({ where: { remoteJid }, data: updateData });
+    return prisma.chat.update({ where: chatWhere, data: updateData });
   }
 
   return prisma.chat.create({
     data: {
+      accountId: MARHABA_ACCOUNT_ID,
       remoteJid,
       name: name || remoteJid.split("@")[0],
       phone: phone || null,
@@ -187,13 +192,14 @@ async function persistMessage(msg: any, fromMe: boolean, opts: { emit?: boolean 
     // Avoid duplicate messages when both sendMessage() and the message_create event fire
     if (msgId) {
       const existing = await prisma.message.findUnique({
-        where: { whatsappMessageId: msgId },
+        where: { accountId_whatsappMessageId: { accountId: MARHABA_ACCOUNT_ID, whatsappMessageId: msgId } },
       });
       if (existing) return;
     }
 
     const messageRecord = await prisma.message.create({
       data: {
+        accountId: MARHABA_ACCOUNT_ID,
         chatId: chatRecord.id,
         remoteJid,
         whatsappMessageId: msgId,
@@ -620,9 +626,9 @@ export async function sendWhatsAppMessage({
       if (jid.endsWith("@g.us")) continue;
       try {
         await prisma.chat.upsert({
-          where: { remoteJid: jid },
+          where: { accountId_remoteJid: { accountId: MARHABA_ACCOUNT_ID, remoteJid: jid } },
           update: { phone: dialed },
-          create: { remoteJid: jid, phone: dialed, name: null },
+          create: { accountId: MARHABA_ACCOUNT_ID, remoteJid: jid, phone: dialed, name: null },
         });
         console.log("[WhatsApp] recorded dialed number", dialed, "for", jid);
       } catch (e) {

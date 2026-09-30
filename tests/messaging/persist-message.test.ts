@@ -102,15 +102,19 @@ describe("getMessageId() via persistMessage", () => {
     const msg = fakeMsg({ id: { _serialized: "wamid.legacy.serialized" } });
     await client.handler("message")(msg);
 
-    const row = await prisma.message.findUnique({ where: { whatsappMessageId: "wamid.legacy.serialized" } });
+    const row = await prisma.message.findUnique({
+      where: { accountId_whatsappMessageId: { accountId: "marhaba", whatsappMessageId: "wamid.legacy.serialized" } },
+    });
     expect(row).toBeTruthy();
     expect(row!.fromMe).toBe(false);
     expect(row!.body).toBe("regression ping");
     expect(row!.type).toBe("text");
     expect(row!.timestamp).toEqual(new Date(TIMESTAMP * 1000));
+    expect(row!.accountId).toBe("marhaba");
     // The chat was derived from msg.from (getChat() avoided) and named from the contact.
     const chatRow = await prisma.chat.findUnique({ where: { id: row!.chatId } });
     expect(chatRow!.remoteJid).toBe("37499000001@c.us");
+    expect(chatRow!.accountId).toBe("marhaba");
     expect(chatRow!.name).toBe("Alice Regression");
     expect(chatRow!.phone).toBe("37499000001");
   });
@@ -119,7 +123,9 @@ describe("getMessageId() via persistMessage", () => {
     const msg = fakeMsg({ id: { $1: "wamid.new.dollar1" } });
     await client.handler("message_create")(msg);
 
-    const row = await prisma.message.findUnique({ where: { whatsappMessageId: "wamid.new.dollar1" } });
+    const row = await prisma.message.findUnique({
+      where: { accountId_whatsappMessageId: { accountId: "marhaba", whatsappMessageId: "wamid.new.dollar1" } },
+    });
     expect(row).toBeTruthy();
     expect(row!.body).toBe("regression ping");
   });
