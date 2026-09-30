@@ -209,6 +209,21 @@ function UserCard({ role, userName, userEmail, version }: TravelNavProps) {
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mt-1 h-7 w-full justify-start px-2.5 text-[11px] font-normal text-muted-foreground"
+        onClick={async () => {
+          try {
+            await fetch("/api/auth/sign-out-everywhere", { method: "POST" });
+          } catch {
+            // Best effort: the local sign-out below still ends this session.
+          }
+          signOut({ callbackUrl: "/login" });
+        }}
+      >
+        Sign out everywhere
+      </Button>
       <p className="px-2.5 pt-1 text-[11px] text-muted-foreground/60">v{version}</p>
     </div>
   );

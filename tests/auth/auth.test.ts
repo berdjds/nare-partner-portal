@@ -103,6 +103,28 @@ describe("credentials authorize()", () => {
     expect(result.sv).toBe(1);
   });
 
+  it("mints the session version produced by revokeAllSessions at the next login (W1b sv-revoke)", async () => {
+    const revoked = await prisma.user.create({
+      data: {
+        email: "auth-sv-revoke@test.io",
+        name: "Auth Sv Revoke",
+        password: bcrypt.hashSync(PASSWORD, 10),
+        role: "USER",
+      },
+    });
+    // The real helper the revocation endpoints call (W1b sv-revoke) — not a
+    // hand-rolled { increment: 1 } like the neighboring test.
+    const { revokeAllSessions } = await import("@/lib/access-policy");
+    await revokeAllSessions(revoked.id);
+
+    const result: any = await credentialsProvider().authorize({
+      email: revoked.email,
+      password: PASSWORD,
+    });
+    expect(result).not.toBeNull();
+    expect(result.sv).toBe(1);
+  });
+
   it("rejects a wrong password with null", async () => {
     const result = await credentialsProvider().authorize({
       email: activeAdmin.email,

@@ -29,6 +29,7 @@ import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
 import { encode } from "next-auth/jwt";
 import type { PrismaClient } from "@prisma/client";
 import { ensureSchema, getPrisma } from "../travel-db/helpers";
+import { revokeAllSessions } from "@/lib/access-policy";
 import {
   ADMINS_ROOM,
   INBOX_ROOM,
@@ -491,6 +492,30 @@ describe("revalidation", () => {
       expect(await connectOutcome(socket)).toBe("connected");
 
       await prisma.user.update({ where: { id: revoked.id }, data: { sessionVersion: { increment: 1 } } });
+      // Attach before advancing so a fast disconnect can never be missed.
+      const disconnected = waitDisconnect(socket);
+      await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB
+      vi.useRealTimers();
+      await disconnected;
+      await vi.waitFor(() => expect(server.sio.sockets.sockets.size).toBe(0));
+    } finally {
+      vi.useRealTimers();
+      await stopServer(server);
+    }
+  });
+
+  it("disconnects within 60s when revokeAllSessions bumps the user's session version (W1b sv-revoke, fake timers)", async () => {
+    const u = await prisma.user.create({ data: { email: "sock-sv-revoke@test.io", name: "SvRevoke", password: "x", role: "USER" } });
+    vi.useFakeTimers();
+    const server = await startServer();
+    try {
+      // Token carries the sv minted at login, matching the DB at connect time.
+      const socket = makeClient(server.url, { cookie: await cookieFor(u, 60 * 60, 0), origin: "http://localhost:3000" });
+      expect(await connectOutcome(socket)).toBe("connected");
+
+      // The real helper the revocation endpoints call (W1b sv-revoke) — not a
+      // hand-rolled { increment: 1 } like the neighboring test.
+      await revokeAllSessions(u.id);
       // Attach before advancing so a fast disconnect can never be missed.
       const disconnected = waitDisconnect(socket);
       await vi.advanceTimersByTimeAsync(60_000); // first interval re-reads the DB

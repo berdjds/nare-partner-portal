@@ -103,6 +103,25 @@ export async function PATCH(req: NextRequest) {
   const data: any = { ...rest };
   if (password) data.password = await bcrypt.hash(password, 10);
 
+  // W1b: account changes that must invalidate existing sessions (new
+  // password, role change, transition to inactive) bump sessionVersion, so
+  // every token minted before the change fails the sv comparison in
+  // getActiveUser() on its next request. No-op role/active values and
+  // name/email/phone-only edits do not bump. A missing row keeps the old
+  // behavior: the update below throws and the catch answers 500.
+  const current = await prisma.user.findUnique({
+    where: { id },
+    select: { role: true, active: true },
+  });
+  if (
+    current &&
+    (password ||
+      (parsed.data.role !== undefined && parsed.data.role !== current.role) ||
+      (parsed.data.active === false && current.active))
+  ) {
+    data.sessionVersion = { increment: 1 };
+  }
+
   try {
     const updated = await prisma.user.update({
       where: { id },
