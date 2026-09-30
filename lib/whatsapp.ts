@@ -208,9 +208,17 @@ async function persistMessage(rt: AccountRuntime, msg: any, fromMe: boolean, opt
           await ensureUploadDir();
           const ext = mime.extension(media.mimetype) || "bin";
           const filename = `${randomUUID()}.${ext}`;
-          const filepath = path.join(UPLOAD_DIR, filename);
+          // Non-default accounts are namespaced (public/uploads/<accountId>/)
+          // so the /uploads gate can enforce each account's own view
+          // permission. Marhaba keeps the legacy flat path — its production
+          // files and stored mediaUrls predate W3 and must keep resolving.
+          const relDir = accountId === MARHABA_ACCOUNT_KEY ? "" : accountId;
+          if (relDir) {
+            await fs.mkdir(path.join(UPLOAD_DIR, relDir), { recursive: true });
+          }
+          const filepath = path.join(UPLOAD_DIR, relDir, filename);
           await fs.writeFile(filepath, Buffer.from(media.data, "base64"));
-          mediaUrl = `/uploads/${filename}`;
+          mediaUrl = relDir ? `/uploads/${relDir}/${filename}` : `/uploads/${filename}`;
           mediaMimeType = media.mimetype;
           if (!mediaCaption && media.filename) mediaCaption = media.filename;
         }

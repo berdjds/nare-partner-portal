@@ -194,8 +194,14 @@ handler): the pathname is percent-decoded, slash-collapsed and normalized before
 `//uploads/…`) are intercepted too instead of being served unsigned by Next's decoded
 public/ lookup; undecodable URLs get **400** and non-GET/HEAD methods **405**. The gate
 itself requires a valid, unexpired NextAuth session cookie (`next-auth/jwt` decode with
-`NEXTAUTH_SECRET`), an active user from the database holding `whatsapp.inbox.view`, and a
-normalized path inside `public/uploads/`. Responses stream the file with its mime type and
+`NEXTAUTH_SECRET`), an active user from the database holding the media's account view
+permission (W3), and a normalized path inside `public/uploads/`. Media is per account:
+files under `/uploads/<accountKey>/` (e.g. `/uploads/nare/…`) require that account's view
+key (`whatsapp.nare.view`), flat paths are marhaba's legacy layout (`whatsapp.inbox.view`).
+The account is derived from the same decoded, normalized path that is streamed, so the
+permission decision and the served file always agree (`/uploads/nare/../x.txt` normalizes
+to marhaba's `x.txt`, not a nare file) — a marhaba-only user cannot stream nare media and
+vice versa. Responses stream the file with its mime type and
 `Cache-Control: private, no-store`. Otherwise: **401** (no/invalid/expired/revoked session),
 **403** (active user without the permission), **404** (traversal or missing file). Existing
 and missing files are indistinguishable to unauthorized callers — file existence is never

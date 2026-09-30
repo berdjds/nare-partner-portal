@@ -11,15 +11,21 @@
  * 1. A valid, unexpired NextAuth session cookie (next-auth/jwt decode with
  *    NEXTAUTH_SECRET). Missing, malformed or expired → 401. NEXTAUTH_SECRET
  *    unset → fail closed (401), never serve unsigned.
- * 2. An ACTIVE user loaded from the database whose effective permissions hold
- *    an inbox view permission (W2/W3 — media belongs to the chat inboxes:
- *    whatsapp.inbox.view or whatsapp.nare.view) and whose
- *    current session version still matches the token's sv claim (W1b —
+ * 2. An ACTIVE user loaded from the database whose current session version
+ *    still matches the token's sv claim (W1b —
  *    the User.sessionVersion column; bumping it with { increment: 1 } revokes
  *    previously issued tokens). A token with no
  *    sv claim reads as 0 and matches only a user that was never revoked.
- *    Unknown/deactivated/sv-mismatch → 401, valid but without the permission
- *    → 403.
+ *    Unknown/deactivated/sv-mismatch → 401.
+ *    Then the PER-ACCOUNT view permission (W3): media under
+ *    /uploads/<accountKey>/ belongs to that WhatsApp account's inbox, flat
+ *    paths belong to marhaba (legacy layout). The account key is derived
+ *    from the decoded, normalized relative path — the exact resolution
+ *    resolveUploadPath applies before streaming — so the permission decision
+ *    and the served file always agree ("/uploads/nare/../x.txt" normalizes to
+ *    marhaba's "x.txt", not a nare file). The user must hold
+ *    accountPermissions(key).view (whatsapp.inbox.view for marhaba,
+ *    whatsapp.nare.view for nare) → 403 otherwise.
  * 3. A normalized path strictly inside public/uploads/ (no traversal). The
  *    traversal/out-of-bounds and not-found cases all answer 404, so the
  *    response never leaks file existence to unauthorized callers: 401/403 are
@@ -37,7 +43,8 @@ import path from "path";
 import { decode } from "next-auth/jwt";
 import mime from "mime-types";
 import { getActiveUserById } from "@/lib/access-policy";
-import { hasPermission } from "@/lib/permissions";
+import { ACCOUNT_PERMISSIONS, accountPermissions, hasPermission } from "@/lib/permissions";
+import { MARHABA_ACCOUNT_KEY } from "@/lib/whatsapp-accounts";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 
@@ -151,6 +158,25 @@ export function resolveUploadPath(pathname: string): string | null {
   return abs;
 }
 
+/**
+ * The WhatsApp account an /uploads path belongs to: the first segment of the
+ * decoded, posix-normalized relative path when it is a known account key in
+ * ACCOUNT_PERMISSIONS, else marhaba (the legacy flat layout). This applies
+ * the exact same decode + normalize as resolveUploadPath, so the account
+ * decision and the streamed file always agree — "/uploads/nare/../x.txt"
+ * normalizes to marhaba's "x.txt" and is gated by marhaba's permission.
+ */
+function accountKeyForPath(pathname: string): string {
+  let rel: string;
+  try {
+    rel = decodeURIComponent(pathname.slice("/uploads/".length));
+  } catch {
+    return MARHABA_ACCOUNT_KEY;
+  }
+  const first = path.posix.normalize(rel).split("/")[0];
+  return ACCOUNT_PERMISSIONS[first] ? first : MARHABA_ACCOUNT_KEY;
+}
+
 function sendJson(res: ServerResponse, status: number, body: { error: string }): void {
   const json = JSON.stringify(body);
   res.writeHead(status, {
@@ -181,10 +207,13 @@ export async function handleUploadsRequest(req: IncomingMessage, res: ServerResp
     sendJson(res, 401, { error: "Unauthorized" });
     return;
   }
-  // W3 (wa-multi): media belongs to the chat inboxes — any account's view
-  // permission (whatsapp.inbox.view for marhaba, whatsapp.nare.view for
-  // nare) may stream uploads.
-  if (!hasPermission(user, "whatsapp.inbox.view") && !hasPermission(user, "whatsapp.nare.view")) {
+  // W3 (wa-multi): media is per-account. Files under /uploads/<accountKey>/
+  // belong to that account's inbox and require its own view permission; flat
+  // paths are marhaba's legacy layout. A marhaba-only user must not stream
+  // nare media, and vice versa.
+  const accountKey = accountKeyForPath(pathname);
+  const viewKey = accountPermissions(accountKey)?.view;
+  if (!viewKey || !hasPermission(user, viewKey)) {
     sendJson(res, 403, { error: "Forbidden" });
     return;
   }

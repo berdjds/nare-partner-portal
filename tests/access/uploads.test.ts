@@ -3,8 +3,10 @@
  * server.ts before the Next.js handler; here it runs on a throwaway HTTP
  * server with REAL NextAuth JWT cookies (next-auth/jwt encode/decode against
  * NEXTAUTH_SECRET) and the seeded throwaway DB, so the whole gate is
- * exercised: cookie validity + expiry, the active/inbox-role DB check, path
- * traversal, leak-free 401/403/404 behavior, and the routing that decodes /
+ * exercised: cookie validity + expiry, the active/inbox-role DB check, the
+ * W3 per-account rule (each account's media requires its own view
+ * permission), path traversal, leak-free 401/403/404 behavior, and the
+ * routing that decodes /
  * normalizes the pathname before deciding (encoded spellings must be
  * intercepted, undecodable URLs get 400, non-GET/HEAD methods get 405).
  */
@@ -25,6 +27,11 @@ process.env.NEXTAUTH_SECRET = SECRET;
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const FILE_NAME = `w1-access-test-${process.pid}-${Math.random().toString(36).slice(2, 8)}.txt`;
 const FILE_CONTENT = "secret media payload";
+// W3: nare media lives namespaced under /uploads/nare/ (marhaba keeps the
+// legacy flat layout), so the per-account gate can be exercised end to end.
+const NARE_DIR = path.join(UPLOAD_DIR, "nare");
+const NARE_FILE_NAME = `w3-nare-test-${process.pid}-${Math.random().toString(36).slice(2, 8)}.txt`;
+const NARE_FILE_CONTENT = "nare secret media payload";
 
 let prisma: PrismaClient;
 let server: Server;
@@ -35,6 +42,7 @@ let admin: { id: string; role: string };
 let advisor: { id: string; role: string };
 let validator: { id: string; role: string };
 let inactive: { id: string; role: string };
+let nareOnly: { id: string; role: string };
 
 async function cookieFor(u: { id: string; role: string }, maxAge = 60 * 60, sv?: number): Promise<string> {
   const token = await encode({
@@ -62,9 +70,16 @@ beforeAll(async () => {
   inactive = await prisma.user.create({
     data: { email: "upl-inactive@test.io", name: "Inactive", password: "x", role: "USER", active: false },
   });
+  // W3: the ADVISOR preset holds no inbox keys, so with a whatsapp.nare.view
+  // grant this user can open the nare inbox/media and nothing else.
+  nareOnly = await prisma.user.create({
+    data: { email: "upl-nare-only@test.io", name: "Nare Only", password: "x", role: "ADVISOR" },
+  });
+  await prisma.userPermission.create({ data: { userId: nareOnly.id, key: "whatsapp.nare.view", allowed: true } });
 
-  mkdirSync(UPLOAD_DIR, { recursive: true });
+  mkdirSync(NARE_DIR, { recursive: true });
   writeFileSync(path.join(UPLOAD_DIR, FILE_NAME), FILE_CONTENT);
+  writeFileSync(path.join(NARE_DIR, NARE_FILE_NAME), NARE_FILE_CONTENT);
 
   // Mirror the server.ts wiring: routeUploadsRequest decides, the media gate
   // handles, and anything else falls through to a stand-in Next handler whose
@@ -113,6 +128,13 @@ afterAll(async () => {
   (server as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
   await new Promise<void>((resolvePromise) => server.close(() => resolvePromise()));
   rmSync(path.join(UPLOAD_DIR, FILE_NAME), { force: true });
+  rmSync(path.join(NARE_DIR, NARE_FILE_NAME), { force: true });
+  try {
+    // Plain rmdir: removes the nare subdir only when we were its only writer.
+    rmSync(NARE_DIR);
+  } catch {
+    // Another suite's files live here — leave them untouched.
+  }
 });
 
 describe("authentication", () => {
@@ -364,5 +386,61 @@ describe("W2 permission overrides (perm-inbox)", () => {
     const after = await get(`/uploads/${FILE_NAME}`, await cookieFor(revoked));
     expect(after.status).toBe(403);
     expect(await after.text()).not.toBe(FILE_CONTENT);
+  });
+});
+
+describe("W3 per-account media", () => {
+  // Media is namespaced per WhatsApp account: /uploads/<accountKey>/ requires
+  // that account's view permission; flat paths are marhaba's legacy layout.
+
+  it("401 for anonymous callers on a nare path, same as flat paths", async () => {
+    const res = await get(`/uploads/nare/${NARE_FILE_NAME}`);
+    expect(res.status).toBe(401);
+    expect(await res.text()).not.toBe(NARE_FILE_CONTENT);
+  });
+
+  it("403 for the marhaba-only USER on nare media; 200 on the flat marhaba file", async () => {
+    const nare = await get(`/uploads/nare/${NARE_FILE_NAME}`, await cookieFor(user));
+    expect(nare.status).toBe(403);
+    expect(await nare.text()).not.toBe(NARE_FILE_CONTENT);
+
+    const flat = await get(`/uploads/${FILE_NAME}`, await cookieFor(user));
+    expect(flat.status).toBe(200);
+    expect(await flat.text()).toBe(FILE_CONTENT);
+  });
+
+  it("200 + content for the nare-only user on nare media; 403 on the flat marhaba file", async () => {
+    const nare = await get(`/uploads/nare/${NARE_FILE_NAME}`, await cookieFor(nareOnly));
+    expect(nare.status).toBe(200);
+    expect(await nare.text()).toBe(NARE_FILE_CONTENT);
+
+    const flat = await get(`/uploads/${FILE_NAME}`, await cookieFor(nareOnly));
+    expect(flat.status).toBe(403);
+    expect(await flat.text()).not.toBe(FILE_CONTENT);
+  });
+
+  it("200 for ADMIN on both accounts' media", async () => {
+    const flat = await get(`/uploads/${FILE_NAME}`, await cookieFor(admin));
+    expect(flat.status).toBe(200);
+    expect(await flat.text()).toBe(FILE_CONTENT);
+
+    const nare = await get(`/uploads/nare/${NARE_FILE_NAME}`, await cookieFor(admin));
+    expect(nare.status).toBe(200);
+    expect(await nare.text()).toBe(NARE_FILE_CONTENT);
+  });
+
+  it("treats /uploads/nare/../<file> as the marhaba flat file, not a nare file", async () => {
+    // fetch() normalizes a literal "..", so the segment arrives percent-encoded
+    // like a real attack. Decoded + normalized this IS /uploads/<file>, so the
+    // account decision and the streamed file both resolve to marhaba.
+    const spoofPath = `/uploads/nare/%2e%2e/${FILE_NAME}`;
+
+    const asUser = await get(spoofPath, await cookieFor(user));
+    expect(asUser.status).toBe(200);
+    expect(await asUser.text()).toBe(FILE_CONTENT);
+
+    const asNareOnly = await get(spoofPath, await cookieFor(nareOnly));
+    expect(asNareOnly.status).toBe(403);
+    expect(await asNareOnly.text()).not.toBe(FILE_CONTENT);
   });
 });

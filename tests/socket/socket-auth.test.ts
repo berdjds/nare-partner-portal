@@ -885,3 +885,101 @@ describe("W2 permission revalidation (perm-inbox, fake timers)", () => {
     }
   });
 });
+
+describe("W3 nare-only account access (wa-multi)", () => {
+  it("connects an ADVISOR granted only whatsapp.nare.view: inbox:nare only, nare availability, never marhaba traffic", async () => {
+    // The ADVISOR preset has no socket-eligible keys; the nare view grant
+    // alone opens the socket — but only for the nare inbox room.
+    const nareViewer = await prisma.user.create({
+      data: { email: "sock-w3-nare-view@test.io", name: "NareView", password: "x", role: "ADVISOR" },
+    });
+    await prisma.userPermission.create({ data: { userId: nareViewer.id, key: "whatsapp.nare.view", allowed: true } });
+
+    const socket = makeClient(shared.url, { cookie: await cookieFor(nareViewer), origin: "http://localhost:3000" });
+    // Attach BEFORE connecting: the initial whatsapp_state is emitted in the
+    // same tick as the CONNECT packet and may be delivered batched with it.
+    const statePayloads: any[] = [];
+    const messages: any[] = [];
+    socket.on("whatsapp_state", (p) => statePayloads.push(p));
+    socket.on("message", (p) => messages.push(p));
+
+    expect(await connectOutcome(socket)).toBe("connected");
+
+    // Initial state: nare availability only (fakeWaState is "qr"), never
+    // marhaba's availability or full state.
+    await vi.waitFor(() => expect(statePayloads.length).toBe(1));
+    expect(statePayloads[0]).toEqual({ accountKey: "nare", connected: false });
+
+    const srv = serverSocketFor(shared.sio, nareViewer.id);
+    expect(srv).toBeDefined();
+    expect(Array.from(srv!.rooms).sort()).toEqual([inboxRoom("nare"), srv!.id].sort());
+    expect(srv!.rooms.has(INBOX_ROOM)).toBe(false);
+    expect(srv!.rooms.has(ADMINS_ROOM)).toBe(false);
+    expect(srv!.rooms.has(adminsRoom("nare"))).toBe(false);
+
+    // Room scoping: marhaba inbox traffic and any admins traffic never
+    // arrive; nare inbox traffic does.
+    shared.sio.to(INBOX_ROOM).emit("message", { id: "m-marhaba", body: "must not arrive" });
+    shared.sio.to(ADMINS_ROOM).emit("whatsapp_state", { accountKey: "marhaba", ...hooks.getWhatsAppState() });
+    shared.sio.to(adminsRoom("nare")).emit("whatsapp_state", { accountKey: "nare", ...hooks.getWhatsAppState() });
+    shared.sio.to(inboxRoom("nare")).emit("message", { id: "m-nare", body: "nare inbox" });
+    await sleep(300);
+
+    expect(messages).toEqual([{ id: "m-nare", body: "nare inbox" }]);
+    expect(statePayloads).toHaveLength(1);
+    expect(JSON.stringify(statePayloads)).not.toContain("qrSvg");
+    expect(JSON.stringify(statePayloads)).not.toContain("marhaba");
+
+    socket.disconnect();
+    await waitForSocketCount(shared.sio, 0);
+  });
+
+  it("connects an ADVISOR granted only whatsapp.nare.admin: admins:nare only, full nare state incl qrSvg, no marhaba state", async () => {
+    // whatsapp.nare.admin alone is socket-eligible: the socket lands in
+    // 'admins:nare' without any inbox room — nare's QR/status channel
+    // decoupled from every message feed.
+    const nareAdmin = await prisma.user.create({
+      data: { email: "sock-w3-nare-admin@test.io", name: "NareAdmin", password: "x", role: "ADVISOR" },
+    });
+    await prisma.userPermission.create({ data: { userId: nareAdmin.id, key: "whatsapp.nare.admin", allowed: true } });
+
+    const socket = makeClient(shared.url, { cookie: await cookieFor(nareAdmin), origin: "http://localhost:3000" });
+    // Attach BEFORE connecting: the initial whatsapp_state is emitted in the
+    // same tick as the CONNECT packet and may be delivered batched with it.
+    const statePayloads: any[] = [];
+    const messages: any[] = [];
+    socket.on("whatsapp_state", (p) => statePayloads.push(p));
+    socket.on("message", (p) => messages.push(p));
+
+    expect(await connectOutcome(socket)).toBe("connected");
+
+    // Full initial nare state — the admins-room payload, accountKey-tagged,
+    // qrSvg included — and nothing about marhaba.
+    await vi.waitFor(() => expect(statePayloads.length).toBe(1));
+    expect(statePayloads[0]).toEqual({ accountKey: "nare", ...hooks.getWhatsAppState() });
+    expect(statePayloads[0].qrSvg).toBe("<svg>fake-pairing-qr</svg>");
+
+    const srv = serverSocketFor(shared.sio, nareAdmin.id);
+    expect(srv).toBeDefined();
+    expect(Array.from(srv!.rooms).sort()).toEqual([adminsRoom("nare"), srv!.id].sort());
+    expect(srv!.rooms.has(INBOX_ROOM)).toBe(false);
+    expect(srv!.rooms.has(ADMINS_ROOM)).toBe(false);
+    expect(srv!.rooms.has(inboxRoom("nare"))).toBe(false);
+
+    // Not in marhaba's admins room or any inbox room: only nare admins
+    // traffic arrives.
+    shared.sio.to(ADMINS_ROOM).emit("whatsapp_state", { accountKey: "marhaba", ...hooks.getWhatsAppState() });
+    shared.sio.to(INBOX_ROOM).emit("message", { id: "m-marhaba-2", body: "must not arrive" });
+    shared.sio.to(inboxRoom("nare")).emit("message", { id: "m-nare-2", body: "must not arrive either" });
+    shared.sio.to(adminsRoom("nare")).emit("whatsapp_state", { accountKey: "nare", ...hooks.getWhatsAppState() });
+    await sleep(300);
+
+    expect(messages).toEqual([]);
+    expect(statePayloads).toHaveLength(2);
+    expect(statePayloads[1].accountKey).toBe("nare");
+    expect(JSON.stringify(statePayloads)).not.toContain("marhaba");
+
+    socket.disconnect();
+    await waitForSocketCount(shared.sio, 0);
+  });
+});
