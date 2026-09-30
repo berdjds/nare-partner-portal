@@ -9,7 +9,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 - **Send to new numbers** — start a chat and send messages to unsaved phone numbers from the dashboard.
 - **Text, image, voice, document** — send and view media messages.
 - **Admin panel** — manage WhatsApp connection, users, and logs.
-- **Role-based login** — ADMIN/USER run the WhatsApp chat inbox; ADVISOR/VALIDATOR run the B2B travel module.
+- **Role-based login with per-user permissions** — role presets by default (ADMIN runs everything, USER the WhatsApp chat inbox, ADVISOR/VALIDATOR the B2B travel module), adjustable per user through the permissions matrix in the admin panel. Internal-cost access is separate and off by default for non-admins until the owner confirms the permissions migration — see `doc/security.md` and `doc/authentication.md`.
 
 ## Stack
 

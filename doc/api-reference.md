@@ -435,8 +435,8 @@ status (409 for stale snapshot/revision conflicts). Money values are decimal str
 | `/api/travel/policies`, `/api/travel/fx` | GET, POST | ADMIN | Pricing policy versions and effective-dated FX rates |
 | `/api/travel/policies/[id]`, `/api/travel/fx/[id]` | DELETE | ADMIN | v0.16.0: hard delete a policy version (409 on the active or last policy; clears a stale `defaultPolicyId`) or an FX rate (409 on the last rate of a currency) |
 | `/api/travel/imports`, `/imports/[id]`, `/imports/[id]/verify` | GET, POST | ADMIN | Workbook import staging batches and row verification |
-| `/api/travel/documents/[id]` | GET | travel roles (INTERNAL: ADMIN/VALIDATOR) | Authorized PDF download |
-| `/api/travel/documents/[id]/send` | POST | owner / assigned validator / ADMIN | WhatsApp delivery of the rendered PDF: `{ userIds?, groupJids? }`, per-recipient results; INTERNAL recipients restricted to ADMIN/VALIDATOR or the assigned validator |
+| `/api/travel/documents/[id]` | GET | travel roles (CLIENT: `travel.client_docs.download`; INTERNAL: `travel.internal.download` + ADMIN/VALIDATOR role or assigned-validator record rule) | Authorized PDF download |
+| `/api/travel/documents/[id]/send` | POST | owner / assigned validator / ADMIN (CLIENT also requires `travel.client_docs.send`) | WhatsApp delivery of the rendered PDF: `{ userIds?, groupJids? }`, per-recipient results; INTERNAL documents are refused for every actor including ADMIN (403, audited `QUOTE_DOCUMENT_SEND_REFUSED`) |
 | `/api/travel/notifications`, `/notifications/retry`, `/notifications/process` | GET, POST | own / ADMIN | Delivery status, retry failed, manual queue processing |
 | `/api/travel/batch` | POST | travel roles | Batch template pricing over PAX bands (default 2/4/6) |
 

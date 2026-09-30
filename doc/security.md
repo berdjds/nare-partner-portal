@@ -90,14 +90,15 @@ comma-separated `SOCKET_ALLOWED_ORIGINS`, for local development). There is no
 `Access-Control-Allow-Origin: *` response header (the `/api/socket` headers in
 `next.config.js` were removed) and a missing `Origin` header is refused too.
 On top of the origin gate, every handshake authenticates the NextAuth session
-cookie and only ACTIVE `ADMIN`/`USER` sockets connect — see "Interim access
-policy" below.
+cookie and only active users holding a socket-eligible permission
+(`whatsapp.inbox.view` or `whatsapp.admin`) connect — see "Access policy and
+permission model" below.
 
 ### Input Validation
 
 - API routes use Zod schemas for incoming request bodies.
 - File uploads (media messages) are saved with random UUID filenames but should be validated for size and type before deployment.
-- Uploaded media is served from `/uploads/` under `public/uploads/`. Since W1 these URLs are authenticated by the custom server (see "Interim access policy" below); before W1 they were publicly reachable.
+- Uploaded media is served from `/uploads/` under `public/uploads/`. Since W1 these URLs are authenticated by the custom server (see "Access policy and permission model" below); before W1 they were publicly reachable.
 
 ### Rate Limiting
 
@@ -118,22 +119,39 @@ may approve their own submission (self-validation is a deliberate small-team mod
 SELF_APPROVAL / SELF_ASSIGNMENT blocks were removed by design, not by accident). The control
 that remains is the assignment itself: only the currently assigned validator can review, and
 users without a travel role only see requests they own or actively validate. INTERNAL quotation
-documents (which contain margins) stay restricted: downloads require ADMIN/VALIDATOR role, and
-WhatsApp delivery of INTERNAL documents is limited to ADMIN/VALIDATOR users or the assigned
-validator.
+documents (which contain margins) stay restricted under W2: downloading one requires the
+`travel.internal.download` permission — preset for ADMIN only until the owner confirms the
+permissions migration (D3), so non-admins need an explicit grant, which stays locked (403)
+until that confirmation — plus the pre-W2 record rule (ADMIN/VALIDATOR role, or the currently
+assigned validator of the request). WhatsApp delivery of INTERNAL documents is refused for
+every actor including ADMIN: the send route answers 403 and `sendQuoteDocument()` refuses them
+too (audited `QUOTE_DOCUMENT_SEND_REFUSED`), so no code path can bypass the refusal. Internal
+costs and margins are redacted from request/calculate responses and INTERNAL documents are
+filtered from lists unless the actor holds `travel.internal.view`; client PDFs and
+client-facing responses contain no internal costs, margins, or internal notes.
+
+Note: enforcement happens at access time, not after delivery — once a user legitimately
+downloads a file (a client PDF or an internal costing sheet), the server cannot prevent them
+from sharing it onward.
 
 Since v0.11.0 the travel-request owner sees per-line net costs and full engine results
 (`scenarios[].lines`, nightly stay costs) — an operator decision, since the owner runs the
-costing. Non-owner advisors are unchanged: they are 404'd from other people's requests and
-would see only sell-side fields if redaction ever applied. INTERNAL PDFs remain invisible to
-advisors (including owners).
+costing. Under W2 that visibility is additionally permission-gated: full engine results and
+internal costing leave the APIs only for actors holding `travel.internal.view`, which is preset
+for ADMIN only until the migration confirmation (D2) — so owners and validators see the
+redacted sell-side view unless explicitly granted the key. Non-owner advisors are unchanged:
+they are 404'd from other people's requests. INTERNAL PDFs remain invisible to
+advisors (including owners) by default: no non-admin preset holds the internal keys (D2), so
+they stay out of reach until an admin grants `travel.internal.download`/`travel.internal.view`
+— which itself is locked until the migration report is confirmed.
 
-## Access policy (W1 interim + W2 perm-inbox)
+## Access policy and permission model (W2)
 
 Implemented in `lib/access-policy.ts` and applied across pages, APIs and media serving.
 The inbox surfaces (dashboard page, chat APIs, media, sockets, WhatsApp status) are
-permission-gated since W2 perm-inbox; the role predicates below remain for the
-role-based redirects and the travel/admin surfaces still on the interim policy.
+permission-gated since W2 perm-inbox; W2 perm-travel and perm-admin extend the same keys
+to the travel and user-management surfaces (detailed below). The role predicates below
+remain only for the role-based redirects and record-level rules.
 
 **Roles.**
 
@@ -219,9 +237,8 @@ at 7 days. Remaining limits: revocation applies on the NEXT request (nothing
 reaches into an in-flight one); open sockets disconnect on the next 60s
 revalidation pass, not instantly; tokens minted before W1b carry no `sv` claim
 and keep working until the user's FIRST version bump — a missing `sv` reads as
-version 0, and the first bump revokes those legacy tokens too. Per-device tokens
-(arrive with W2) are still not individually addressable: revocation is always
-all-sessions-of-a-user.
+version 0, and the first bump revokes those legacy tokens too. W2 did not add
+per-device tokens: revocation is always all-sessions-of-a-user.
 
 **Permission model (W2 core).** `lib/permissions.ts` defines the closed set of
 permission keys (`admin.users`, `admin.settings`, `whatsapp.inbox.view`,
@@ -299,9 +316,9 @@ exposes the matrix as a per-user Permissions dialog in the existing users tab
 - [ ] Upgrade all dependencies and resolve `npm audit` findings.
 - [ ] Generate strong `NEXTAUTH_SECRET` and `ADMIN_PASSWORD`.
 - [ ] Serve over HTTPS with a valid certificate.
-- [x] Restrict CORS/socket origins (W1: exact-origin allow-list via `allowRequest` in `lib/socket-auth.ts` — see "Interim access policy").
-- [x] Authenticate and room-scope Socket.io (W1: session-cookie handshake, server-managed `inbox`/`admins` rooms, 60s + token-expiry revalidation — see "Interim access policy").
+- [x] Restrict CORS/socket origins (W1: exact-origin allow-list via `allowRequest` in `lib/socket-auth.ts` — see "Access policy and permission model").
+- [x] Authenticate and room-scope Socket.io (W1: session-cookie handshake, server-managed `inbox`/`admins` rooms, 60s + token-expiry revalidation — see "Access policy and permission model").
 - [ ] Add rate limiting and input size limits.
-- [x] Protect `/uploads/` (W1: authenticated streaming via the custom server — see "Interim access policy"; media stays under `public/uploads/`).
+- [x] Protect `/uploads/` (W1: authenticated streaming via the custom server — see "Access policy and permission model"; media stays under `public/uploads/`).
 - [ ] Back up `.wwebjs_auth/` securely.
 - [ ] Review Puppeteer sandbox settings for your hosting environment.
