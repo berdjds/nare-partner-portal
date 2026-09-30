@@ -58,7 +58,7 @@ WAControl/
 
 1. **Startup**: `server.ts` prepares the Next.js app, creates an HTTP server, attaches Socket.io, and initializes the WhatsApp client after a short delay.
 2. **Authentication**: Users sign in with email and password. NextAuth validates credentials against the `User` table and issues a JWT session.
-3. **WhatsApp Connection**: The admin scans a QR code. The `whatsapp-web.js` client authenticates and stores session data in `.wwebjs_auth/`.
+3. **WhatsApp Connection**: Each WhatsApp business account (W3: `marhaba`, `nare`) is paired by scanning its own QR code from the admin accounts panel. The `whatsapp-web.js` client authenticates and stores session data in `.wwebjs_auth/`.
 4. **Message Handling**: Incoming and outgoing messages are persisted to SQLite and broadcast via Socket.io.
 5. **Dashboard**: Active ADMIN/USER view chats and send messages; ADVISOR/VALIDATOR work in the travel module; admins manage users and connection state.
 

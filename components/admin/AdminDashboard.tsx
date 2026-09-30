@@ -11,9 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useSocket } from "@/hooks/useSocket";
+import { useSocket, resolveWhatsAppDisplayState, DEFAULT_ACCOUNT_KEY, type WhatsAppState } from "@/hooks/useSocket";
 import { useToast } from "@/components/ui/toast";
 import UserPermissionsDialog from "@/components/admin/UserPermissionsDialog";
+import AccountsPanel, { type AccountCardData } from "@/components/admin/AccountsPanel";
 
 interface User {
   id: string;
@@ -33,15 +34,33 @@ interface Log {
   user: { email: string; name: string } | null;
 }
 
+// Row shape of GET /api/whatsapp/accounts: only accounts the caller may
+// administer, each with the full live state (qrSvg included) attached.
+interface WhatsAppAccountRow {
+  key: string;
+  displayName: string;
+  enabled: boolean;
+  purpose: string;
+  publicNumber: string | null;
+  verifiedNumber: string | null;
+  state: WhatsAppState | null;
+}
+
 export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { canAdminWhatsApp: boolean; currentUserId: string }) {
-  const { connected, unauthorized, whatsAppState, disconnectSocket } = useSocket();
+  const { connected, unauthorized, whatsAppStates, disconnectSocket } = useSocket();
   const { toast } = useToast();
 
   const [users, setUsers] = useState<User[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
-  const [loading, setLoading] = useState(false);
   const [buildInfo, setBuildInfo] = useState<{ version?: string; startedAt?: string } | null>(null);
   const [permissionsUserId, setPermissionsUserId] = useState<string | null>(null);
+
+  const [accounts, setAccounts] = useState<WhatsAppAccountRow[]>([]);
+  const [accountsUnauthorized, setAccountsUnauthorized] = useState(false);
+  // HTTP-fallback states per account: the socket is live but silent until the
+  // first event, so cards resolve against these instead of showing "unknown".
+  const [httpStates, setHttpStates] = useState<Record<string, WhatsAppState>>({});
+  const [busyAccount, setBusyAccount] = useState<string | null>(null);
 
   const [newUser, setNewUser] = useState({
     email: "",
@@ -74,15 +93,48 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
     }
   }
 
+  async function fetchAccounts() {
+    try {
+      const res = await axios.get("/api/whatsapp/accounts");
+      const rows = res.data as WhatsAppAccountRow[];
+      setAccounts(rows);
+      setAccountsUnauthorized(false);
+      // Seed the HTTP fallback map so each card shows the last server-reported
+      // state until the socket delivers a fresher one.
+      setHttpStates((prev) => {
+        const next = { ...prev };
+        for (const row of rows) {
+          if (row.state) next[row.key] = row.state;
+        }
+        return next;
+      });
+    } catch (err: any) {
+      // The API answers 401 when the caller administers no account at all;
+      // the tab then shows the same no-permission notice the old connection
+      // tab showed without whatsapp.admin.
+      if (err?.response?.status === 401) {
+        setAccounts([]);
+        setAccountsUnauthorized(true);
+      } else {
+        toast("Failed to load WhatsApp accounts", "error");
+      }
+    }
+  }
+
   useEffect(() => {
     fetchUsers();
     fetchLogs();
+    fetchAccounts();
     // The build indicator reads version/startedAt from the full status payload,
     // which only whatsapp.admin holders receive — skip the call otherwise.
     if (canAdminWhatsApp) {
       axios
         .get("/api/whatsapp/status")
-        .then((res) => setBuildInfo({ version: res.data.version, startedAt: res.data.startedAt }))
+        .then((res) => {
+          setBuildInfo({ version: res.data.version, startedAt: res.data.startedAt });
+          // The default account's HTTP fallback state rides on the same call.
+          setHttpStates((prev) => ({ ...prev, [DEFAULT_ACCOUNT_KEY]: res.data }));
+        })
         .catch(() => null);
     }
   }, []);
@@ -152,17 +204,46 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
     signOut({ callbackUrl: "/login" });
   }
 
-  async function handleWhatsAppAction(action: "logout" | "reconnect") {
-    setLoading(true);
+  async function handleAccountAction(accountKey: string, action: "connect" | "reconnect" | "disconnect") {
+    setBusyAccount(accountKey);
     try {
-      await axios.post("/api/whatsapp/status", { action });
-      toast(action === "logout" ? "Logged out WhatsApp" : "Reconnecting WhatsApp", "success");
+      // connect/reconnect are async server-side; the QR and new states arrive
+      // over the socket, the refreshed list only carries the immediate state.
+      await axios.post("/api/whatsapp/accounts", { action, account: accountKey });
+      toast(
+        action === "connect" ? "Connecting WhatsApp" : action === "reconnect" ? "Reconnecting WhatsApp" : "Disconnected WhatsApp",
+        "success"
+      );
+      fetchAccounts();
     } catch (err: any) {
       toast(err?.response?.data?.error || "Action failed", "error");
     } finally {
-      setLoading(false);
+      setBusyAccount(null);
     }
   }
+
+  async function handleToggleEnabled(accountKey: string, enabled: boolean) {
+    setBusyAccount(accountKey);
+    try {
+      await axios.post("/api/whatsapp/accounts", { action: "configure", account: accountKey, enabled });
+      toast(enabled ? "Account enabled" : "Account disabled", "success");
+      fetchAccounts();
+    } catch (err: any) {
+      toast(err?.response?.data?.error || "Failed to update account", "error");
+    } finally {
+      setBusyAccount(null);
+    }
+  }
+
+  const accountCards: AccountCardData[] = accounts.map((account) => ({
+    key: account.key,
+    displayName: account.displayName,
+    enabled: account.enabled,
+    purpose: account.purpose,
+    publicNumber: account.publicNumber,
+    verifiedNumber: account.verifiedNumber,
+    state: resolveWhatsAppDisplayState(whatsAppStates[account.key], httpStates[account.key]),
+  }));
 
   return (
     <div className="min-h-screen bg-muted/40 p-4">
@@ -207,59 +288,37 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
         </div>
       </header>
 
-      <Tabs defaultValue="connection" className="space-y-4">
+      <Tabs defaultValue="accounts" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="connection">Connection</TabsTrigger>
+          <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="connection">
-          <Card>
-            <CardHeader>
-              <CardTitle>WhatsApp Connection</CardTitle>
-              <CardDescription>
-                Socket: <Badge variant={connected ? "default" : "destructive"}>{unauthorized ? "session expired" : connected ? "connected" : "offline"}</Badge>{" "}
-                {canAdminWhatsApp && (
-                  <>
-                    State: <Badge variant={whatsAppState?.state === "ready" ? "default" : "outline"}>{whatsAppState?.state || "initializing"}</Badge>
-                  </>
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Hidden without the whatsapp.admin permission: the server
-                  already withholds the state details, QR and actions. */}
-              {canAdminWhatsApp ? (
-                <>
-                  <div className="flex gap-2">
-                    <Button onClick={() => handleWhatsAppAction("reconnect")} disabled={loading}>
-                      Reconnect
-                    </Button>
-                    <Button variant="destructive" onClick={() => handleWhatsAppAction("logout")} disabled={loading}>
-                      Logout
-                    </Button>
-                  </div>
-
-                  {whatsAppState?.qrSvg ? (
-                    <div className="rounded-lg border bg-white p-4">
-                      <p className="mb-2 text-sm font-medium">Scan this QR code with WhatsApp on your phone:</p>
-                      <div dangerouslySetInnerHTML={{ __html: whatsAppState.qrSvg }} className="inline-block" />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      {whatsAppState?.info || "Waiting for WhatsApp state..."}
-                    </p>
-                  )}
-                </>
-              ) : (
+        <TabsContent value="accounts">
+          {/* Hidden without any account admin permission: the server already
+              withholds the account list, states, QR and actions (401). */}
+          {accountsUnauthorized ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>WhatsApp Accounts</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <p className="text-sm text-muted-foreground">
                   You do not have the WhatsApp administration permission. Connection details and actions are
                   available to whatsapp.admin holders only.
                 </p>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <AccountsPanel
+              accounts={accountCards}
+              browserLink={{ connected, unauthorized }}
+              busyAccount={busyAccount}
+              onAction={handleAccountAction}
+              onToggleEnabled={handleToggleEnabled}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="users">

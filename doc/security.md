@@ -169,11 +169,14 @@ deactivated or deleted user gets **401** (their credential is revoked, not merel
 under-privileged).
 
 **Pages** (`app/page.tsx`, `app/dashboard/page.tsx`): ADVISOR/VALIDATOR are redirected to
-`/travel`; the dashboard additionally requires the `whatsapp.inbox.view` permission
-(without it → `/travel`, unknown/inactive sessions → `/login`). ADMIN continues to
-`/admin`, USER to `/dashboard`. The dashboard hides the composer, attachment and
-new-message controls without `whatsapp.inbox.send`; the admin page hides the connection
-controls and QR without `whatsapp.admin`.
+`/travel`; the dashboard requires the view permission of at least one WhatsApp account
+(W3: `whatsapp.inbox.view` for marhaba, `whatsapp.nare.view` for nare — without any →
+`/travel`, unknown/inactive sessions → `/login`) and shows an account switcher limited to
+the accounts the user may view. ADMIN continues to `/admin`, USER to `/dashboard`. The
+dashboard hides the composer, attachment and new-message controls when the selected
+account's send permission is missing; the admin page's accounts tab shows only the accounts
+the caller may administer (the `/api/whatsapp/accounts` API answers 401 when there are
+none), withholding their states, QR and actions.
 
 **Chat APIs** (`/api/chats`, `/api/messages`, `/api/send`): **401** without a session and for
 deactivated users; **403** for active users without the permission. Reading (chats,

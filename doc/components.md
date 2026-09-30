@@ -32,21 +32,21 @@ Server component that verifies the `ADMIN` role and renders `AdminDashboard`.
 
 ### `app/dashboard/page.tsx`
 
-Server component that verifies authentication and renders `ChatDashboard`, passing `isAdmin` flag.
+Server component that verifies authentication and renders `ChatDashboard`, passing `isAdminRole` and the W3 `accounts` list — every WhatsApp account whose per-account view permission the user holds (`whatsapp.inbox.view` for marhaba, `whatsapp.nare.view` for nare), each with its `canSend`/`canAdmin` flags. Users who may view no account are redirected to `/travel`.
 
 ## Feature Components
 
 ### `components/admin/AdminDashboard.tsx`
 
 Admin dashboard for:
-- Viewing WhatsApp connection status and QR code.
-- Controlling logout/reconnect actions.
+- Managing the WhatsApp business accounts (W3): one card per account in the Accounts tab (`components/admin/AccountsPanel.tsx`) with business name, verified/public number, per-account state, QR pairing, connect/reconnect/disconnect and an enabled switch, backed by `/api/whatsapp/accounts`. The browser-to-server socket link is shown separately from each account's WhatsApp state, and the state returned by the HTTP status/accounts calls is shown until the socket delivers a fresher one.
 - Managing users (create, update, delete, activate/deactivate).
 - Viewing audit logs.
 
 ### `components/dashboard/ChatDashboard.tsx`
 
 Main chat interface for:
+- Switching between the WhatsApp accounts the user may view (W3 `components/dashboard/AccountSwitcher.tsx`, server-decided list, defaults to marhaba); chats, messages and sends are scoped to the selected account.
 - Listing chats and latest messages.
 - Viewing message history.
 - Sending text and media messages.
@@ -61,7 +61,7 @@ React hook for Socket.io connection.
 ```typescript
 import { useSocket } from "@/hooks/useSocket";
 
-const { socket, connected, unauthorized, whatsAppState, lastEvent, disconnectSocket } = useSocket();
+const { socket, connected, unauthorized, whatsAppState, whatsAppStates, lastEvent, disconnectSocket } = useSocket();
 ```
 
 **Returns**:
@@ -70,10 +70,16 @@ const { socket, connected, unauthorized, whatsAppState, lastEvent, disconnectSoc
 - `unauthorized` — True after the server refused the handshake (`unauthorized`
   connect_error: missing/forged/expired session or disallowed origin). The
   hook stops reconnecting in that case; the dashboards show "Session expired".
-- `whatsAppState` — Current WhatsApp state. Admins receive the full payload
-  (`state`, `info`, `qrSvg`); non-admin inbox users only receive
-  `{ connected: boolean }` (interim W1 policy).
-- `lastEvent` — Last `message` or `chat_update` event payload.
+- `whatsAppState` — The marhaba entry of `whatsAppStates` (pre-W3 compat view).
+- `whatsAppStates` — Per-account WhatsApp states keyed by account key (W3):
+  every `whatsapp_state` payload carries `accountKey`. Admins receive the full
+  payload (`state`, `info`, `qrSvg`); non-admin inbox users only receive
+  `{ connected: boolean }` (interim W1 policy). The exported
+  `resolveWhatsAppDisplayState(socketState, httpState)` helper picks the socket
+  state once delivered and the HTTP status state before that, so the UI never
+  shows "initializing" when the server has reported a state.
+- `lastEvent` — Last `message` or `chat_update` event payload (account-scoped
+  via `payload.accountKey`).
 - `disconnectSocket` — Disconnects the socket; the dashboards call it on
   sign-out so the session cookie is not used after logout.
 
