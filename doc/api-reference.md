@@ -2,7 +2,7 @@
 
 ## Authentication
 
-All API routes except the NextAuth endpoints require an active session cookie. Role checks follow the interim W1 access policy (`lib/access-policy.ts`, see `doc/security.md`): the user is re-loaded from the database on every request and the current role decides, so deactivation or a role change takes effect on the next request. Admin-only routes check the database role, not the JWT.
+All API routes except the NextAuth endpoints require an active session cookie. Permission checks follow the W2 permission model (`lib/permissions.ts`, gates in `lib/access-policy.ts`, see `doc/security.md`): the user is re-loaded from the database on every request and the current role preset plus per-user overrides decide, so deactivation, a role change or an override edit takes effect on the next request. Gates never consult the JWT role.
 
 ## HTTP Routes
 
@@ -39,7 +39,7 @@ its next request, and open sockets disconnect on the next 60s revalidation pass.
 
 Returns all chats ordered by most recent message.
 
-**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
+**Access**: Active session with the `whatsapp.inbox.view` permission (W2). Anonymous and deactivated users get 401; active users without the permission get 403.
 
 **Response**:
 
@@ -71,7 +71,7 @@ Returns all chats ordered by most recent message.
 
 Returns messages for a chat.
 
-**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
+**Access**: Active session with the `whatsapp.inbox.view` permission (W2). Anonymous and deactivated users get 401; active users without the permission get 403.
 
 **Query parameters**:
 - `chatId` — Chat ID (preferred)
@@ -109,7 +109,7 @@ At least one parameter is required.
 
 Sends a WhatsApp message. Can be used to start a new chat with an unsaved number.
 
-**Access**: Active ADMIN or USER session (interim W1 policy). Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
+**Access**: Active session with the `whatsapp.inbox.send` permission (W2) — view and send are separate keys. Anonymous and deactivated users get 401; active users without the permission get 403.
 
 **Request body**:
 
@@ -192,11 +192,12 @@ Streams an uploaded message media file (stored under `public/uploads/`).
 `/uploads/*` before Next.js's static handler. The pathname is percent-decoded, slash-collapsed
 and normalized before matching, so encoded spellings (`/%75ploads/…`, `/uploads%2F…`) are gated
 too; GET/HEAD only, other methods get `405`. Requires a valid, unexpired NextAuth session
-cookie plus an active ADMIN/USER database role. Responses carry the file's mime type and
-`Cache-Control: private, no-store`.
+cookie plus an active database user holding the `whatsapp.inbox.view` permission (W2).
+Responses carry the file's mime type and `Cache-Control: private, no-store`.
 
 **Errors**: `400` (undecodable URL), `401` (no, invalid, expired or revoked session),
-`403` (active non-inbox role), `404` (traversal or missing file), `405` (non-GET/HEAD method).
+`403` (active user without the `whatsapp.inbox.view` permission), `404` (traversal or
+missing file), `405` (non-GET/HEAD method).
 Existing and missing files are indistinguishable to unauthorized callers.
 
 ### Users

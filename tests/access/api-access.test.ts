@@ -369,3 +369,156 @@ describe("session version revocation takes effect on the next request (W1b)", ()
     expect(await redirectTarget(() => HomePage())).toBe("/dashboard");
   });
 });
+
+describe("W2 permission overrides (perm-inbox)", () => {
+  // W2 replaces the W1 role-only gates with effective permissions (role preset
+  // + UserPermission grants − denies, deny always wins). Every fixture here is
+  // dedicated: overrides are resolved per request from the DB, so mutating the
+  // shared W1 personas would leak into the suites above.
+
+  let viewOnly: { id: string; email: string; name: string | null; role: string };
+  let noInbox: { id: string; email: string; name: string | null; role: string };
+  let travelGranted: { id: string; email: string; name: string | null; role: string };
+  let adminDemoted: { id: string; email: string; name: string | null; role: string };
+  let userPromoted: { id: string; email: string; name: string | null; role: string };
+
+  const sendBody = { remoteJid: "37420000002@c.us", body: "hello", type: "text" };
+  const sendReq = () => req("http://localhost:3000/api/send", { method: "POST", body: sendBody });
+  const statusActionReq = () =>
+    req("http://localhost:3000/api/whatsapp/status", { method: "POST", body: { action: "reconnect" } });
+  const messagesReq = () => req(`http://localhost:3000/api/messages?chatId=${chat.id}`);
+
+  beforeAll(async () => {
+    viewOnly = await prisma.user.create({
+      data: { email: "acc-w2-viewonly@test.io", name: "View Only", password: "x", role: "USER" },
+    });
+    await prisma.userPermission.create({ data: { userId: viewOnly.id, key: "whatsapp.inbox.send", allowed: false } });
+
+    noInbox = await prisma.user.create({
+      data: { email: "acc-w2-noinbox@test.io", name: "No Inbox", password: "x", role: "USER" },
+    });
+    await prisma.userPermission.create({ data: { userId: noInbox.id, key: "whatsapp.inbox.view", allowed: false } });
+    await prisma.userPermission.create({ data: { userId: noInbox.id, key: "whatsapp.inbox.send", allowed: false } });
+
+    travelGranted = await prisma.user.create({
+      data: { email: "acc-w2-travelgranted@test.io", name: "Travel Granted", password: "x", role: "ADVISOR" },
+    });
+    await prisma.userPermission.create({
+      data: { userId: travelGranted.id, key: "whatsapp.inbox.view", allowed: true },
+    });
+
+    adminDemoted = await prisma.user.create({
+      data: { email: "acc-w2-admindemoted@test.io", name: "Admin Demoted", password: "x", role: "ADMIN" },
+    });
+    await prisma.userPermission.create({ data: { userId: adminDemoted.id, key: "whatsapp.admin", allowed: false } });
+
+    userPromoted = await prisma.user.create({
+      data: { email: "acc-w2-userpromoted@test.io", name: "User Promoted", password: "x", role: "USER" },
+    });
+    await prisma.userPermission.create({ data: { userId: userPromoted.id, key: "whatsapp.admin", allowed: true } });
+  });
+
+  it("WhatsApp-only user (USER preset): view+send allowed, admin surfaces denied", async () => {
+    login(user);
+    expect((await chatsGET()).status).toBe(200);
+    expect((await sendPOST(sendReq())).status).toBe(200);
+    expect(sendWhatsAppMessageMock.fn).toHaveBeenCalled();
+
+    // whatsapp.admin is not in the USER preset: only { connected }, no actions.
+    expect(await (await statusGET()).json()).toEqual({ connected: true });
+    expect((await statusPOST(statusActionReq())).status).toBe(401);
+  });
+
+  it("view-but-no-send user: reads the inbox, cannot send", async () => {
+    login(viewOnly);
+    expect((await chatsGET()).status).toBe(200);
+    expect((await messagesGET(messagesReq())).status).toBe(200);
+    expect(await (await statusGET()).json()).toEqual({ connected: true });
+
+    // The deny wins over the USER preset; the route must stop before touching
+    // WhatsApp or writing the audit entry.
+    expect((await sendPOST(sendReq())).status).toBe(403);
+    expect(sendWhatsAppMessageMock.fn).not.toHaveBeenCalled();
+    expect(await prisma.log.count({ where: { action: "SEND_MESSAGE", userId: viewOnly.id } })).toBe(0);
+  });
+
+  it("user denied inbox view: every inbox surface denies, send included", async () => {
+    login(noInbox);
+    expect((await chatsGET()).status).toBe(403);
+    expect((await messagesGET(messagesReq())).status).toBe(403);
+    expect((await sendPOST(sendReq())).status).toBe(403);
+    expect(sendWhatsAppMessageMock.fn).not.toHaveBeenCalled();
+    expect((await statusGET()).status).toBe(403);
+    expect((await statusPOST(statusActionReq())).status).toBe(401);
+    expect(await redirectTarget(() => DashboardPage())).toBe("/travel");
+  });
+
+  it("travel-only user (ADVISOR preset): no inbox access", async () => {
+    login(advisor);
+    expect((await chatsGET()).status).toBe(403);
+    expect((await messagesGET(messagesReq())).status).toBe(403);
+    expect((await sendPOST(sendReq())).status).toBe(403);
+    expect(sendWhatsAppMessageMock.fn).not.toHaveBeenCalled();
+    expect((await statusGET()).status).toBe(403);
+    expect((await statusPOST(statusActionReq())).status).toBe(401);
+    expect(await redirectTarget(() => DashboardPage())).toBe("/travel");
+  });
+
+  it("travel-only user granted whatsapp.inbox.view: reads but cannot send", async () => {
+    login(travelGranted);
+    expect((await chatsGET()).status).toBe(200);
+    expect((await messagesGET(messagesReq())).status).toBe(200);
+    expect(await (await statusGET()).json()).toEqual({ connected: true });
+    expect((await sendPOST(sendReq())).status).toBe(403);
+    expect(sendWhatsAppMessageMock.fn).not.toHaveBeenCalled();
+    expect(await redirectTarget(() => DashboardPage())).toBeNull();
+  });
+
+  it("anonymous: every inbox surface answers 401", async () => {
+    login(null);
+    expect((await chatsGET()).status).toBe(401);
+    expect((await messagesGET(messagesReq())).status).toBe(401);
+    expect((await sendPOST(sendReq())).status).toBe(401);
+    expect((await statusGET()).status).toBe(401);
+    expect((await statusPOST(statusActionReq())).status).toBe(401);
+  });
+
+  it("admin denied whatsapp.admin: loses details and actions, keeps inbox", async () => {
+    login(adminDemoted);
+    const res = await statusGET();
+    expect(res.status).toBe(200);
+    // The deny wins even against the ADMIN preset: downgraded to { connected }.
+    expect(await res.json()).toEqual({ connected: true });
+    expect((await statusPOST(statusActionReq())).status).toBe(401);
+    expect((await chatsGET()).status).toBe(200);
+  });
+
+  it("USER granted whatsapp.admin: full status and actions", async () => {
+    login(userPromoted);
+    const res = await statusGET();
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.qrSvg).toBe("<svg>pairing-qr</svg>");
+    expect(json.state).toBe("ready");
+
+    const action = await statusPOST(statusActionReq());
+    expect(action.status).toBe(200);
+    expect((await action.json()).ok).toBe(true);
+  });
+
+  it("deny takes effect on the next request with the same unexpired session", async () => {
+    const flipped = await prisma.user.create({
+      data: { email: "acc-w2-flip@test.io", name: "Flip", password: "x", role: "USER" },
+    });
+    login(flipped);
+    expect((await chatsGET()).status).toBe(200);
+
+    // Overrides are resolved from the DB per request — no session refresh needed.
+    await prisma.userPermission.create({ data: { userId: flipped.id, key: "whatsapp.inbox.view", allowed: false } });
+    login(flipped); // same unexpired session claims
+    expect((await chatsGET()).status).toBe(403);
+
+    await prisma.userPermission.deleteMany({ where: { userId: flipped.id } });
+    expect((await chatsGET()).status).toBe(200);
+  });
+});

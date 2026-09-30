@@ -128,35 +128,47 @@ costing. Non-owner advisors are unchanged: they are 404'd from other people's re
 would see only sell-side fields if redaction ever applied. INTERNAL PDFs remain invisible to
 advisors (including owners).
 
-## Interim access policy (until W2)
+## Access policy (W1 interim + W2 perm-inbox)
 
 Implemented in `lib/access-policy.ts` and applied across pages, APIs and media serving.
-Documented here as the interim policy; W2 is expected to grant inbox access per user.
+The inbox surfaces (dashboard page, chat APIs, media, sockets, WhatsApp status) are
+permission-gated since W2 perm-inbox; the role predicates below remain for the
+role-based redirects and the travel/admin surfaces still on the interim policy.
 
 **Roles.**
 
-- `canUseInbox(role)`: **ADMIN** or **USER** — may open the WhatsApp chat inbox.
-- `canAdministerWhatsApp(role)`: **ADMIN** — full WhatsApp status details and reconnect/logout.
-- **ADVISOR** and **VALIDATOR** are travel-only until W2.
+- `canUseInbox(role)`: **ADMIN** or **USER** — the role-preset equivalent of the
+  `whatsapp.inbox.*` keys; still used by the `/` redirect.
+- `canAdministerWhatsApp(role)`: **ADMIN** — the role-preset equivalent of
+  `whatsapp.admin`.
+- **ADVISOR** and **VALIDATOR** presets hold no inbox keys.
 
 **Trust boundary.** Every gate reloads the user from the database on each request: the user
-must exist and be active, and the *current* database role decides. The role stored in the JWT
-at login is never consulted, so a deactivation or role change takes effect on the next
-request, with the same unexpired session token. A deactivated or deleted user gets **401**
-(their credential is revoked, not merely under-privileged).
+must exist and be active, and the *current* database role and permission overrides decide.
+The role stored in the JWT at login is never consulted, so a deactivation, role change or
+override edit takes effect on the next request, with the same unexpired session token. A
+deactivated or deleted user gets **401** (their credential is revoked, not merely
+under-privileged).
 
 **Pages** (`app/page.tsx`, `app/dashboard/page.tsx`): ADVISOR/VALIDATOR are redirected to
-`/travel`; the dashboard additionally requires an inbox role (non-inbox roles → `/travel`,
-unknown/inactive sessions → `/login`). ADMIN continues to `/admin`, USER to `/dashboard`.
+`/travel`; the dashboard additionally requires the `whatsapp.inbox.view` permission
+(without it → `/travel`, unknown/inactive sessions → `/login`). ADMIN continues to
+`/admin`, USER to `/dashboard`. The dashboard hides the composer, attachment and
+new-message controls without `whatsapp.inbox.send`; the admin page hides the connection
+controls and QR without `whatsapp.admin`.
 
 **Chat APIs** (`/api/chats`, `/api/messages`, `/api/send`): **401** without a session and for
-deactivated users; **403** for active ADVISOR/VALIDATOR; ADMIN/USER proceed.
+deactivated users; **403** for active users without the permission. Reading (chats,
+messages) requires `whatsapp.inbox.view`; sending requires `whatsapp.inbox.send` — view
+and send are separate keys.
 
 **WhatsApp status** (`/api/whatsapp/status`): GET returns full details (`state`, `info`,
-pairing `qrSvg`, `version`, `startedAt`) to ADMIN only; USER receives only
-`{ "connected": boolean }` (availability as connected/not connected); other roles get 403.
-POST (reconnect/logout) stays ADMIN-only. The dashboard badge shows the raw connection state
-to admins and only connected/not connected to other inbox users.
+pairing `qrSvg`, `version`, `startedAt`) to holders of `whatsapp.admin`; holders of
+`whatsapp.inbox.view` receive only `{ "connected": boolean }` (availability as
+connected/not connected); everyone else gets 403. POST (reconnect/logout) requires
+`whatsapp.admin` and answers **401** to everyone without it, logged in or not (the pre-W1
+contract). The dashboard badge shows the raw connection state to `whatsapp.admin` holders
+and only connected/not connected to other inbox users.
 
 **Media** (`/uploads/*`, served by `lib/uploads.ts` mounted in `server.ts` before the Next.js
 handler): the pathname is percent-decoded, slash-collapsed and normalized before matching
@@ -164,29 +176,33 @@ handler): the pathname is percent-decoded, slash-collapsed and normalized before
 `//uploads/…`) are intercepted too instead of being served unsigned by Next's decoded
 public/ lookup; undecodable URLs get **400** and non-GET/HEAD methods **405**. The gate
 itself requires a valid, unexpired NextAuth session cookie (`next-auth/jwt` decode with
-`NEXTAUTH_SECRET`), an active inbox-role user from the database, and a normalized path inside
-`public/uploads/`. Responses stream the file with its mime type and
+`NEXTAUTH_SECRET`), an active user from the database holding `whatsapp.inbox.view`, and a
+normalized path inside `public/uploads/`. Responses stream the file with its mime type and
 `Cache-Control: private, no-store`. Otherwise: **401** (no/invalid/expired/revoked session),
-**403** (active non-inbox role), **404** (traversal or missing file). Existing and missing
-files are indistinguishable to unauthorized callers — file existence is never leaked.
+**403** (active user without the permission), **404** (traversal or missing file). Existing
+and missing files are indistinguishable to unauthorized callers — file existence is never
+leaked.
 
 **Sockets** (`/api/socket`, wired in `server.ts` + `lib/socket-auth.ts` via
 `setSocketServer()`): the origin gate (`allowRequest`) runs before the Socket.io
 handshake, then an `io.use` middleware decodes the NextAuth session cookie
 (`next-auth/jwt` with `NEXTAUTH_SECRET`) and refuses anything missing, forged or
 expired, exactly like the media gate. The user is then loaded from the database
-and must be active with an inbox role — anonymous, ADVISOR/VALIDATOR and
+and must be active and hold at least one socket-eligible permission
+(`whatsapp.inbox.view` or `whatsapp.admin`) — anonymous, travel-only and
 deactivated sessions get the `unauthorized` connect_error and never connect.
-The SERVER places sockets in rooms (inbox users → `inbox`, ADMIN additionally →
-`admins`); no client-to-server handlers exist and anything a client emits is
+The SERVER places sockets in rooms by current effective permission
+(`whatsapp.inbox.view` → `inbox`, `whatsapp.admin` → `admins`); no
+client-to-server handlers exist and anything a client emits is
 ignored and logged (`socket.onAny`). Emits are room-scoped: `message` and
 `chat_update` go to `inbox` only; availability `{ connected: boolean }` goes to
 `inbox` only; the full `whatsapp_state` (including `info` and the pairing
 `qrSvg`) goes to `admins` only, including on connection. Two revalidation
 mechanisms run while a socket is open: it is disconnected when its token's `exp`
-passes, and every 60s the user row is reloaded — deactivation or a role change
-disconnects the socket (and room membership is re-synced with the current role),
-so logout, expiry, deactivation or demotion all cut the socket promptly. The
+passes, and every 60s the user row is reloaded — deactivation, session revocation
+or losing every socket-eligible permission disconnects the socket, and room
+membership is re-synced with the current effective permissions (a grant or deny
+takes effect within one interval, without a reconnect). The
 client (`hooks/useSocket.ts`) stops reconnecting after an `unauthorized`
 connect_error and disconnects on sign-out.
 
@@ -225,9 +241,11 @@ ignored and can never widen access). `getActiveUser()` /
 that checks role, active and session version (the override rows load through
 the indexed `(userId, key)` relation in the one user query), so an override
 edit takes effect on the next request, and `requirePermission(session, key)`
-gates on it (401 without an active session, 403 without the key). Enforcement
-sites still check the interim role predicates above until they are wired to
-these keys.
+gates on it (401 without an active session, 403 without the key). The inbox
+surfaces (W2 perm-inbox: dashboard page, `/api/chats`, `/api/messages`,
+`/api/send`, `/api/whatsapp/status`, `/uploads/*`, socket handshake/rooms)
+enforce through these keys; the travel and admin surfaces still check the
+interim role predicates above until their own wiring tasks land.
 
 **Rate limiting and media validation.** Still open (see below).
 

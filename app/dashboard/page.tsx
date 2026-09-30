@@ -1,19 +1,27 @@
 import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import { canUseInbox, getActiveUser } from "@/lib/access-policy";
+import { getActiveUser } from "@/lib/access-policy";
+import { hasPermission } from "@/lib/permissions";
 import ChatDashboard from "@/components/dashboard/ChatDashboard";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
-  // Interim W1 policy (lib/access-policy.ts): only ADMIN/USER may open the
-  // inbox, decided from the current database role; travel-only roles are
-  // redirected, unknown/deactivated sessions fall back to login.
+  // W2 permission policy: opening the inbox requires the effective
+  // whatsapp.inbox.view permission, resolved from the current database row;
+  // users without it are redirected, unknown/deactivated sessions fall back
+  // to login.
   const user = await getActiveUser(session);
   if (!user) redirect("/login");
-  if (!canUseInbox(user.role)) redirect("/travel");
+  if (!hasPermission(user, "whatsapp.inbox.view")) redirect("/travel");
 
-  return <ChatDashboard isAdmin={user.role === "ADMIN"} />;
+  return (
+    <ChatDashboard
+      isAdminRole={user.role === "ADMIN"}
+      canSend={hasPermission(user, "whatsapp.inbox.send")}
+      canAdminWhatsApp={hasPermission(user, "whatsapp.admin")}
+    />
+  );
 }

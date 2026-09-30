@@ -32,7 +32,7 @@ interface Log {
   user: { email: string; name: string } | null;
 }
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ canAdminWhatsApp }: { canAdminWhatsApp: boolean }) {
   const { connected, unauthorized, whatsAppState, disconnectSocket } = useSocket();
   const { toast } = useToast();
 
@@ -75,10 +75,14 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchUsers();
     fetchLogs();
-    axios
-      .get("/api/whatsapp/status")
-      .then((res) => setBuildInfo({ version: res.data.version, startedAt: res.data.startedAt }))
-      .catch(() => null);
+    // The build indicator reads version/startedAt from the full status payload,
+    // which only whatsapp.admin holders receive — skip the call otherwise.
+    if (canAdminWhatsApp) {
+      axios
+        .get("/api/whatsapp/status")
+        .then((res) => setBuildInfo({ version: res.data.version, startedAt: res.data.startedAt }))
+        .catch(() => null);
+    }
   }, []);
 
   async function handleCreateUser(e: React.FormEvent) {
@@ -211,27 +215,42 @@ export default function AdminDashboard() {
               <CardTitle>WhatsApp Connection</CardTitle>
               <CardDescription>
                 Socket: <Badge variant={connected ? "default" : "destructive"}>{unauthorized ? "session expired" : connected ? "connected" : "offline"}</Badge>{" "}
-                State: <Badge variant={whatsAppState?.state === "ready" ? "default" : "outline"}>{whatsAppState?.state || "initializing"}</Badge>
+                {canAdminWhatsApp && (
+                  <>
+                    State: <Badge variant={whatsAppState?.state === "ready" ? "default" : "outline"}>{whatsAppState?.state || "initializing"}</Badge>
+                  </>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Button onClick={() => handleWhatsAppAction("reconnect")} disabled={loading}>
-                  Reconnect
-                </Button>
-                <Button variant="destructive" onClick={() => handleWhatsAppAction("logout")} disabled={loading}>
-                  Logout
-                </Button>
-              </div>
+              {/* Hidden without the whatsapp.admin permission: the server
+                  already withholds the state details, QR and actions. */}
+              {canAdminWhatsApp ? (
+                <>
+                  <div className="flex gap-2">
+                    <Button onClick={() => handleWhatsAppAction("reconnect")} disabled={loading}>
+                      Reconnect
+                    </Button>
+                    <Button variant="destructive" onClick={() => handleWhatsAppAction("logout")} disabled={loading}>
+                      Logout
+                    </Button>
+                  </div>
 
-              {whatsAppState?.qrSvg ? (
-                <div className="rounded-lg border bg-white p-4">
-                  <p className="mb-2 text-sm font-medium">Scan this QR code with WhatsApp on your phone:</p>
-                  <div dangerouslySetInnerHTML={{ __html: whatsAppState.qrSvg }} className="inline-block" />
-                </div>
+                  {whatsAppState?.qrSvg ? (
+                    <div className="rounded-lg border bg-white p-4">
+                      <p className="mb-2 text-sm font-medium">Scan this QR code with WhatsApp on your phone:</p>
+                      <div dangerouslySetInnerHTML={{ __html: whatsAppState.qrSvg }} className="inline-block" />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {whatsAppState?.info || "Waiting for WhatsApp state..."}
+                    </p>
+                  )}
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  {whatsAppState?.info || "Waiting for WhatsApp state..."}
+                  You do not have the WhatsApp administration permission. Connection details and actions are
+                  available to whatsapp.admin holders only.
                 </p>
               )}
             </CardContent>

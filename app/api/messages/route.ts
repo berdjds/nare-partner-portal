@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { requireInboxAccess } from "@/lib/access-policy";
+import { requirePermission } from "@/lib/access-policy";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  // Interim W1 policy: chat inbox is ADMIN/USER only, from the current DB role.
-  const access = await requireInboxAccess(session);
+  // W2 permission policy: chat history requires the effective
+  // whatsapp.inbox.view permission, resolved from the current DB row.
+  const access = await requirePermission(session, "whatsapp.inbox.view");
   if (!access.allowed) return access.response;
 
   const { searchParams } = new URL(req.url);

@@ -42,7 +42,18 @@ interface Message {
   timestamp: string;
 }
 
-export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
+export default function ChatDashboard({
+  isAdminRole,
+  canSend,
+  canAdminWhatsApp,
+}: {
+  /** ADMIN database role — controls the Admin panel nav button (the /admin page itself is role-gated). */
+  isAdminRole: boolean;
+  /** whatsapp.inbox.send — controls the composer, attachment and new-message controls. */
+  canSend: boolean;
+  /** whatsapp.admin — controls the raw connection-state display (full whatsapp_state payload). */
+  canAdminWhatsApp: boolean;
+}) {
   const { connected, unauthorized, whatsAppState, lastEvent, disconnectSocket } = useSocket();
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
@@ -83,9 +94,10 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
-  // Interim W1 policy: admins read the raw connection state from their full
-  // whatsapp_state payload; other inbox users receive only { connected }.
-  const waAvailable = isAdmin ? whatsAppState?.state === "ready" : whatsAppState?.connected === true;
+  // W2 permission policy: whatsapp.admin holders read the raw connection
+  // state from their full whatsapp_state payload; other inbox users receive
+  // only { connected }.
+  const waAvailable = canAdminWhatsApp ? whatsAppState?.state === "ready" : whatsAppState?.connected === true;
 
   async function handleStartNewChat(e?: React.FormEvent) {
     e?.preventDefault();
@@ -234,7 +246,7 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
             WA
           </div>
           <h1 className="hidden font-semibold min-[400px]:inline">WAControl</h1>
-          {isAdmin && (
+          {isAdminRole && (
             <Button variant="outline" size="sm" onClick={() => (window.location.href = "/admin")}>
               Admin
             </Button>
@@ -247,19 +259,21 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
             <Plane className="h-4 w-4 sm:mr-1" />
             <span className="hidden sm:inline">Travel</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setNewChatOpen(true)}>
-            <MessageSquarePlus className="h-4 w-4 sm:mr-1" />
-            <span className="hidden sm:inline">New message</span>
-          </Button>
+          {canSend && (
+            <Button variant="outline" size="sm" onClick={() => setNewChatOpen(true)}>
+              <MessageSquarePlus className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">New message</span>
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <Badge className="hidden sm:inline-flex" variant={connected ? "default" : "destructive"}>
             {unauthorized ? "Session expired" : connected ? "Socket connected" : "Socket offline"}
           </Badge>
-          {/* Interim W1 policy: non-admins see availability only as
-              connected/not connected, never the raw connection state. */}
+          {/* whatsapp.admin holders see the raw connection state; other inbox
+              users see availability only as connected/not connected. */}
           <Badge variant={waAvailable ? "default" : "outline"}>
-            {isAdmin
+            {canAdminWhatsApp
               ? whatsAppState?.state || "initializing"
               : waAvailable
                 ? "Connected"
@@ -366,45 +380,49 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <div ref={messagesEndRef} />
               </div>
 
-              <form onSubmit={handleSend} className="border-t p-3">
-                {selectedFile && (
-                  <div className="mb-2 flex items-center gap-2 text-sm">
-                    <Paperclip className="h-4 w-4" />
-                    <span className="truncate">{selectedFile.name}</span>
-                    <button type="button" className="text-destructive" onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
-                      ×
-                    </button>
+              {/* The composer is hidden without whatsapp.inbox.send — the
+                  server already rejects the send API with 403. */}
+              {canSend && (
+                <form onSubmit={handleSend} className="border-t p-3">
+                  {selectedFile && (
+                    <div className="mb-2 flex items-center gap-2 text-sm">
+                      <Paperclip className="h-4 w-4" />
+                      <span className="truncate">{selectedFile.name}</span>
+                      <button type="button" className="text-destructive" onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
+                      onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])}
+                    />
+                    <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()}>
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <Textarea
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Type a message..."
+                      className="min-h-0 flex-1 resize-none"
+                      rows={1}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
+                    />
+                    <Button type="submit" disabled={loading || (!input.trim() && !selectedFile)}>
+                      <Send className="h-4 w-4" />
+                    </Button>
                   </div>
-                )}
-                <div className="flex items-end gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
-                    onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])}
-                  />
-                  <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()}>
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  <Textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Type a message..."
-                    className="min-h-0 flex-1 resize-none"
-                    rows={1}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                  />
-                  <Button type="submit" disabled={loading || (!input.trim() && !selectedFile)}>
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              </form>
+                </form>
+              )}
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
@@ -412,7 +430,7 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
               <p>Select a chat to start messaging</p>
               {!waAvailable && (
                 <p className="mt-2 text-sm">
-                  {isAdmin
+                  {canAdminWhatsApp
                     ? `WhatsApp state: ${whatsAppState?.state || "initializing"}`
                     : "WhatsApp not connected"}
                 </p>
@@ -422,7 +440,8 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
         </main>
       </div>
 
-      <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
+      {canSend && (
+        <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Send message to new number</DialogTitle>
@@ -459,6 +478,7 @@ export default function ChatDashboard({ isAdmin }: { isAdmin: boolean }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

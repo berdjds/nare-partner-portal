@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { requireInboxAccess } from "@/lib/access-policy";
+import { requirePermission } from "@/lib/access-policy";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  // Interim W1 policy: chat inbox is ADMIN/USER only (ADVISOR/VALIDATOR → 403,
-  // no or deactivated session → 401), decided from the current DB role.
-  const access = await requireInboxAccess(session);
+  // W2 permission policy: the chat inbox requires the effective
+  // whatsapp.inbox.view permission (no or deactivated session → 401, missing
+  // permission → 403), resolved from the current DB row on every request.
+  const access = await requirePermission(session, "whatsapp.inbox.view");
   if (!access.allowed) return access.response;
 
   const chats = await prisma.chat.findMany({

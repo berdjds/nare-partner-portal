@@ -30,8 +30,10 @@
  * UserPermission table), resolved from the same database read (the override
  * rows load through the indexed (userId, key) relation in the one user
  * query), so an override edit takes effect on the next request exactly like a
- * role change. The gates below still enforce the interim role policy;
- * permission-aware gates use requirePermission().
+ * role change. The inbox surfaces (W2 perm-inbox: chat APIs, media, sockets,
+ * WhatsApp administration) enforce through requirePermission() and the
+ * permission-based requireWhatsAppAdminAccess(); the role predicates remain
+ * for the role-based redirects (app/page.tsx) and the travel gates.
  */
 
 import type { Session } from "next-auth";
@@ -145,14 +147,17 @@ export async function requireInboxAccess(session: Session | null): Promise<Acces
 }
 
 /**
- * Gate for WhatsApp administration. Everything except an active ADMIN gets
- * 401 — matching the pre-W1 POST /api/whatsapp/status behavior, which never
- * distinguished "logged in but not admin" from "no session".
+ * Gate for WhatsApp administration (W2 perm-inbox): requires the effective
+ * whatsapp.admin permission (an ADMIN denied the key, or a non-admin granted
+ * it, is decided by the permission, not the role). Everything without the
+ * permission gets 401 — matching the pre-W1 POST /api/whatsapp/status
+ * behavior, which never distinguished "logged in but not admin" from "no
+ * session".
  */
 export async function requireWhatsAppAdminAccess(session: Session | null): Promise<AccessDecision> {
   const user = await getActiveUser(session);
   if (!user) return denied(401, "Unauthorized");
-  if (!canAdministerWhatsApp(user.role)) return denied(401, "Unauthorized");
+  if (!user.permissions.has("whatsapp.admin")) return denied(401, "Unauthorized");
   return { allowed: true, user };
 }
 
