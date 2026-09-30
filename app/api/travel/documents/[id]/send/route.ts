@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { hasPermission } from "@/lib/permissions";
 import { ROLE_ADMIN } from "@/lib/travel/contracts";
 import { sendQuoteDocument } from "@/lib/travel/whatsapp-docs";
 import { getTravelActor, travelError, unauthorized } from "../../../guard";
@@ -11,9 +12,13 @@ const sendSchema = z.object({
 });
 
 // POST /api/travel/documents/[id]/send — delivers the rendered PDF over
-// WhatsApp. Allowed for the request owner, the assigned validator and ADMIN.
-// INTERNAL documents are additionally restricted per recipient (admins /
-// validators only) inside sendQuoteDocument.
+// WhatsApp. W2 (perm-travel): sending a CLIENT document requires the
+// travel.client_docs.send permission — deliberately separate from
+// whatsapp.inbox.send so a travel-only user can send a client quotation
+// without inbox access. The pre-W2 record rule stays as the minimum on top:
+// request owner, the assigned validator and ADMIN. INTERNAL documents are
+// additionally restricted per recipient (admins / validators only) inside
+// sendQuoteDocument.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const actor = await getTravelActor();
@@ -34,6 +39,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { version: { select: { requestId: true, request: { select: { ownerId: true } } } } },
     });
     if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (doc.kind === "CLIENT" && !hasPermission(actor, "travel.client_docs.send")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     if (actor.role !== ROLE_ADMIN && doc.version.request.ownerId !== actor.id) {
       const assignment = await prisma.validationAssignment.findFirst({

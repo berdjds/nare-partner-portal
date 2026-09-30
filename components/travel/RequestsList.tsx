@@ -38,9 +38,10 @@ const EMPTY_TRAVELERS: TravelerSetupView = {
 interface RequestsListProps {
   role: string;
   userId: string;
+  permissions: string[];
 }
 
-export default function RequestsList({ role, userId }: RequestsListProps) {
+export default function RequestsList({ role, userId, permissions }: RequestsListProps) {
   const { toast } = useToast();
   const [requests, setRequests] = useState<RequestListItem[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -62,7 +63,9 @@ export default function RequestsList({ role, userId }: RequestsListProps) {
     travelers: { ...EMPTY_TRAVELERS },
   });
 
-  const canCreate = role === "ADMIN" || role === "ADVISOR";
+  // W2: the create dialog also requires the travel.create permission the
+  // server enforces on POST /api/travel/requests.
+  const canCreate = (role === "ADMIN" || role === "ADVISOR") && permissions.includes("travel.create");
   const isAdmin = role === "ADMIN";
   const invalidDates = form.startDate !== "" && form.endDate !== "" && !(form.endDate > form.startDate);
 

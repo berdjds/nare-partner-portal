@@ -4,12 +4,15 @@
  * the server — not hidden buttons.
  *
  * - USER role: 401 on requests/settings/rates (and every other travel route)
- *   unless they hold an active validation assignment (v0.10.0 — see the last
- *   describe block).
+ *   unless they hold an active validation assignment AND the matching
+ *   permission grants (W2: the assignment path also requires travel.access /
+ *   travel.review / travel.internal.download — see the last describe block).
  * - ADVISOR: 403 on PUT settings and PATCH rates (ADMIN-only); may POST requests.
  * - VALIDATOR: 403 creating requests; 403 issuing (not owner/admin).
  * - Non-current validator: 403 NOT_ASSIGNED_VALIDATOR on review.
- * - INTERNAL documents: 403 for ADVISOR, 200 for VALIDATOR/ADMIN.
+ * - INTERNAL documents (D2): 403 for ADVISOR; 403 for VALIDATOR without an
+ *   explicit travel.internal.download grant; 200 for a granted VALIDATOR and
+ *   for ADMIN (the key is in the ADMIN preset only).
  * - ADVISOR list scope: sees only own requests.
  */
 
@@ -172,7 +175,7 @@ describe("request creation and workflow actions", () => {
 });
 
 describe("document kind authorization", () => {
-  it("INTERNAL documents reject ADVISOR (403) and allow VALIDATOR/ADMIN; CLIENT allows any travel role", async () => {
+  it("INTERNAL requires travel.internal.download (D2): 403 for ADVISOR and ungranted VALIDATOR, 200 for granted VALIDATOR/ADMIN; CLIENT allows any travel role", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "qa-docs-"));
     const file = path.join(dir, "doc.pdf");
     writeFileSync(file, "%PDF-1.4 qa");
@@ -199,8 +202,24 @@ describe("document kind authorization", () => {
     expect(clientRes.status).toBe(200);
     expect(clientRes.headers.get("Content-Type")).toBe("application/pdf");
 
+    // D2: travel.internal.download is in the ADMIN preset only, so a plain
+    // VALIDATOR (no grant) is now refused INTERNAL downloads.
     session(fx.validator);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(403);
+
+    // ...but an explicit grant re-opens them for a VALIDATOR.
+    const grantedValidator = await prisma.user.create({
+      data: {
+        email: "validator-granted@test.io",
+        name: "Granted Validator",
+        password: "x",
+        role: "VALIDATOR",
+        permissions: { create: [{ key: "travel.internal.download", allowed: true }] },
+      },
+    });
+    session(grantedValidator);
     expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(200);
+
     session(fx.admin);
     expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(200);
 
@@ -242,13 +261,23 @@ describe("assigned USER-role validator (v0.10.0)", () => {
     expect((await assignableRoute.GET()).status).toBe(401);
   });
 
-  it("module access opens with an assignment; lists and details are scoped", async () => {
+  it("module access opens with an assignment plus grants; lists and details are scoped", async () => {
     const { request, version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
     await saveContent(prisma, actorOf(fx.advisor), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
     await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.plainUser.id });
     const { hash } = await workflow.submit(actorOf(fx.advisor), request.id);
 
+    // W2: an assignment alone no longer opens the module — travel.access is
+    // required on top of the assignment.
     session(fx.plainUser);
+    expect((await requestsRoute.GET(req("http://t/api/travel/requests"))).status).toBe(401);
+
+    // W2: assignment + admin grants unlock; the assignment stays a runtime
+    // record-level check on top of the permissions.
+    for (const key of ["travel.access", "travel.internal.download", "travel.review"]) {
+      await prisma.userPermission.create({ data: { userId: fx.plainUser.id, key, allowed: true } });
+    }
+
     const list = await (await requestsRoute.GET(req("http://t/api/travel/requests"))).json();
     expect(list.map((r: any) => r.id)).toEqual([request.id]);
 
@@ -256,8 +285,9 @@ describe("assigned USER-role validator (v0.10.0)", () => {
     const own = await requestByIdRoute.GET(req(`http://t/api/travel/requests/${request.id}`), { params: Promise.resolve({ id: request.id }) });
     expect(own.status).toBe(200);
 
-    // ...and the assignment also unlocks the INTERNAL document download
-    // (submit rendered one; a USER role alone would be forbidden).
+    // ...and the travel.internal.download grant unlocks the INTERNAL document
+    // download (submit rendered one; a USER role without the grant would be
+    // forbidden — D2).
     const internalDoc = await prisma.quoteDocument.findUnique({
       where: { idempotencyKey: `internal-${version.id}` },
     });
@@ -274,7 +304,7 @@ describe("assigned USER-role validator (v0.10.0)", () => {
     });
     expect(denied.status).toBe(404);
 
-    // Review through the route works with role USER.
+    // Review through the route works with role USER plus the travel.review grant.
     const ok = await reviewRoute.POST(
       req(`http://t/api/travel/versions/${version.id}/review`, {
         method: "POST",

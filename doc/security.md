@@ -244,8 +244,19 @@ edit takes effect on the next request, and `requirePermission(session, key)`
 gates on it (401 without an active session, 403 without the key). The inbox
 surfaces (W2 perm-inbox: dashboard page, `/api/chats`, `/api/messages`,
 `/api/send`, `/api/whatsapp/status`, `/uploads/*`, socket handshake/rooms)
-enforce through these keys; the travel and admin surfaces still check the
-interim role predicates above until their own wiring tasks land.
+enforce through these keys. The travel surfaces (W2 perm-travel) enforce them
+too: `getTravelActor()` requires `travel.access` on top of the role/assignment
+rule (so an assignment alone no longer opens the module — the user also needs
+the grant); the workflow gates `createRequest`/`createRevision` on
+`travel.create`, `review` on `travel.review` and `issue` on `travel.issue`,
+with the role and record-level rules (owner, assigned validator) kept as the
+minimum — a permission can only narrow, never widen; the document routes gate
+CLIENT download/send on `travel.client_docs.download` /
+`travel.client_docs.send` (the send key is deliberately separate from
+`whatsapp.inbox.send`, so a travel-only user can send a client quotation
+without inbox access) and INTERNAL download on `travel.internal.download`
+(D2: validators need an explicit grant). The admin surfaces still check the
+interim role predicates above until their own wiring task lands.
 
 **Rate limiting and media validation.** Still open (see below).
 

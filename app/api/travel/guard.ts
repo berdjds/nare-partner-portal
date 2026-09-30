@@ -3,10 +3,15 @@
  *
  * Every travel route requires a session whose current database role is in
  * TRAVEL_ROLES (ADMIN / ADVISOR / VALIDATOR) — or any user holding an active
- * validation assignment (v0.10.0). Role and session version are re-read from
+ * validation assignment (v0.10.0) — AND the effective travel.access
+ * permission (W2 perm-travel): the role/assignment rule stays as the minimum,
+ * the permission can only narrow it (a deny override locks the user out of
+ * the whole module). Role, session version and permissions are re-read from
  * the database via getActiveUser(), never trusted from the JWT, so a revoked
- * or stale token is rejected here. Finer-grained RBAC lives in the workflow
- * layer (lib/travel/workflow.ts), which throws WorkflowError with an HTTP
+ * or stale token — or a permission edit — is rejected here on the next
+ * request. The actor carries the effective permissions into the workflow
+ * layer, which gates create/review/issue per key; finer record-level RBAC
+ * lives in lib/travel/workflow.ts, which throws WorkflowError with an HTTP
  * status that travelError() maps verbatim.
  */
 
@@ -15,6 +20,7 @@ import { getServerSession } from "next-auth/next";
 import { ZodError } from "zod";
 import { authOptions } from "@/lib/auth";
 import { getActiveUser } from "@/lib/access-policy";
+import { hasPermission } from "@/lib/permissions";
 import { canAccessTravel } from "@/lib/travel/access";
 import { WorkflowError, type WorkflowActor } from "@/lib/travel/workflow";
 import { ResolutionError } from "@/lib/travel/resolve";
@@ -23,12 +29,14 @@ export async function getTravelActor(): Promise<WorkflowActor | null> {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
   if (!user) return null;
+  if (!hasPermission(user, "travel.access")) return null;
   if (!(await canAccessTravel(user.id, user.role))) return null;
   return {
     id: user.id,
     role: user.role,
     name: user.name,
     email: user.email,
+    permissions: user.permissions,
   };
 }
 

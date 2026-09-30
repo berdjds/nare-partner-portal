@@ -40,6 +40,15 @@ export default function DocumentsTab({ ctx }: { ctx: DetailContext }) {
   const canRetry = ctx.isAdmin;
   const canSend = ctx.isAdmin || ctx.isOwner || ctx.detail.currentValidatorId === ctx.userId;
 
+  // W2: mirror the per-kind document permissions the server enforces —
+  // downloads and client-document sends hide when the key is missing.
+  const canDownload = (d: DocumentDetail) =>
+    d.kind === "INTERNAL"
+      ? ctx.permissions.includes("travel.internal.download")
+      : ctx.permissions.includes("travel.client_docs.download");
+  const canSendDoc = (d: DocumentDetail) =>
+    canSend && (d.kind !== "CLIENT" || ctx.permissions.includes("travel.client_docs.send"));
+
   return (
     <Card>
       <CardHeader>
@@ -73,14 +82,14 @@ export default function DocumentsTab({ ctx }: { ctx: DetailContext }) {
                   <TableCell className="font-mono text-xs">{shortHash(d.sha256)}</TableCell>
                   <TableCell className="pr-3">
                     <div className="flex gap-2">
-                      {d.renderState === "READY" && (
+                      {d.renderState === "READY" && canDownload(d) && (
                         <a href={`/api/travel/documents/${d.id}`} target="_blank" rel="noreferrer">
                           <Button size="sm" variant="outline">
                             Download
                           </Button>
                         </a>
                       )}
-                      {d.renderState === "READY" && canSend && (
+                      {d.renderState === "READY" && canSendDoc(d) && (
                         <Button size="sm" variant="outline" onClick={() => setSendDoc(d)}>
                           Send via WhatsApp
                         </Button>

@@ -149,10 +149,14 @@ export function effectivePermissions(
   return effective;
 }
 
-/** Convenience predicate over anything carrying an effective permission set (e.g. ActiveUser). */
+/**
+ * Convenience predicate over anything carrying an effective permission set
+ * (e.g. ActiveUser). The set may be absent (e.g. an unresolved WorkflowActor)
+ * — an absent set never satisfies a key.
+ */
 export function hasPermission(
-  user: { permissions: ReadonlySet<PermissionKey> } | null | undefined,
+  user: { permissions?: ReadonlySet<PermissionKey> | undefined } | null | undefined,
   key: PermissionKey,
 ): boolean {
-  return user?.permissions.has(key) ?? false;
+  return user?.permissions?.has(key) ?? false;
 }

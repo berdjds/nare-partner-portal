@@ -45,8 +45,12 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
     (ctx.isOwner || ctx.isAdmin) && ctx.isLatestVersion && ["DRAFT", "CHANGES_REQUESTED"].includes(version.status);
   // Self-validation is allowed: the assigned validator reviews, even when
   // they also submitted the version (v0.10.0).
-  const canReview = version.status === "PENDING_VALIDATION" && isAssignedValidator;
-  const canIssue = (ctx.isOwner || ctx.isAdmin) && version.status === "APPROVED";
+  // W2: review/issue buttons hide when the user lacks the permission the
+  // server enforces on the corresponding workflow action.
+  const canReview =
+    version.status === "PENDING_VALIDATION" && isAssignedValidator && ctx.permissions.includes("travel.review");
+  const canIssue =
+    (ctx.isOwner || ctx.isAdmin) && version.status === "APPROVED" && ctx.permissions.includes("travel.issue");
   const canOutcome = (ctx.isOwner || ctx.isAdmin) && version.status === "ISSUED";
   const canAssign = (ctx.isOwner || ctx.isAdmin) && ["DRAFT", "CHANGES_REQUESTED"].includes(detail.status);
 

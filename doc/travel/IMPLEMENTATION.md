@@ -209,7 +209,10 @@ A versioned B2B travel package costing and quotation module inside WAControl:
     requires the current active assignment, reassign still revokes the former validator, and
     APPROVE is still blocked on engine BLOCKER issues. Users without a travel role enter the
     module when they hold an active assignment (`canAccessTravel` in `lib/travel/access.ts`,
-    used by both the API guard and the page gates); their request list and request details are
+    used by both the API guard and the page gates); since W2 (perm-travel) they additionally
+    need the effective `travel.access` permission (and `travel.review` to decide,
+    `travel.internal.download` for INTERNAL sheets — D2), granted per user by an admin; the
+    assignment stays a runtime record-level check on top. Their request list and request details are
     scoped to own + assigned requests (existence of anything else is not disclosed), while
     per-action RBAC still applies. The validator picker reads the new
     `GET /api/travel/users/assignable` (any travel actor) instead of ADMIN-only `/api/users`.
