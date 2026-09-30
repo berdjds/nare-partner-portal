@@ -163,16 +163,92 @@ Append this service block to the existing `docker-compose.yml` on the VPS. It fo
 
 - The SQLite database lives in `./wacontrol-data/dev.db` on the host. Make sure the `DATABASE_URL` environment variable uses the absolute path `file:/app/data/dev.db` inside the container.
 - Uploaded media is stored in `./wacontrol-uploads/`.
-- The WhatsApp session is stored in `./wacontrol-auth/`; protect this directory.
+- The WhatsApp sessions are stored in `./wacontrol-auth/` — one directory per account (`session/` for Marhaba, `session-nare/` for Nare, see below); protect this directory.
 - The container exposes port `3000` and relies on the existing `web` Docker network and Traefik container.
 - WebSocket traffic for Socket.io uses path `/api/socket`; Traefik passes WebSocket upgrade headers automatically.
 - **Real-time messages only:** messages that arrive while the session is `ready` are saved and displayed. After the client connects, the app also backfills at most the 20 most recent chats × 50 messages each (`BACKFILL_CHAT_LIMIT`/`BACKFILL_MESSAGE_LIMIT` in `lib/whatsapp.ts`); anything older is not captured.
 - **Phone must be online:** the mobile device does not need to be open, but it must have an internet connection for the WhatsApp Web session to receive messages.
 - Use the dashboard **New message** button to send messages to unsaved phone numbers.
 
+## WhatsApp business accounts (W3)
+
+WAControl runs two WhatsApp business accounts, each with its own
+`whatsapp-web.js` client and LocalAuth session:
+
+| Key | Display name | Purpose | Shipped state | Session directory |
+|-----|--------------|---------|---------------|-------------------|
+| `marhaba` | Marhaba Armenia | `INBOX` (the chat inbox) | Enabled | `.wwebjs_auth/session/` (legacy, no LocalAuth clientId) |
+| `nare` | Nare Travel and Tours | `TRAVEL` (travel-module sends) | **Disabled** | `.wwebjs_auth/session-nare/` (LocalAuth clientId `nare`) |
+
+The rows are created idempotently by `ensureDefaultAccounts()`
+(`lib/whatsapp-accounts.ts`, called from `prisma/seed.ts`); it never modifies an
+existing row, so owner configuration survives every deploy. On an existing
+deployment the two rows are simply inserted, and pre-existing chats, messages
+and notification deliveries are backfilled to `accountId = 'marhaba'` by the
+schema column defaults. **Releasing W3 changes nothing for the live Marhaba
+account**: Nare ships disabled and no client is created for it until the owner
+enables it.
+
+Both session directories live under `.wwebjs_auth/`, which the `wacontrol-auth`
+volume mounts in full (`./wacontrol-auth:/app/.wwebjs_auth`), so both sessions
+persist across container restarts and are covered by the deploy gate's backup
+and restore of the auth dir. The Marhaba session is never disconnected,
+re-linked or reused by the Nare pairing flow.
+
+### Runbook: enabling and pairing Nare after the release
+
+1. Open the admin panel → **Accounts** tab → the **Nare Travel and Tours** card.
+2. Tick **Enabled**, then click **Connect**. The pairing QR appears on the card
+   (the full WhatsApp state with the QR is admin-only).
+3. On the Nare business phone: WhatsApp → Linked devices → Link a device, and
+   scan the QR.
+4. On `ready` the connected number is read from the linked session itself and
+   shown on the card as the account's verified number
+   (`WhatsAppAccount.verifiedNumber`).
+5. Publish the public number via the accounts **Configure** action (the
+   `displayName` / `publicNumber` / `enabled` fields of
+   `POST /api/whatsapp/accounts`). `publicNumber` is the contact number frozen
+   onto client quotation PDFs at submit time.
+
+The on-disk session is preserved when the account is disabled, so re-enabling
+and clicking Connect resumes without a new pairing; a fresh QR is only needed
+after an actual logout.
+
+### Resource note
+
+Each enabled account runs its own headless Chromium (Puppeteer) instance, so
+enabling Nare roughly doubles the WhatsApp browser memory footprint of the
+container. Check the available RAM on the current VPS plan before enabling the
+second account.
+
+### Startup and permissions
+
+At startup `server.ts` calls `initializeWhatsAppAccounts()`, which boots every
+**enabled** account via `Promise.allSettled` — one account failing to start
+never affects the other. The `scripts/patch-wwebjs.js` runtime patches still
+apply at container start (`docker-entrypoint.sh`).
+
+Nare's permission keys `whatsapp.nare.view` / `whatsapp.nare.send` /
+`whatsapp.nare.admin` are ADMIN-only by default; grant them to other users via
+per-user permission overrides in the admin users panel. Marhaba's keys are
+unchanged (`whatsapp.inbox.view` / `whatsapp.inbox.send`, `whatsapp.admin`).
+
+### Travel send routing
+
+All travel-module WhatsApp sends (client documents, notifications) go through
+the account named by `TravelSettings.whatsappAccountKey` (default `nare`). If
+that account is disabled or its client is not ready, the send fails with a
+coded, actionable error naming the account and is retried later on the **same**
+account — there is never a silent fallback to Marhaba. The account is part of
+the notification dedup key, so retries cannot duplicate a delivery.
+
 ## Scaling Notes
 
-WAControl maintains the WhatsApp client as an in-memory singleton in `lib/whatsapp.ts`. It is designed for a single server instance. Scaling horizontally would require externalizing the WhatsApp session state and message queue.
+WAControl holds one `whatsapp-web.js` client per enabled WhatsApp account in a
+`Map` anchored on `globalThis` in `lib/whatsapp.ts` (`state.accounts`) — one
+headless Chromium per enabled account, all inside a single server process. It
+is designed for a single server instance. Scaling horizontally would require
+externalizing the WhatsApp session state and message queue.
 
 ## CI/CD (GitHub Actions)
 
@@ -222,7 +298,8 @@ Between the freeze start and cutover the deploy gate stops the `wacontrol-app` c
 which stops every writer:
 
 - the Next.js API routes and Socket.io handlers (all HTTP writes),
-- the in-process WhatsApp Web client (inbound message persistence and outbound sends),
+- the in-process WhatsApp Web clients, one per enabled account (inbound message persistence and
+  outbound sends),
 - the travel notification outbox worker (EMAIL/WHATSAPP deliveries) and the
   overdue-validation sweep,
 - bootstrap seeds (they run only through the deploy gate), and the container-entrypoint
@@ -236,7 +313,7 @@ trials and cutover do not sit between the two log lines.
 
 ### Inbound WhatsApp during the freeze
 
-While the container is stopped the WhatsApp Web session is offline: incoming customer
+While the container is stopped the WhatsApp Web sessions are offline: incoming customer
 messages are **not received by the app** and are not queued anywhere for later delivery.
 After the app reconnects, only live events from that point onward plus the bounded backfill
 (at most 20 chats × 50 messages each, `lib/whatsapp.ts`) are captured — messages that
@@ -273,8 +350,8 @@ accordingly around deploys.
 - **Not guaranteed:** media files added to `wacontrol-uploads/` after the backup (they are
   neither in the export nor restored — preserve them from a separate copy if needed); rows
   in tables without `createdAt`/`updatedAt` (listed under `skippedTables` in the export —
-  re-create those manually); the WhatsApp session returns to its backup-time state and may
-  require re-pairing; messages that arrived while the session was offline (see above).
+  re-create those manually); the WhatsApp sessions return to their backup-time state and may
+  require re-pairing; messages that arrived while the sessions were offline (see above).
 
 ### Runbook: post-cutover failure with `ROLLBACK_COMPATIBLE=no`
 
