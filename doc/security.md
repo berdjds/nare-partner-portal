@@ -90,9 +90,10 @@ comma-separated `SOCKET_ALLOWED_ORIGINS`, for local development). There is no
 `Access-Control-Allow-Origin: *` response header (the `/api/socket` headers in
 `next.config.js` were removed) and a missing `Origin` header is refused too.
 On top of the origin gate, every handshake authenticates the NextAuth session
-cookie and only active users holding a socket-eligible permission
-(`whatsapp.inbox.view` or `whatsapp.admin`) connect — see "Access policy and
-permission model" below.
+cookie and only active users holding at least one socket-eligible permission
+connect (W3: any WhatsApp account's view or admin permission —
+`whatsapp.inbox.view`, `whatsapp.nare.view`, `whatsapp.admin`,
+`whatsapp.nare.admin`) — see "Access policy and permission model" below.
 
 ### Input Validation
 
@@ -169,24 +170,51 @@ deactivated or deleted user gets **401** (their credential is revoked, not merel
 under-privileged).
 
 **Pages** (`app/page.tsx`, `app/dashboard/page.tsx`): ADVISOR/VALIDATOR are redirected to
-`/travel`; the dashboard additionally requires the `whatsapp.inbox.view` permission
-(without it → `/travel`, unknown/inactive sessions → `/login`). ADMIN continues to
-`/admin`, USER to `/dashboard`. The dashboard hides the composer, attachment and
-new-message controls without `whatsapp.inbox.send`; the admin page hides the connection
-controls and QR without `whatsapp.admin`.
+`/travel`; the dashboard requires the view permission of at least one WhatsApp account
+(W3: `whatsapp.inbox.view` for marhaba, `whatsapp.nare.view` for nare — without any →
+`/travel`, unknown/inactive sessions → `/login`) and shows an account switcher limited to
+the accounts the user may view. ADMIN continues to `/admin`, USER to `/dashboard`. The
+dashboard hides the composer, attachment and new-message controls when the selected
+account's send permission is missing; the admin page's accounts tab shows only the accounts
+the caller may administer (the `/api/whatsapp/accounts` API answers 401 when there are
+none), withholding their states, QR and actions.
 
 **Chat APIs** (`/api/chats`, `/api/messages`, `/api/send`): **401** without a session and for
-deactivated users; **403** for active users without the permission. Reading (chats,
-messages) requires `whatsapp.inbox.view`; sending requires `whatsapp.inbox.send` — view
-and send are separate keys.
+deactivated users; **403** for active users without the permission. Every request selects the
+WhatsApp account with `?account=` (query for chats/messages) or `account` (body for send),
+defaulting to `marhaba` — the pre-W3 behavior for existing callers. Reading (chats, messages)
+requires the account's view permission (`whatsapp.inbox.view` for marhaba,
+`whatsapp.nare.view` for nare); sending requires its send permission (`whatsapp.inbox.send` /
+`whatsapp.nare.send`) — view and send are separate keys per account.
 
-**WhatsApp status** (`/api/whatsapp/status`): GET returns full details (`state`, `info`,
-pairing `qrSvg`, `version`, `startedAt`) to holders of `whatsapp.admin`; holders of
-`whatsapp.inbox.view` receive only `{ "connected": boolean }` (availability as
-connected/not connected); everyone else gets 403. POST (reconnect/logout) requires
-`whatsapp.admin` and answers **401** to everyone without it, logged in or not (the pre-W1
-contract). The dashboard badge shows the raw connection state to `whatsapp.admin` holders
-and only connected/not connected to other inbox users.
+**WhatsApp status** (`/api/whatsapp/status`): the account is selected with `?account=` (GET) or
+body `account` (POST), defaulting to `marhaba`; unknown account keys get **400**. GET returns
+full details (`state`, `info`, pairing `qrSvg`, `version`, `startedAt`) to holders of the
+account's admin permission (`whatsapp.admin` for marhaba, `whatsapp.nare.admin` for nare);
+holders of the account's view permission receive only `{ "connected": boolean }` (availability
+as connected/not connected); everyone else gets 403. POST (reconnect/logout) requires the
+account's admin permission and answers **401** to everyone without it, logged in or not (the
+pre-W1 contract). The dashboard badge shows the raw connection state to admin-permission
+holders and only connected/not connected to other inbox users.
+
+**WhatsApp accounts admin API** (`/api/whatsapp/accounts`, W3): GET lists the accounts with
+their runtime state and pairing QR, filtered to the accounts the caller administrates — a
+caller with no account admin permission gets **401**. POST performs the per-account actions
+`configure` (display name, public number, enabled), `connect`, `reconnect` and `disconnect`,
+each gated by the target account's admin permission (`whatsapp.admin` / `whatsapp.nare.admin`).
+
+**Travel WhatsApp routing (W3, R3).** Every WhatsApp send from the travel module — client
+document PDFs via `lib/travel/whatsapp-docs.ts` and workflow notifications via
+`lib/travel/notifications.ts` — resolves the account from `TravelSettings.whatsappAccountKey`
+(default `nare`), with deliberately **no silent fallback to marhaba**: a disabled account fails
+with WorkflowError `TRAVEL_WHATSAPP_ACCOUNT_DISABLED` (503), a missing account row with
+`TRAVEL_WHATSAPP_ACCOUNT_NOT_CONFIGURED`, and a not-ready client with a send error naming the
+account. The failed `NotificationDelivery` stays retryable and retries go to the SAME account:
+the account id is stamped on the row at queue time and is part of the dedup key
+(`<accountId>:<eventId>:<recipientId>:<channel>`), so a retry can neither duplicate the
+delivery nor switch accounts. This send path is a system path gated by the
+`travel.client_docs.send` permission, not by the inbox/nare send keys — so a travel-only user
+can deliver client documents without any WhatsApp inbox permission.
 
 **Media** (`/uploads/*`, served by `lib/uploads.ts` mounted in `server.ts` before the Next.js
 handler): the pathname is percent-decoded, slash-collapsed and normalized before matching
@@ -194,8 +222,14 @@ handler): the pathname is percent-decoded, slash-collapsed and normalized before
 `//uploads/…`) are intercepted too instead of being served unsigned by Next's decoded
 public/ lookup; undecodable URLs get **400** and non-GET/HEAD methods **405**. The gate
 itself requires a valid, unexpired NextAuth session cookie (`next-auth/jwt` decode with
-`NEXTAUTH_SECRET`), an active user from the database holding `whatsapp.inbox.view`, and a
-normalized path inside `public/uploads/`. Responses stream the file with its mime type and
+`NEXTAUTH_SECRET`), an active user from the database holding the media's account view
+permission (W3), and a normalized path inside `public/uploads/`. Media is per account:
+files under `/uploads/<accountKey>/` (e.g. `/uploads/nare/…`) require that account's view
+key (`whatsapp.nare.view`), flat paths are marhaba's legacy layout (`whatsapp.inbox.view`).
+The account is derived from the same decoded, normalized path that is streamed, so the
+permission decision and the served file always agree (`/uploads/nare/../x.txt` normalizes
+to marhaba's `x.txt`, not a nare file) — a marhaba-only user cannot stream nare media and
+vice versa. Responses stream the file with its mime type and
 `Cache-Control: private, no-store`. Otherwise: **401** (no/invalid/expired/revoked session),
 **403** (active user without the permission), **404** (traversal or missing file). Existing
 and missing files are indistinguishable to unauthorized callers — file existence is never
@@ -206,16 +240,23 @@ leaked.
 handshake, then an `io.use` middleware decodes the NextAuth session cookie
 (`next-auth/jwt` with `NEXTAUTH_SECRET`) and refuses anything missing, forged or
 expired, exactly like the media gate. The user is then loaded from the database
-and must be active and hold at least one socket-eligible permission
-(`whatsapp.inbox.view` or `whatsapp.admin`) — anonymous, travel-only and
-deactivated sessions get the `unauthorized` connect_error and never connect.
-The SERVER places sockets in rooms by current effective permission
-(`whatsapp.inbox.view` → `inbox`, `whatsapp.admin` → `admins`); no
+and must be active and hold at least one socket-eligible permission — W3:
+ANY account's view or admin permission (`whatsapp.inbox.view`,
+`whatsapp.nare.view`, `whatsapp.admin`, `whatsapp.nare.admin`) — anonymous,
+travel-only and deactivated sessions get the `unauthorized` connect_error and
+never connect. Rooms are per WhatsApp account (W3): `inbox:<accountKey>` and
+`admins:<accountKey>` (helpers `inboxRoom`/`adminsRoom`; the legacy
+`INBOX_ROOM`/`ADMINS_ROOM` constants equal the marhaba rooms). The SERVER
+places sockets in rooms by current effective permission per account
+(`whatsapp.inbox.view` → `inbox:marhaba`, `whatsapp.nare.view` → `inbox:nare`,
+`whatsapp.admin` → `admins:marhaba`, `whatsapp.nare.admin` → `admins:nare`); no
 client-to-server handlers exist and anything a client emits is
-ignored and logged (`socket.onAny`). Emits are room-scoped: `message` and
-`chat_update` go to `inbox` only; availability `{ connected: boolean }` goes to
-`inbox` only; the full `whatsapp_state` (including `info` and the pairing
-`qrSvg`) goes to `admins` only, including on connection. Two revalidation
+ignored and logged (`socket.onAny`). Emits are room- and account-scoped:
+`message` and `chat_update` go to the account's `inbox:<key>` room only, with
+`accountKey` in the payload; availability `{ accountKey, connected }` goes to
+`inbox:<key>` only; the full `whatsapp_state` (including `info` and the
+pairing `qrSvg`) goes to that account's `admins:<key>` room only, including on
+connection — so an account's pairing QR never leaves its own admins room. Two revalidation
 mechanisms run while a socket is open: it is disconnected when its token's `exp`
 passes, and every 60s the user row is reloaded — deactivation, session revocation
 or losing every socket-eligible permission disconnects the socket, and room
@@ -242,16 +283,21 @@ per-device tokens: revocation is always all-sessions-of-a-user.
 
 **Permission model (W2 core).** `lib/permissions.ts` defines the closed set of
 permission keys (`admin.users`, `admin.settings`, `whatsapp.inbox.view`,
-`whatsapp.inbox.send`, `whatsapp.admin`, `travel.access`, `travel.create`,
+`whatsapp.inbox.send`, `whatsapp.admin`, `whatsapp.nare.view`,
+`whatsapp.nare.send`, `whatsapp.nare.admin`, `travel.access`, `travel.create`,
 `travel.review`, `travel.issue`, `travel.client_docs.download`,
 `travel.client_docs.send`, `travel.internal.view`, `travel.internal.download`),
 a default preset per role and the effective-permission resolution: **(role
 preset ∪ grants) − denies** — deny has the highest precedence, a grant adds a
 key the preset lacks. Presets reproduce the interim role policy exactly, with
-one decided exception (D2): the internal keys (`travel.internal.view`,
+two decided exceptions: (D2) the internal keys (`travel.internal.view`,
 `travel.internal.download`) are preset for ADMIN only, so non-admins have no
 internal-cost access until the owner confirms the proposed-permissions
-migration (D3). Per-user overrides live in the `UserPermission` table (one row
+migration (D3); and (W3) the Nare triple (`whatsapp.nare.view`,
+`whatsapp.nare.send`, `whatsapp.nare.admin`) is likewise preset for ADMIN only
+— no other role preset opts in, so other users reach the Nare account only
+through per-user overrides. `ACCOUNT_PERMISSIONS` maps each account key
+(`marhaba`, `nare`) to its view/send/admin triple. Per-user overrides live in the `UserPermission` table (one row
 per `(userId, key)`, `allowed` = grant/deny; rows with unknown keys are
 ignored and can never widen access). `getActiveUser()` /
 `getActiveUserById()` resolve the effective set from the same database read
@@ -317,7 +363,7 @@ exposes the matrix as a per-user Permissions dialog in the existing users tab
 - [ ] Generate strong `NEXTAUTH_SECRET` and `ADMIN_PASSWORD`.
 - [ ] Serve over HTTPS with a valid certificate.
 - [x] Restrict CORS/socket origins (W1: exact-origin allow-list via `allowRequest` in `lib/socket-auth.ts` — see "Access policy and permission model").
-- [x] Authenticate and room-scope Socket.io (W1: session-cookie handshake, server-managed `inbox`/`admins` rooms, 60s + token-expiry revalidation — see "Access policy and permission model").
+- [x] Authenticate and room-scope Socket.io (W1: session-cookie handshake, server-managed rooms — W3: per-account `inbox:<accountKey>`/`admins:<accountKey>`, 60s + token-expiry revalidation — see "Access policy and permission model").
 - [ ] Add rate limiting and input size limits.
 - [x] Protect `/uploads/` (W1: authenticated streaming via the custom server — see "Access policy and permission model"; media stays under `public/uploads/`).
 - [ ] Back up `.wwebjs_auth/` securely.

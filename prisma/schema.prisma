@@ -30,9 +30,29 @@ model User {
   notificationDeliveries   NotificationDelivery[]
 }
 
+// W3: one row per WhatsApp business account (marhaba = existing account,
+// nare = travel account, shipped disabled). accountId on Chat / Message /
+// NotificationDelivery is a plain string WITHOUT a foreign key on purpose:
+// keeping it relation-free means `prisma db push` on a populated database is
+// a pure ADD COLUMN with a default (no table rebuild, no FK check against a
+// WhatsAppAccount row that only exists after the bootstrap seed has run).
+model WhatsAppAccount {
+  id              String   @id // fixed: marhaba | nare
+  key             String   @unique // marhaba | nare
+  displayName     String
+  enabled         Boolean  @default(false)
+  sessionClientId String? // LocalAuth clientId; null = legacy default session dir (.wwebjs_auth/session)
+  publicNumber    String? // owner-published number, shown on client documents
+  verifiedNumber  String? // number read from the linked session (client.info) once ready
+  purpose         String   @default("INBOX") // INBOX | TRAVEL
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model Chat {
   id            String   @id @default(cuid())
-  remoteJid     String   @unique
+  accountId     String   @default("marhaba") // WhatsAppAccount.id (no FK — see above)
+  remoteJid     String
   name          String?
   phone         String?
   profilePicUrl String?
@@ -41,13 +61,18 @@ model Chat {
   updatedAt     DateTime @updatedAt
 
   messages Message[]
+
+  // Chat identity = account + remoteJid: the same customer can chat with both
+  // business accounts without mixing.
+  @@unique([accountId, remoteJid])
 }
 
 model Message {
   id                String   @id @default(cuid())
+  accountId         String   @default("marhaba") // WhatsAppAccount.id (no FK — see WhatsAppAccount)
   chatId            String
   remoteJid         String
-  whatsappMessageId String?  @unique
+  whatsappMessageId String?
   fromMe            Boolean  @default(false)
   body              String?
   type              String   @default("text") // text | image | voice | document | unknown
@@ -65,6 +90,10 @@ model Message {
 
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
+  // Dedupe is per account: the same WhatsApp message id can exist once per
+  // business account. SQLite treats NULLs as distinct, so rows without a
+  // whatsappMessageId are unaffected.
+  @@unique([accountId, whatsappMessageId])
   @@index([chatId, timestamp])
 }
 
@@ -464,6 +493,7 @@ model WorkflowEvent {
 // Transactional outbox: one row per event+recipient+channel, dedupKey unique.
 model NotificationDelivery {
   id          String    @id @default(cuid())
+  accountId   String    @default("marhaba") // WhatsAppAccount.id that sent/owns this delivery (no FK — see WhatsAppAccount)
   eventId     String
   recipientId String
   channel     String // EMAIL | WHATSAPP
@@ -600,5 +630,8 @@ model TravelSettings {
   // notifications + the INTERNAL costing sheet; the first member is
   // auto-assigned as validator on new requests.
   validatorUserIds        String  @default("[]")
+  // W3: WhatsApp account key (WhatsAppAccount.key) that all travel-module
+  // sends must use; there is no silent fallback to another account.
+  whatsappAccountKey      String  @default("nare")
   updatedAt               DateTime @updatedAt
 }

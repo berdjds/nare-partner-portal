@@ -5,6 +5,7 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "./TravelShell";
@@ -32,6 +33,11 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
   const [form, setForm] = useState({ companyTz: "", overdueReminderHours: "", requireSettingsForIssue: true, infantMaxAge: "2" });
   const [validatorIds, setValidatorIds] = useState<string[]>([]);
   const [assignableUsers, setAssignableUsers] = useState<TravelUser[]>([]);
+  // W3 (travel-nare): the WhatsApp account all travel sends go through.
+  const [accountKey, setAccountKey] = useState("");
+  const [waAccounts, setWaAccounts] = useState<
+    Array<{ key: string; displayName: string; enabled: boolean; purpose: string }>
+  >([]);
   const [branding, setBranding] = useState({
     companyName: "",
     companyPhone: "",
@@ -61,6 +67,7 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
         } catch {
           setValidatorIds([]);
         }
+        setAccountKey(res.data.settings.whatsappAccountKey ?? "nare");
         setBranding({
           companyName: res.data.settings.companyName ?? "",
           companyPhone: res.data.settings.companyPhone ?? "",
@@ -75,6 +82,12 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
       .get("/api/travel/users/assignable")
       .then((res) => setAssignableUsers(res.data as TravelUser[]))
       .catch(() => setAssignableUsers([]));
+    // Account list for the travel-account picker (ADMIN-only page; if the
+    // call fails the picker falls back to a plain input with the saved key).
+    axios
+      .get("/api/whatsapp/accounts")
+      .then((res) => setWaAccounts(res.data as Array<{ key: string; displayName: string; enabled: boolean; purpose: string }>))
+      .catch(() => setWaAccounts([]));
   }, [toast]);
 
   useEffect(load, [load]);
@@ -89,6 +102,7 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
         requireSettingsForIssue: form.requireSettingsForIssue,
         infantMaxAge: Number.parseInt(form.infantMaxAge || "2", 10),
         validatorUserIds: validatorIds,
+        whatsappAccountKey: accountKey || undefined,
       });
       toast("Settings saved", "success");
       load();
@@ -170,6 +184,29 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                   <p className="mt-1 text-xs text-muted-foreground">
                     A child whose age at return is at or below this counts as an infant. Infant counts are
                     auto-filled from child ages on new requests.
+                  </p>
+                </div>
+                <div>
+                  <Label>Travel WhatsApp account</Label>
+                  {waAccounts.length > 0 ? (
+                    <Select value={accountKey} onValueChange={setAccountKey}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {waAccounts.map((a) => (
+                          <SelectItem key={a.key} value={a.key}>
+                            {a.displayName} ({a.key}){a.enabled ? "" : " — disabled"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input value={accountKey} onChange={(e) => setAccountKey(e.target.value)} />
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Every travel-module WhatsApp send (documents, notifications) goes through this account — there
+                    is no fallback to another account. Pair and enable accounts under Admin → WhatsApp accounts.
                   </p>
                 </div>
                 <div>

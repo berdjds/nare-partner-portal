@@ -21,6 +21,9 @@
  * Role-to-preset mapping (from the current enforcement sites):
  * - admin.users / admin.settings / whatsapp.admin: ADMIN-only today
  *   (/api/users, travel settings/catalog/policies/fx, WhatsApp status + QR).
+ * - whatsapp.nare.view / whatsapp.nare.send / whatsapp.nare.admin (W3): the
+ *   Nare account's inbox triple; ADMIN-only by default (no other preset opts
+ *   in), granted per user like any other key.
  * - whatsapp.inbox.view / whatsapp.inbox.send: ADMIN + USER (canUseInbox).
  * - travel.access: the travel roles ADMIN / ADVISOR / VALIDATOR
  *   (TRAVEL_ROLES; a USER enters only via an active validation assignment,
@@ -50,6 +53,12 @@ export const PERMISSION_KEYS = [
   "whatsapp.inbox.send",
   /** Full WhatsApp status details, pairing QR, reconnect/logout, admins socket room. */
   "whatsapp.admin",
+  /** Open the Nare account inbox: its chats, messages and media (inbox:nare socket room). */
+  "whatsapp.nare.view",
+  /** Send WhatsApp messages from the Nare account inbox. */
+  "whatsapp.nare.send",
+  /** Administer the Nare account: status details, pairing QR, connect/reconnect/disconnect. */
+  "whatsapp.nare.admin",
   /** Use the B2B travel module at all (pages under /travel and the travel APIs). */
   "travel.access",
   /** Create travel requests and quote versions. */
@@ -110,9 +119,7 @@ export const ROLE_PRESETS: Readonly<Record<string, ReadonlySet<PermissionKey>>> 
   ]),
 };
 
-const EMPTY_PRESET: ReadonlySet<PermissionKey> = new Set();
-
-export function presetForRole(role: string | null | undefined): ReadonlySet<PermissionKey> {
+const EMPTY_PRESET: ReadonlySet<PermissionKey> = new Set();export function presetForRole(role: string | null | undefined): ReadonlySet<PermissionKey> {
   if (!role) return EMPTY_PRESET;
   return ROLE_PRESETS[role] ?? EMPTY_PRESET;
 }
@@ -159,4 +166,27 @@ export function hasPermission(
   key: PermissionKey,
 ): boolean {
   return user?.permissions?.has(key) ?? false;
+}
+
+/**
+ * W3 (wa-multi): per-account permission keys. The Marhaba inbox keeps the
+ * original whatsapp.inbox.* / whatsapp.admin keys; Nare gets its own triple,
+ * admin-only by default (no non-admin preset includes them). The travel
+ * module's sends are a system path gated by travel.client_docs.send, never by
+ * these inbox keys.
+ */
+export interface AccountPermissionSet {
+  view: PermissionKey;
+  send: PermissionKey;
+  admin: PermissionKey;
+}
+
+export const ACCOUNT_PERMISSIONS: Readonly<Record<string, AccountPermissionSet>> = {
+  marhaba: { view: "whatsapp.inbox.view", send: "whatsapp.inbox.send", admin: "whatsapp.admin" },
+  nare: { view: "whatsapp.nare.view", send: "whatsapp.nare.send", admin: "whatsapp.nare.admin" },
+};
+
+/** Permission keys for an account key, or null when the account key is unknown. */
+export function accountPermissions(accountKey: string): AccountPermissionSet | null {
+  return ACCOUNT_PERMISSIONS[accountKey] ?? null;
 }

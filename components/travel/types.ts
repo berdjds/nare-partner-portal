@@ -314,6 +314,8 @@ export interface TravelSettingsView {
   infantMaxAge: number;
   /** JSON array of user ids — the virtual validator group. */
   validatorUserIds: string;
+  /** W3: WhatsAppAccount.key that all travel-module WhatsApp sends use. */
+  whatsappAccountKey: string;
   updatedAt: string;
 }
 

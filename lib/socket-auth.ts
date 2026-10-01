@@ -18,17 +18,22 @@
  *    is decoded with NEXTAUTH_SECRET (next-auth/jwt, same as lib/uploads.ts).
  *    Missing, forged or expired tokens are rejected, then the user is loaded
  *    from the database and must be active and hold at least one socket-eligible
- *    permission (W2): whatsapp.inbox.view (message feed) or whatsapp.admin
- *    (full state/QR). Users with neither are refused.
+ *    permission (W2/W3): an account view permission (message feed) or an
+ *    account admin permission (full state/QR). Users with neither are refused.
  * 3. Server-managed rooms: the SERVER places each authenticated socket in the
- *    rooms its CURRENT effective permissions entitle it to: 'inbox' with
- *    whatsapp.inbox.view, 'admins' with whatsapp.admin. Clients are never
+ *    rooms its CURRENT effective permissions entitle it to (W3, wa-multi):
+ *    'inbox:<accountKey>' with the account's view permission
+ *    (whatsapp.inbox.view for marhaba, whatsapp.nare.view for nare) and
+ *    'admins:<accountKey>' with the account's admin permission
+ *    (whatsapp.admin / whatsapp.nare.admin). Clients are never
  *    asked to join anything and no client-to-server event handlers are
  *    registered — anything a client emits is ignored and logged
  *    (socket.onAny), so it cannot subscribe to rooms or trigger actions.
- * 4. Scoped emits (lib/whatsapp.ts): 'message' and 'chat_update' go to
- *    'inbox' only; availability { connected } goes to 'inbox' only; the full
- *    whatsapp_state (info + pairing qrSvg) goes to 'admins' only.
+ * 4. Scoped emits (lib/whatsapp.ts): 'message' and 'chat_update' go to the
+ *    account's 'inbox:<key>' room only; availability { connected, accountKey }
+ *    goes to 'inbox:<key>' only; the full whatsapp_state (info + pairing
+ *    qrSvg) goes to 'admins:<key>' only. Every payload carries accountKey so
+ *    clients can route it to the right account.
  * 5. Revalidation: a socket is disconnected when its token's exp passes, and
  *    every REVALIDATE_INTERVAL_MS each open socket's user is reloaded from
  *    the database — deactivation, a session-version (sv) mismatch against the
@@ -50,12 +55,23 @@ import type { IncomingMessage } from "http";
 import type { Server as SocketIOServer, Socket as ServerSocket, ExtendedError } from "socket.io";
 import { decode } from "next-auth/jwt";
 import { getActiveUserById } from "@/lib/access-policy";
-import { hasPermission, type PermissionKey } from "@/lib/permissions";
+import { ACCOUNT_PERMISSIONS, type PermissionKey } from "@/lib/permissions";
 
-/** Sockets with whatsapp.inbox.view land here; receives messages and availability. */
-export const INBOX_ROOM = "inbox";
-/** Sockets with whatsapp.admin; receives the full whatsapp_state including the pairing QR. */
-export const ADMINS_ROOM = "admins";
+/** Room receiving an account's messages and availability: inbox:<accountKey>. */
+export function inboxRoom(accountKey: string): string {
+  return `inbox:${accountKey}`;
+}
+/** Room receiving an account's full whatsapp_state including the pairing QR: admins:<accountKey>. */
+export function adminsRoom(accountKey: string): string {
+  return `admins:${accountKey}`;
+}
+
+/** Marhaba (default account) rooms — kept as named constants for existing emitters. */
+export const INBOX_ROOM = inboxRoom("marhaba");
+export const ADMINS_ROOM = adminsRoom("marhaba");
+
+/** The account keys sockets can join rooms for, derived from the permission matrix. */
+export const SOCKET_ACCOUNT_KEYS: ReadonlyArray<string> = Object.keys(ACCOUNT_PERMISSIONS);
 
 /** Re-check interval for open sockets (active + socket-eligible permissions). */
 export const REVALIDATE_INTERVAL_MS = 60_000;
@@ -86,18 +102,22 @@ export interface SocketAuthData {
 
 /**
  * A socket is worth keeping only while the user holds at least one
- * socket-eligible permission: whatsapp.inbox.view (inbox feed) or
- * whatsapp.admin (full state / pairing QR).
+ * socket-eligible permission: any account's view permission (inbox feed) or
+ * admin permission (full state / pairing QR).
  */
 function isSocketEligible(user: { permissions: ReadonlySet<PermissionKey> }): boolean {
-  return hasPermission(user, "whatsapp.inbox.view") || hasPermission(user, "whatsapp.admin");
+  return SOCKET_ACCOUNT_KEYS.some(
+    (key) =>
+      user.permissions.has(ACCOUNT_PERMISSIONS[key].view) ||
+      user.permissions.has(ACCOUNT_PERMISSIONS[key].admin)
+  );
 }
 
 export interface SocketStateHooks {
-  /** Full whatsapp_state payload for the admin dashboard (info, qrSvg, ...). */
-  getWhatsAppState: () => Record<string, unknown>;
-  /** Whether the WhatsApp client is currently 'ready' (availability only). */
-  isConnected: () => boolean;
+  /** Full whatsapp_state payload for one account (info, qrSvg, ...). */
+  getWhatsAppState: (accountKey: string) => Record<string, unknown>;
+  /** Whether one account's WhatsApp client is currently 'ready' (availability only). */
+  isConnected: (accountKey: string) => boolean;
 }
 
 /**
@@ -167,7 +187,7 @@ function readSessionCookie(req: IncomingMessage): string | null {
  * Decodes the handshake's session cookie and resolves it to the current,
  * active, socket-eligible user. Throws "unauthorized" for every failure mode —
  * missing/forged/expired token, unknown user, deactivated user, or effective
- * permissions without either whatsapp.inbox.view or whatsapp.admin — so the
+ * permissions without any account view or admin permission — so the
  * middleware can refuse identically.
  */
 async function authenticateHandshake(req: IncomingMessage): Promise<SocketAuthData> {
@@ -256,10 +276,12 @@ export async function revalidateSocket(socket: ServerSocket): Promise<void> {
 
 /** Places the socket in exactly the rooms its effective permissions entitle it to. */
 async function syncRooms(socket: ServerSocket, permissions: ReadonlySet<PermissionKey>): Promise<void> {
-  const entitled: Array<[string, boolean]> = [
-    [INBOX_ROOM, permissions.has("whatsapp.inbox.view")],
-    [ADMINS_ROOM, permissions.has("whatsapp.admin")],
-  ];
+  const entitled: Array<[string, boolean]> = [];
+  for (const key of SOCKET_ACCOUNT_KEYS) {
+    const perms = ACCOUNT_PERMISSIONS[key];
+    entitled.push([inboxRoom(key), permissions.has(perms.view)]);
+    entitled.push([adminsRoom(key), permissions.has(perms.admin)]);
+  }
   for (const [room, allow] of entitled) {
     if (allow) {
       if (!socket.rooms.has(room)) await socket.join(room);
@@ -318,8 +340,11 @@ export function attachSocketAuth(io: SocketIOServer, hooks: SocketStateHooks): v
 
     // The server, never the client, decides room membership — from the
     // effective permissions resolved at the handshake.
-    if (auth.permissions.has("whatsapp.inbox.view")) socket.join(INBOX_ROOM);
-    if (auth.permissions.has("whatsapp.admin")) socket.join(ADMINS_ROOM);
+    for (const key of SOCKET_ACCOUNT_KEYS) {
+      const perms = ACCOUNT_PERMISSIONS[key];
+      if (auth.permissions.has(perms.view)) socket.join(inboxRoom(key));
+      if (auth.permissions.has(perms.admin)) socket.join(adminsRoom(key));
+    }
 
     // No client-to-server handlers exist anywhere: whatever a client emits
     // (join/subscribe/send/...) is ignored and logged, so it can never
@@ -328,13 +353,18 @@ export function attachSocketAuth(io: SocketIOServer, hooks: SocketStateHooks): v
       console.warn(`[Socket] ignoring client-emitted event "${event}" from user ${auth.userId}`);
     });
 
-    // Initial state: sockets in 'admins' get the full picture (including the
-    // pairing QR); everyone else gets availability as { connected } and
-    // nothing else.
-    if (socket.rooms.has(ADMINS_ROOM)) {
-      socket.emit("whatsapp_state", hooks.getWhatsAppState());
-    } else {
-      socket.emit("whatsapp_state", { connected: hooks.isConnected() });
+    // Initial state, per account: sockets in the account's admins room get
+    // the full picture (including the pairing QR); inbox-only viewers get
+    // availability as { connected, accountKey } and nothing else. The
+    // availability emit goes FIRST so a socket in both rooms ends up with the
+    // full state as the last whatsapp_state it receives for that account.
+    for (const key of SOCKET_ACCOUNT_KEYS) {
+      if (socket.rooms.has(inboxRoom(key))) {
+        socket.emit("whatsapp_state", { accountKey: key, connected: hooks.isConnected(key) });
+      }
+      if (socket.rooms.has(adminsRoom(key))) {
+        socket.emit("whatsapp_state", { accountKey: key, ...hooks.getWhatsAppState(key) });
+      }
     }
 
     scheduleTokenExpiryDisconnect(socket, auth.exp);

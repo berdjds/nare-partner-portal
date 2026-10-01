@@ -25,8 +25,9 @@ import {
 } from "@/lib/travel/contracts";
 import { sendEmail } from "@/lib/email";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { DEFAULT_TRAVEL_ACCOUNT_KEY, ensureDefaultAccounts, getAccount } from "@/lib/whatsapp-accounts";
 import { INBOX_ROOM } from "@/lib/socket-auth";
-import type { Prisma, User } from "@prisma/client";
+import type { Prisma, User, WhatsAppAccount } from "@prisma/client";
 
 export const TEMPLATE_VERSION = "1";
 
@@ -68,20 +69,33 @@ export async function queueWorkflowEvent(
     if (r && !uniqueRecipients.has(r.id)) uniqueRecipients.set(r.id, r);
   }
 
+  // W3 (wa-multi): every WHATSAPP delivery of this event sends through the
+  // account named by TravelSettings.whatsappAccountKey (default 'nare'). The
+  // account is recorded on the delivery row at queue time and is part of the
+  // dedup key, so retries always reuse the SAME account and never fall back
+  // to Marhaba. Read through tx so the value commits with the event.
+  let whatsappAccountId = DEFAULT_TRAVEL_ACCOUNT_KEY;
+  const settings = await tx.travelSettings.findUnique({ where: { id: "default" } });
+  if (settings?.whatsappAccountKey) whatsappAccountId = settings.whatsappAccountKey;
+
   for (const recipient of Array.from(uniqueRecipients.values())) {
     for (const channel of NOTIFICATION_CHANNELS) {
       const destination = channel === "EMAIL" ? recipient.email : recipient.phone;
       const body = renderNotificationBody(payload, channel);
+      const isWhatsApp = channel === "WHATSAPP";
       await tx.notificationDelivery.create({
         data: {
           eventId: event.id,
           recipientId: recipient.id,
           channel,
           destination: destination ?? null,
-          dedupKey: `${event.id}:${recipient.id}:${channel}`,
+          dedupKey: isWhatsApp
+            ? `${whatsappAccountId}:${event.id}:${recipient.id}:${channel}`
+            : `${event.id}:${recipient.id}:${channel}`,
           status: destination ? "QUEUED" : "SKIPPED_NO_DESTINATION",
           lastError: destination ? null : `user has no ${channel === "EMAIL" ? "email" : "phone"}`,
           body,
+          ...(isWhatsApp ? { accountId: whatsappAccountId } : {}),
         },
       });
     }
@@ -164,6 +178,20 @@ export async function processNotificationQueue({ limit = 50 }: { limit?: number 
     take: limit,
   });
 
+  // W3 (travel-nare): account rows are read once per sweep (cached) so a
+  // disabled or unconfigured travel account fails its deliveries with a
+  // coded, actionable WorkflowError naming the account — the row stays
+  // retryable on the SAME account and no other account is ever tried.
+  // Dynamic import: workflow.ts imports this module, so a static import of
+  // WorkflowError would close a cycle.
+  await ensureDefaultAccounts();
+  const { WorkflowError } = await import("@/lib/travel/workflow");
+  const accountCache = new Map<string, WhatsAppAccount | null>();
+  const accountFor = async (key: string): Promise<WhatsAppAccount | null> => {
+    if (!accountCache.has(key)) accountCache.set(key, await getAccount(key));
+    return accountCache.get(key) ?? null;
+  };
+
   let processed = 0;
   let sent = 0;
   let failed = 0;
@@ -192,9 +220,31 @@ export async function processNotificationQueue({ limit = 50 }: { limit?: number 
         });
         providerId = res.providerId;
       } else {
-        // Throws when the WhatsApp client is not ready — caught below, so the
-        // delivery becomes FAILED and stays retryable.
+        // W3 (wa-multi): sends through the account recorded on the delivery
+        // (TravelSettings.whatsappAccountKey at queue time) — never a
+        // fallback account. A disabled/unconfigured account fails here with a
+        // coded WorkflowError; a not-ready client throws from
+        // sendWhatsAppMessage naming the account. Either way the delivery
+        // becomes FAILED below and stays retryable on the SAME account.
+        const account = await accountFor(delivery.accountId);
+        if (!account) {
+          throw new WorkflowError(
+            "TRAVEL_WHATSAPP_ACCOUNT_NOT_CONFIGURED",
+            `WhatsApp account "${delivery.accountId}" is not configured. Create it under Admin → WhatsApp accounts; ` +
+              `the delivery stays queued for retry on the same account.`,
+            503,
+          );
+        }
+        if (!account.enabled) {
+          throw new WorkflowError(
+            "TRAVEL_WHATSAPP_ACCOUNT_DISABLED",
+            `WhatsApp account "${account.key}" (${account.displayName}) is disabled. Enable it under Admin → WhatsApp accounts; ` +
+              `the delivery stays queued for retry on the same account.`,
+            503,
+          );
+        }
         const msg: any = await sendWhatsAppMessage({
+          accountKey: delivery.accountId,
           remoteJid: delivery.destination!,
           body: delivery.body,
           type: "text",
@@ -215,7 +265,7 @@ export async function processNotificationQueue({ limit = 50 }: { limit?: number 
       sent++;
       emitDeliveryStatus(delivery.id, "SENT");
     } catch (err: any) {
-      const message = err?.message ?? String(err);
+      const message = err?.code ? `${err.code}: ${err.message}` : err?.message ?? String(err);
       await prisma.notificationDelivery.update({
         where: { id: delivery.id },
         data: { status: "FAILED", lastError: message, attempts: { increment: 1 } },
