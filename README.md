@@ -73,3 +73,12 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 - `npm run db:push` — apply the Prisma schema
 - `npm run db:seed` — seed the admin user
 - `npm test` — run the Vitest test suite (also runs in CI before every deploy)
+
+## Documentation
+
+- [doc/README.md](doc/README.md) — full documentation index
+- [doc/deployment.md](doc/deployment.md) — production release path for portal.nare.am: server provisioning, the CI release pipeline (staging → production), rollback/restore runbooks, backups and drills
+
+The repo-root `docker-compose.yml` is for **local development only**; the
+production and staging compose projects live under `deploy/portal/` and
+`deploy/staging/` (see [doc/deployment.md](doc/deployment.md)).
