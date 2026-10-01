@@ -61,7 +61,7 @@ case "$cmd" in
           printf '%s\n' "${STUB_INSPECT_RUNNING:-true}"
           ;;
         *Config.Image*)
-          printf '%s\n' "${STUB_INSPECT_IMAGE:-wacontrol:latest}"
+          printf '%s\n' "${STUB_INSPECT_IMAGE:-portal:latest}"
           ;;
         *'.Id'*)
           printf '%s\n' "${STUB_APP_ID:-aaa111}"

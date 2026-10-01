@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 #
-# Manual recovery export (W1, task deploy-recov). Runs ON THE VPS.
+# Manual recovery export for portal.nare.am (W3b, task script-param). Runs ON
+# THE SERVER. One-time provisioning installs it as
+# /usr/local/lib/portal-deploy/portal-export; it is operator-run (manual
+# recovery), never invoked by the deploy gate or the CI pipeline.
 #
-# Before scripts/restore-backup.sh overwrites the live data dirs with a
-# pre-deploy backup, this script captures every row that was created or
+# Before the restore tool (portal-restore) overwrites the live data dirs with
+# a pre-deploy backup, this script captures every row that was created or
 # updated AFTER that backup was taken, so post-backup data can be reviewed
 # and re-applied. It reads the LIVE SQLite database read-only: the database
 # file is never opened for writing — it is snapshot-copied (together with its
@@ -11,13 +14,13 @@
 # into a scratch directory and only the copy is queried.
 #
 # Usage:
-#   scripts/export-since.sh <archive>
+#   portal-export <archive>
 #
-#   <archive>  A backup archive written by scripts/vps-deploy.sh, e.g.
-#              /root/productionapp/backups/wacontrol-20260928T120000Z.tar.gz
+#   <archive>  A backup archive written by the deploy gate, e.g.
+#              /opt/stack/backups/portal-production-20260928T120000Z.tar.gz
 #
 # The cutoff timestamp is the archive's own timestamp: parsed from the
-# wacontrol-YYYYMMDDTHHMMSSZ file name when present, otherwise taken from
+# portal-<env>-YYYYMMDDTHHMMSSZ file name when present, otherwise taken from
 # the archive file's mtime. Rows with createdAt or updatedAt greater than or
 # equal to the cutoff are exported (inclusive, so a row written in the same
 # second as the backup is preserved rather than lost).
@@ -33,25 +36,24 @@
 # archive (rows keyed by table name, plus counts). Progress goes to stderr.
 #
 # Execution: prefers the repo checkout's node + generated Prisma client
-# (tests, dev machines). On the VPS (no node on the host) it runs the same
+# (tests, dev machines). On the server (no node on the host) it runs the same
 # helper inside the app image via `docker run` with read-only mounts;
-# WACONTROL_EXPORT_IMAGE selects the image (default wacontrol:latest — after
-# a failed cutover that is the image whose schema matches the current
-# database).
+# PORTAL_EXPORT_IMAGE selects the image (default portal:latest — or
+# portal-staging:latest in staging; after a failed cutover that is the image
+# whose schema matches the current database).
+#
+# Server layout and PORTAL_* overrides are the same as in the deploy gate
+# (scripts/vps-deploy.sh); PORTAL_DATABASE_FILE overrides the database path
+# directly.
 #
 # Run this while the app is stopped for a consistent snapshot; against a
 # running app the copy is best-effort (rows committed mid-copy can be
-# missed), which is why restore-backup.sh only records that it ran.
+# missed), which is why the restore tool only records that it ran.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-APP_ROOT="${WACONTROL_APP_ROOT:-/root/productionapp}"
-DATA_DIR="${WACONTROL_DATA_DIR:-$APP_ROOT/wacontrol-data}"
-DB_FILE="${WACONTROL_DATABASE_FILE:-$DATA_DIR/dev.db}"
-EXPORT_IMAGE="${WACONTROL_EXPORT_IMAGE:-wacontrol:latest}"
 
 log() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
@@ -62,12 +64,32 @@ die() {
   exit 1
 }
 
+ENV_NAME="${PORTAL_ENV_NAME:-production}"
+case "$ENV_NAME" in
+  production)
+    DEFAULT_ROOT="/opt/stack"
+    DEFAULT_IMAGE_REPO="portal"
+    ;;
+  staging)
+    DEFAULT_ROOT="/opt/stack/staging"
+    DEFAULT_IMAGE_REPO="portal-staging"
+    ;;
+  *)
+    die "PORTAL_ENV_NAME must be 'staging' or 'production' (got '$ENV_NAME')"
+    ;;
+esac
+
+ROOT="${PORTAL_ROOT:-$DEFAULT_ROOT}"
+DATA_DIR="${PORTAL_DATA_DIR:-$ROOT/portal/data}"
+DB_FILE="${PORTAL_DATABASE_FILE:-${DATA_DIR%/}/dev.db}"
+EXPORT_IMAGE="${PORTAL_EXPORT_IMAGE:-$DEFAULT_IMAGE_REPO:latest}"
+
 usage() {
   cat >&2 <<'EOF'
-usage: scripts/export-since.sh <archive>
+usage: portal-export <archive>
 
-  <archive>  Backup archive written by scripts/vps-deploy.sh, e.g.
-             /root/productionapp/backups/wacontrol-20260928T120000Z.tar.gz
+  <archive>  Backup archive written by the deploy gate, e.g.
+             /opt/stack/backups/portal-production-20260928T120000Z.tar.gz
 
 Reads the live SQLite database read-only and writes a JSON export of every
 row created or updated at/after the archive's timestamp from every table
@@ -79,15 +101,15 @@ EOF
 [ $# -eq 1 ] || { usage; exit 2; }
 ARCHIVE="$1"
 [ -f "$ARCHIVE" ] || die "archive not found: $ARCHIVE"
-[ -f "$DB_FILE" ] || die "live database not found: $DB_FILE (set WACONTROL_APP_ROOT?)"
+[ -f "$DB_FILE" ] || die "live database not found: $DB_FILE (set PORTAL_DATA_DIR or PORTAL_DATABASE_FILE?)"
 
-# Cutoff: the archive's timestamp — from the wacontrol-YYYYMMDDTHHMMSSZ file
-# name when present, else the file mtime (GNU date/stat, Linux only).
+# Cutoff: the archive's timestamp — from the portal-<env>-YYYYMMDDTHHMMSSZ
+# file name when present, else the file mtime (GNU date/stat, Linux only).
 archive_since() {
   local base="${1##*/}"
   local s
-  if [[ "$base" =~ ^wacontrol-([0-9]{8}T[0-9]{6}Z)\.tar\.gz$ ]]; then
-    s="${BASH_REMATCH[1]}"
+  if [[ "$base" =~ ^portal-(production|staging)-([0-9]{8}T[0-9]{6}Z)\.tar\.gz$ ]]; then
+    s="${BASH_REMATCH[2]}"
     printf '%s-%s-%sT%s:%s:%sZ' "${s:0:4}" "${s:4:2}" "${s:6:2}" "${s:9:2}" "${s:11:2}" "${s:13:2}"
   else
     date -u -d "@$(stat -c %Y "$1")" +%Y-%m-%dT%H:%M:%SZ
@@ -97,7 +119,7 @@ SINCE="$(archive_since "$ARCHIVE")"
 
 OUT="${ARCHIVE%.tar.gz}.export.json"
 
-SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/wacontrol-export-since.XXXXXX")"
+SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/portal-export-since.XXXXXX")"
 cleanup() {
   rm -rf "$SCRATCH"
 }
@@ -114,10 +136,10 @@ done
 # (the .sh redirects it into the export file), so it logs to stderr.
 cat > "$SCRATCH/export-since.js" <<'JS'
 "use strict";
-// export-since helper (W1, task deploy-recov): dump every row created or
+// export-since helper (W3b, task script-param): dump every row created or
 // updated at/after a cutoff from every table that has createdAt/updatedAt.
 // Executed either by the repo checkout's node (local mode) or inside the
-// wacontrol image (docker mode) — scripts/export-since.sh picks the runner.
+// portal image (docker mode) — scripts/export-since.sh picks the runner.
 const { PrismaClient } = require("@prisma/client");
 
 function usage(msg) {
