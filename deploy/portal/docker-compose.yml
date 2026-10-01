@@ -1,0 +1,95 @@
+# Production compose project for portal.nare.am — DOCUMENTATION-GRADE TEMPLATE.
+#
+# This file documents the production server layout at /opt/stack. It is
+# installed by the OWNER (copied from this template to
+# /opt/stack/docker-compose.yml) during provisioning. The deploy gate
+# (scripts/vps-deploy.sh) REFUSES to deploy when the server compose file is
+# missing and never creates, syncs or modifies it — the compose file belongs
+# to provisioning, because deployments must not be able to rewrite the
+# environment they deploy into.
+#
+# Fixed server layout (phase W3b):
+#   /opt/stack/docker-compose.yml   this file (production project)
+#   /opt/stack/.env                 PORTAL_* secrets, interpolated below
+#   /opt/stack/portal/src           build context (source tree uploaded by the
+#                                   deploy gate)
+#   /opt/stack/portal/{data,uploads,auth}  app data (SQLite, media, WhatsApp
+#                                   session)
+#   /opt/stack/backups              deploy-gate backup archives
+#   /opt/stack/staging/             SECOND compose project (staging), which
+#                                   joins the portal-web network created here
+#                                   as an external network — so the production
+#                                   project must exist before staging starts.
+#
+# Secrets come from /opt/stack/.env using PORTAL_-prefixed names
+# (PORTAL_NEXTAUTH_SECRET, PORTAL_ADMIN_EMAIL, PORTAL_ADMIN_PASSWORD, and the
+# optional PORTAL_SMTP_* set for travel-module e-mail). Required secrets use
+# `${VAR:?...}` interpolation so a missing value fails loudly at `docker
+# compose up` instead of booting the app with an empty secret.
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: portal-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      # The Caddyfile and the staging-site import live on the host under
+      # /etc/caddy because they are provisioning artifacts, not app data —
+      # they must survive `docker compose down -v` of this project.
+      - /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /etc/caddy/staging.portal.nare.am.caddy:/etc/caddy/staging.portal.nare.am.caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+
+  portal:
+    image: portal:latest
+    # `portal:latest` is tagged by the deploy gate at cutover (after the
+    # trials pass). Never edit the image reference by hand — a hand-tagged
+    # image bypasses the gate's backup-and-trial safety net.
+    container_name: portal-app
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - DATABASE_URL=file:/app/data/dev.db
+      - NEXTAUTH_URL=https://portal.nare.am
+      - NEXTAUTH_SECRET=${PORTAL_NEXTAUTH_SECRET:?PORTAL_NEXTAUTH_SECRET must be set in /opt/stack/.env}
+      - ADMIN_EMAIL=${PORTAL_ADMIN_EMAIL:?PORTAL_ADMIN_EMAIL must be set in /opt/stack/.env}
+      - ADMIN_PASSWORD=${PORTAL_ADMIN_PASSWORD:?PORTAL_ADMIN_PASSWORD must be set in /opt/stack/.env}
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      # Travel-module e-mail notifications. Optional: with the SMTP_* values
+      # empty the app still boots but flags notification deliveries FAILED,
+      # which is preferable to refusing to start on a mail outage.
+      - SMTP_HOST=${PORTAL_SMTP_HOST:-}
+      - SMTP_PORT=${PORTAL_SMTP_PORT:-}
+      - SMTP_USER=${PORTAL_SMTP_USER:-}
+      - SMTP_PASS=${PORTAL_SMTP_PASS:-}
+      - SMTP_FROM=${PORTAL_SMTP_FROM:-}
+    volumes:
+      - ./portal/data:/app/data
+      - ./portal/uploads:/app/public/uploads
+      - ./portal/auth:/app/.wwebjs_auth
+    # No published host port: caddy proxies to portal-app:3000 over the
+    # portal-web network, so the app is never reachable except through TLS.
+    expose:
+      - "3000"
+    networks:
+      - web
+
+networks:
+  web:
+    # Fixed name: the staging project (/opt/stack/staging) joins this network
+    # as an EXTERNAL network, which only works if the name is stable and not
+    # prefixed with the compose project name.
+    name: portal-web
+
+volumes:
+  caddy_data:
+  caddy_config:
