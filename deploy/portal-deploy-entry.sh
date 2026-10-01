@@ -16,9 +16,16 @@
 # matching installed tool. Because validation happens twice and sudoers pins
 # only this dispatcher, the CI pipeline can never widen its authority beyond
 # the operations below — it gets no shell, no arbitrary command, no extra
-# arguments.
+# arguments. The single exception is `upload`: it needs no root, so stage 1
+# handles it directly as the deploy user and never re-invokes through sudo.
 #
 # Accepted interface (EXACT — everything else is rejected):
+#   upload <name.tar.gz>          stage 1 only, no sudo: writes stdin to
+#                                 $UPLOAD_DIR/<name> (bare name, validated).
+#                                 This is the pipeline's file-transfer path —
+#                                 scp/sftp cannot pass a forced command, since
+#                                 their SSH_ORIGINAL_COMMAND is `scp -t ...` or
+#                                 the sftp-server path, both rejected below.
 #   deploy <env> <tarball>        env = staging|production; a bare tarball name
 #                                 is rewritten to $UPLOAD_DIR/<name>
 #   smoke <env>                   env = staging|production
@@ -29,6 +36,8 @@
 #   drill-restore                 staging only
 #
 # Dispatch (stage 2):
+#   upload   -> never dispatched: stage 1 handles it as the deploy user, and
+#               stage 2 rejects it (uploads must never run as root)
 #   deploy   -> $LIB_DIR/portal-deploy <env> <tarball>
 #   smoke    -> $LIB_DIR/portal-smoke <url>  (staging/public URL per env)
 #   backup   -> $LIB_DIR/portal-backup
@@ -100,7 +109,7 @@ validate_path_arg() {
 
 # validate_command <raw line> — charset-whitelist, split, route and validate
 # the full command. On success sets:
-#   CMD        the first word (deploy|smoke|backup|restore|drill-*)
+#   CMD        the first word (upload|deploy|smoke|backup|restore|drill-*)
 #   CMD_WORDS  the normalized argument vector (deploy's tarball rewritten to
 #              an absolute path under $UPLOAD_DIR)
 # Any violation rejects with exit 1.
@@ -126,6 +135,19 @@ validate_command() {
 
   CMD="${1:-}"
   case "$CMD" in
+    upload)
+      [ "$#" -eq 2 ] || reject "usage: upload <name.tar.gz>"
+      local name="$2"
+      validate_path_arg "upload name" "$name"
+      case "$name" in
+        */*)
+          # Uploads are always written to $UPLOAD_DIR/<name>; a directory
+          # prefix would let the client pick another location.
+          reject "upload name must be a bare file name (no directory)"
+          ;;
+      esac
+      CMD_WORDS=("upload" "$name")
+      ;;
     deploy)
       [ "$#" -eq 3 ] || reject "usage: deploy <env> <tarball>"
       case "$2" in
@@ -216,6 +238,11 @@ if [ "${1:-}" = "--exec" ]; then
   line="$(IFS=' '; printf '%s' "$*")"
   validate_command "$line"
   case "$CMD" in
+    upload)
+      # Uploads run as the unprivileged deploy user in stage 1; they must
+      # never be executed with root privileges.
+      reject "upload is a stage-1 command and never runs as root"
+      ;;
     deploy)
       exec "$LIB_DIR/portal-deploy" "${CMD_WORDS[1]}" "${CMD_WORDS[2]}"
       ;;
@@ -250,4 +277,18 @@ fi
 [ -n "${SSH_ORIGINAL_COMMAND:-}" ] || reject "interactive access is not allowed"
 
 validate_command "$SSH_ORIGINAL_COMMAND"
+
+if [ "$CMD" = "upload" ]; then
+  # The one operation that needs no root: stream stdin into the deploy user's
+  # own upload dir, where `deploy` later resolves the bare tarball name. Write
+  # to a temp file and rename so a dropped connection never leaves a truncated
+  # tarball behind for `deploy` to pick up.
+  tmp="$UPLOAD_DIR/.upload-partial.$$"
+  trap 'rm -f "$tmp"' EXIT
+  cat > "$tmp"
+  mv "$tmp" "$UPLOAD_DIR/${CMD_WORDS[1]}"
+  trap - EXIT
+  exit 0
+fi
+
 exec "$SUDO" "$ENTRY_PATH" --exec "${CMD_WORDS[@]}"

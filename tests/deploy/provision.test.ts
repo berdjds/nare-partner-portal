@@ -30,6 +30,11 @@
  * reject matrix (shell metacharacters, newline/tab, unknown environments,
  * extra or missing args, `..`, leading `-`, tarballs outside the upload dir,
  * relative restore archives, client-sent --exec, empty SSH_ORIGINAL_COMMAND).
+ * `upload <name.tar.gz>` — the pipeline's file-transfer path, since scp/sftp
+ * cannot pass the forced command — is covered separately: stdin must land
+ * byte-identical in the upload dir without sudo ever being called, unsafe or
+ * non-bare names are rejected, and `--exec upload` (running it as root) is
+ * refused.
  */
 
 import { spawnSync } from "child_process";
@@ -238,7 +243,7 @@ function makeDispatcherFixture(): DispatcherFixture {
  * client command in SSH_ORIGINAL_COMMAND, sudo and the tool library replaced
  * by recording stubs.
  */
-function runDispatcher(fx: DispatcherFixture, sshCommand?: string): RunResult {
+function runDispatcher(fx: DispatcherFixture, sshCommand?: string, stdin?: Buffer): RunResult {
   const env: NodeJS.ProcessEnv = {
     NODE_ENV: process.env.NODE_ENV ?? "test",
     PATH: process.env.PATH ?? "",
@@ -252,7 +257,7 @@ function runDispatcher(fx: DispatcherFixture, sshCommand?: string): RunResult {
     STUB_TOOL_LOG: fx.toolLog,
   };
   if (sshCommand !== undefined) env.SSH_ORIGINAL_COMMAND = sshCommand;
-  const res = spawnSync("bash", [DISPATCHER], { env, encoding: "utf8" });
+  const res = spawnSync("bash", [DISPATCHER], { env, encoding: "utf8", input: stdin });
   return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
 }
 
@@ -583,6 +588,66 @@ describe("deploy/portal-deploy-entry.sh reject matrix", () => {
     expect(missing.stderr).toContain("portal-deploy-entry: rejected:");
     expect(existsSync(fx.sudoLog)).toBe(false);
     expect(existsSync(fx.toolLog)).toBe(false);
+  });
+});
+
+describe("deploy/portal-deploy-entry.sh upload", () => {
+  it("writes stdin byte-identically to the upload dir without ever calling sudo", () => {
+    const fx = makeDispatcherFixture();
+    const payload = Buffer.concat([
+      // Binary edge bytes (including the gzip magic) to prove no text mangling.
+      Buffer.from([0x00, 0x01, 0xfe, 0xff, 0x1f, 0x8b]),
+      Buffer.from("portal-source fixture bytes\n"),
+    ]);
+    const res = runDispatcher(fx, "upload app.tar.gz", payload);
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+    expect(readFileSync(path.join(fx.uploadDir, "app.tar.gz")).equals(payload)).toBe(true);
+    // Upload is a stage-1 operation: sudo and the tool library were never touched.
+    expect(existsSync(fx.sudoLog)).toBe(false);
+    expect(existsSync(fx.toolLog)).toBe(false);
+    // The atomic temp file was renamed away — only the payload remains.
+    expect(readdirSync(fx.uploadDir)).toEqual(["app.tar.gz"]);
+  });
+
+  it("rejects unsafe upload names and wrong arity", () => {
+    const fx = makeDispatcherFixture();
+    const commands = [
+      "upload", // missing name
+      "upload a.tar.gz extra", // extra argument
+      "upload sub/dir/a.tar.gz", // not a bare name
+      `upload ${fx.uploadDir}/a.tar.gz`, // absolute path: still not bare
+      "upload ../a.tar.gz", // traversal
+      "upload -a.tar.gz", // leading dash (would parse as a flag downstream)
+      "upload a.zip", // not a .tar.gz archive
+    ];
+    for (const cmd of commands) {
+      const res = runDispatcher(fx, cmd);
+      expect(res.status, JSON.stringify(cmd)).toBe(1);
+      expect(res.stderr).toContain("portal-deploy-entry: rejected:");
+    }
+    // Nothing was written, and sudo / the tools were never touched.
+    expect(existsSync(fx.sudoLog)).toBe(false);
+    expect(existsSync(fx.toolLog)).toBe(false);
+    expect(readdirSync(fx.uploadDir)).toEqual([]);
+  });
+
+  it("refuses to run upload as root (--exec upload is rejected)", () => {
+    const fx = makeDispatcherFixture();
+    // Stage 2 is only reachable via stage 1's sudo call, but it must be safe
+    // even when invoked directly: upload must never execute with root rights.
+    const res = spawnSync("bash", [DISPATCHER, "--exec", "upload", "a.tar.gz"], {
+      env: {
+        NODE_ENV: process.env.NODE_ENV ?? "test",
+        PATH: process.env.PATH ?? "",
+        PORTAL_DEPLOY_LIB_DIR: fx.libDir,
+        PORTAL_DEPLOY_UPLOAD_DIR: fx.uploadDir,
+      },
+      encoding: "utf8",
+    });
+    expect(res.status).toBe(1);
+    expect(res.stderr ?? "").toContain("portal-deploy-entry: rejected:");
+    expect(existsSync(fx.toolLog)).toBe(false);
+    expect(readdirSync(fx.uploadDir)).toEqual([]);
   });
 });
 
