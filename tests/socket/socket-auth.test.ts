@@ -596,15 +596,15 @@ describe("allowedSocketOrigins / isSocketOriginAllowed (unit)", () => {
   });
 
   it("allows exactly the origin of NEXTAUTH_URL plus each SOCKET_ALLOWED_ORIGINS entry", () => {
-    process.env.NEXTAUTH_URL = "https://wa.hayk.ae/some/path";
+    process.env.NEXTAUTH_URL = "https://portal.nare.am/some/path";
     process.env.SOCKET_ALLOWED_ORIGINS = "http://localhost:5173, http://127.0.0.1:5500";
-    expect(allowedSocketOrigins()).toEqual(["https://wa.hayk.ae", "http://localhost:5173", "http://127.0.0.1:5500"]);
-    expect(isSocketOriginAllowed("https://wa.hayk.ae")).toBe(true);
+    expect(allowedSocketOrigins()).toEqual(["https://portal.nare.am", "http://localhost:5173", "http://127.0.0.1:5500"]);
+    expect(isSocketOriginAllowed("https://portal.nare.am")).toBe(true);
     expect(isSocketOriginAllowed("http://localhost:5173")).toBe(true);
     // Exact match only: trailing slash, other scheme/port/host never match.
-    expect(isSocketOriginAllowed("https://wa.hayk.ae/")).toBe(false);
-    expect(isSocketOriginAllowed("http://wa.hayk.ae")).toBe(false);
-    expect(isSocketOriginAllowed("https://wa.hayk.ae:443")).toBe(false);
+    expect(isSocketOriginAllowed("https://portal.nare.am/")).toBe(false);
+    expect(isSocketOriginAllowed("http://portal.nare.am")).toBe(false);
+    expect(isSocketOriginAllowed("https://portal.nare.am:443")).toBe(false);
     expect(isSocketOriginAllowed("http://localhost:5174")).toBe(false);
     expect(isSocketOriginAllowed("null")).toBe(false);
     expect(isSocketOriginAllowed(undefined)).toBe(false);

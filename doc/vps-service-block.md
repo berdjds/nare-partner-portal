@@ -1,53 +1,18 @@
-# VPS Docker Compose Service Block
+# HISTORY NOTE — legacy VPS compose service block, retired
 
-Copy and paste this block into `/root/productionapp/docker-compose.yml` under `services:`.
+This document described the old manual deployment: a compose service block to
+paste by hand into the VPS compose file, fronted by a reverse proxy with
+host-based routing. That release path was retired.
 
-Make sure the image `wacontrol:latest` is built first:
+The current deployment is documented in [deployment.md](./deployment.md):
 
-```bash
-docker build -t wacontrol:latest .
-```
+- the production compose project (`caddy` + `portal`) lives at
+  `/opt/stack/docker-compose.yml` on the server, installed once by the owner
+  from `deploy/portal/docker-compose.yml` and never modified by a deploy,
+- releases are driven by CI through the restricted `deploy` user and the
+  forced-command dispatcher (`deploy/portal-deploy-entry.sh`),
+- TLS is terminated by Caddy (`deploy/portal/Caddyfile.example`), and staging
+  is a second, isolated compose project under `/opt/stack/staging`.
 
-```yaml
-  wacontrol_app:
-    image: wacontrol:latest
-    container_name: wacontrol-app
-    restart: always
-    networks:
-      - web
-    environment:
-      - NODE_ENV=production
-      - HOSTNAME=0.0.0.0
-      - DATABASE_URL=file:/app/data/dev.db
-      - NEXTAUTH_URL=https://wa.hayk.ae
-      - NEXTAUTH_SECRET=${WACONTROL_NEXTAUTH_SECRET}
-      - ADMIN_EMAIL=${WACONTROL_ADMIN_EMAIL}
-      - ADMIN_PASSWORD=${WACONTROL_ADMIN_PASSWORD}
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-    volumes:
-      - ./wacontrol-data:/app/data
-      - ./wacontrol-uploads:/app/public/uploads
-      - ./wacontrol-auth:/app/.wwebjs_auth
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.wacontrol.rule=Host(`wa.hayk.ae`)"
-      - "traefik.http.routers.wacontrol.entrypoints=web"
-      - "traefik.http.routers.wacontrol.middlewares=redirect-to-https"
-      - "traefik.http.routers.wacontrol-secure.rule=Host(`wa.hayk.ae`)"
-      - "traefik.http.routers.wacontrol-secure.entrypoints=websecure"
-      - "traefik.http.routers.wacontrol-secure.tls.certresolver=le"
-      - "traefik.http.routers.wacontrol-secure.middlewares=wacontrol-rate"
-      - "traefik.http.middlewares.wacontrol-rate.ratelimit.average=10"
-      - "traefik.http.middlewares.wacontrol-rate.ratelimit.burst=20"
-      - "traefik.http.services.wacontrol.loadbalancer.server.port=3000"
-    expose:
-      - "3000"
-```
-
-Add these variables to `/root/productionapp/.env`:
-
-```env
-WACONTROL_NEXTAUTH_SECRET=<random-32-char-secret>
-WACONTROL_ADMIN_EMAIL=admin@example.com
-WACONTROL_ADMIN_PASSWORD=<strong-password>
-```
+The original service block was removed; this page remains only as a clearly
+marked history note.
