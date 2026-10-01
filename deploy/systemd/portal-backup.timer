@@ -1,0 +1,18 @@
+# Daily trigger for the scheduled verified portal backup (W3b task
+# backup-sched). Installed by one-time provisioning as
+# /etc/systemd/system/portal-backup.timer and enabled with:
+#   systemctl enable --now portal-backup.timer
+
+[Unit]
+Description=Daily scheduled backup of the portal data (portal.nare.am)
+
+[Timer]
+# 03:30 local, well outside the deploy window and the traffic peak.
+OnCalendar=*-*-* 03:30:00
+# Catch up on the run missed while the server was off, instead of silently
+# skipping a day of backups.
+Persistent=true
+Unit=portal-backup.service
+
+[Install]
+WantedBy=timers.target

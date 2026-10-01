@@ -1,0 +1,24 @@
+# Scheduled verified backup of the portal data (portal.nare.am, W3b task
+# backup-sched). Installed by one-time provisioning as
+# /etc/systemd/system/portal-backup.service and started daily 03:30 by
+# portal-backup.timer — never started by CI or the deploy pipeline.
+#
+# The unit runs the provisioning-installed copy of scripts/portal-backup.sh
+# (this repo is the source of truth). Settings: /etc/portal-backup.env
+# (PORTAL_BACKUP_KEEP_DAYS, PORTAL_OFFSITE_HOOK, PORTAL_* dir overrides).
+
+[Unit]
+Description=Scheduled verified backup of the portal data (portal.nare.am)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/portal-deploy/portal-backup
+# The backup tars and hashes the full data dirs while the app keeps serving:
+# keep its CPU and I/O below the live app.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# mktemp staging must not clash with anything else on the host.
+PrivateTmp=yes
+NoNewPrivileges=yes
