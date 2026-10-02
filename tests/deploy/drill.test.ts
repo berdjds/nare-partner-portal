@@ -70,6 +70,18 @@ function makeSourceTarball(stagingRoot: string): string {
   return tarball;
 }
 
+/**
+ * The staging build context the deploy gate leaves behind at portal/src after
+ * extracting (and deleting) the source tarball — what a real W3b staging host
+ * looks like once the pipeline's deploy has run.
+ */
+function writeSourceContext(stagingRoot: string) {
+  const srcDir = path.join(stagingRoot, "portal", "src");
+  mkdirSync(srcDir, { recursive: true });
+  writeFileSync(path.join(srcDir, "docker-compose.yml"), "services: {}\n# test fixture\n");
+  writeFileSync(path.join(srcDir, "candidate-marker.txt"), "candidate source");
+}
+
 /** The three data dirs under portal/ (each with a marker file) plus the compose file. */
 function writeDataFixture(root: string) {
   for (const dir of DATA_DIRS) {
@@ -244,6 +256,46 @@ describe("scripts/portal-drill.sh rollback drill", () => {
     );
     expect(rollbackLines).toHaveLength(1);
     expect(ctx.dockerLog).toContain("tag portal-staging:previous portal-staging:latest");
+    expectMarkersIntact(stagingRoot);
+  });
+
+  it("passes with no source tarball when the last staging deploy left its build context behind", () => {
+    const stagingRoot = setupStagingRoot();
+    // The real W3b path: the pipeline uploads the tarball to the deploy
+    // user's home, the deploy gate deletes it after extracting it into
+    // portal/src, and the drill job uploads nothing. The drill must rebuild
+    // the tarball from the build context and redeploy that source.
+    rmSync(path.join(stagingRoot, "portal-source.tar.gz"));
+    writeSourceContext(stagingRoot);
+
+    const ctx = runDrill("rollback", stagingRoot);
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(ctx.stdout).toContain("DRILL PASS rollback");
+    expect(out).toContain("rebuilding it from the staging build context");
+    expect(out).toContain("rollback OK");
+    // The rebuilt tarball was consumed by the child deploy, and the gate
+    // re-extracted it, so the build context is still there for the next run.
+    expect(existsSync(path.join(stagingRoot, "portal-source.tar.gz"))).toBe(false);
+    expect(existsSync(path.join(stagingRoot, "portal", "src", "candidate-marker.txt"))).toBe(true);
+    expectMarkersIntact(stagingRoot);
+  });
+
+  it("fails with a clear message when neither the source tarball nor a staging build context exists", () => {
+    const stagingRoot = setupStagingRoot();
+    // No pending tarball and no prior staging deploy: the drill has nothing
+    // to redeploy and must say so instead of failing on a missing file.
+    rmSync(path.join(stagingRoot, "portal-source.tar.gz"));
+
+    const ctx = runDrill("rollback", stagingRoot);
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("DRILL FAIL rollback:");
+    expect(out).toContain("source tarball not found");
+    expect(out).toContain("a staging deploy must run first");
+    expect(ctx.dockerLog).toBe(""); // the refusal happens before any docker call
     expectMarkersIntact(stagingRoot);
   });
 

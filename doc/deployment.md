@@ -87,11 +87,10 @@ installs:
   `command="/usr/local/sbin/portal-deploy-entry",no-port-forwarding,no-agent-forwarding,no-pty,no-X11-forwarding`,
 - the dispatcher's tool library under `/usr/local/lib/portal-deploy/`
   (`portal-deploy`, `portal-restore`, `portal-export`, `portal-backup`,
-  `portal-smoke`) from the `scripts/*.sh` sources — root-owned, so the
-  pipeline can call but never modify them. `portal-drill` is installed only
-  when `scripts/portal-drill.sh` exists in the repo; it has not shipped yet,
-  so provisioning prints a `[warn]` ("drill commands unavailable until it
-  ships") and continues without it,
+  `portal-smoke`, `portal-drill`) from the `scripts/*.sh` sources —
+  root-owned, so the pipeline can call but never modify them (`portal-drill`
+  is skipped with a `[warn]` only when `scripts/portal-drill.sh` is missing
+  from the provisioned source),
 - `/usr/local/sbin/portal-deploy-entry` (the dispatcher) and the sudoers
   drop-in `/etc/sudoers.d/portal-deploy` granting the deploy user **only**
   that dispatcher as root (validated with `visudo` before install),
@@ -117,11 +116,7 @@ After provisioning, the owner (the script prints this checklist):
    re-run provisioning (or append the import line) to wire the staging site,
    and reload Caddy.
 5. Add the CI secrets and variables (below) to the repository settings.
-6. Run the staging drills (below) before enabling the production release —
-   not yet possible: the drill tool (`scripts/portal-drill.sh`) has not
-   shipped in the repo, so provisioning prints a warning, skips installing
-   `portal-drill`, and `drill-rollback` / `drill-restore` fail until the tool
-   ships.
+6. Run the staging drills (below) before enabling the production release.
 
 ## CI pipeline (`.github/workflows/ci-cd.yml`)
 
@@ -303,21 +298,37 @@ network.
 
 ## Drills
 
-**Not yet available.** The drill tool (`scripts/portal-drill.sh`, to be
-installed as `/usr/local/lib/portal-deploy/portal-drill`) has not shipped in
-the repo. Until it does, provisioning prints a `[warn]` ("drill commands
-unavailable until it ships") and skips installing it, so the dispatcher's
-`drill-rollback` / `drill-restore` commands fail against a missing
-`portal-drill`.
+The drill tool (`scripts/portal-drill.sh`, installed as
+`/usr/local/lib/portal-deploy/portal-drill`) proves the staging rollback and
+restore paths end to end. Run the drills before the production release is
+enabled, and periodically afterwards (Actions → CI/CD → Run workflow → pick
+the action):
 
-Once the tool ships, run the drills before the production release is enabled,
-and periodically afterwards (Actions → CI/CD → Run workflow → pick the
-action):
+- `drill-rollback` — deploys staging through the deploy gate with the drill
+  hook (`PORTAL_DRILL_FAIL_HEALTH=1`, honoured only when the target env is
+  staging) so the post-cutover health check fails on purpose, then verifies
+  the automatic rollback: the container runs the previous image, `/login`
+  answers HTTP 200 inside it, and the staging data dirs are byte-for-byte
+  unchanged. The drill redeploys the currently deployed staging source: the
+  drill job uploads no tarball (the pipeline's tarball is deleted by the
+  deploy gate after extraction), so the drill rebuilds
+  `portal-source.tar.gz` from the staging build context
+  (`/opt/stack/staging/portal/src`) left by the last staging deploy. At least
+  one staging deploy must have run first; with neither a pending tarball nor
+  a build context the drill fails with `DRILL FAIL rollback: source tarball
+  not found … a staging deploy must run first`.
+- `drill-restore` — takes a verified staging backup, plants a marker file,
+  restores the backup with the restore tool, then verifies the marker is
+  gone, the data matches the backup byte for byte, and the staging app is
+  healthy.
 
-- `drill-rollback` — proves the staging rollback path end to end.
-- `drill-restore` — proves the staging export + restore runbook end to end.
-
-Both are staging-only; the dispatcher rejects any other target.
+A passing run ends with `DRILL PASS rollback` (or `DRILL PASS restore`) and
+exits 0; a failing run prints `DRILL FAIL <name>: <reason>` and exits 1.
+Both are staging-only: the dispatcher takes no environment argument for them
+and always runs the drill with `PORTAL_ENV_NAME=staging`, and the drill
+itself refuses to run unless `PORTAL_ENV_NAME` is exactly `staging` and
+every data path resolves inside the staging root (symlinks pointing outside
+are rejected). The drills are covered by `tests/deploy/drill.test.ts`.
 
 ## Backups and retention
 

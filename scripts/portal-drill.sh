@@ -12,15 +12,21 @@
 #              (PORTAL_DRILL_FAIL_HEALTH=1) so the post-cutover health check
 #              fails on purpose, then verify the automatic rollback: the
 #              container runs the previous image, /login is healthy, and the
-#              staging data is byte-for-byte unchanged.
+#              staging data is byte-for-byte unchanged. The drill redeploys
+#              the currently deployed staging source: when no source tarball
+#              is pending it is rebuilt from the staging build context
+#              (portal/src) left by the last staging deploy, so at least one
+#              staging deploy must have run first.
 #   restore    Take a verified backup of the staging data dirs, plant a
 #              marker file, run the restore tool (portal-restore) over the
 #              staging data, then verify the marker is gone and the restored
 #              data matches the backup byte for byte.
 #
 # Both drills run against the STAGING stack (default root /opt/stack/staging),
-# whose layout mirrors production: portal/{data,uploads,auth},
-# docker-compose.yml, backups/ and portal-source.tar.gz. The child tools are
+# whose layout mirrors production: portal/{data,uploads,auth,src},
+# docker-compose.yml, backups/ and — only while a deploy is pending —
+# portal-source.tar.gz (the deploy gate deletes it after extracting it into
+# portal/src). The child tools are
 # the installed deploy/restore tools (portal-deploy / portal-restore under
 # /usr/local/lib/portal-deploy), pointed at the staging root through PORTAL_*
 # overrides.
@@ -83,6 +89,7 @@ HEALTH_INTERVAL_SECONDS="${PORTAL_HEALTH_INTERVAL_SECONDS:-3}"
 DATA_DIR="$STAGING_ROOT/portal/data"
 UPLOADS_DIR="$STAGING_ROOT/portal/uploads"
 AUTH_DIR="$STAGING_ROOT/portal/auth"
+SRC_DIR="$STAGING_ROOT/portal/src"
 BACKUP_DIR="$STAGING_ROOT/backups"
 COMPOSE_FILE="$STAGING_ROOT/docker-compose.yml"
 
@@ -152,7 +159,7 @@ assert_staging_safety() {
   local path
   local resolved
   for path in "$DATA_DIR" "$UPLOADS_DIR" "$AUTH_DIR" "$BACKUP_DIR" \
-    "$SOURCE_TARBALL" "$COMPOSE_FILE" "$PAUSE_COMPOSE_FILE" "$ENV_FILE"; do
+    "$SRC_DIR" "$SOURCE_TARBALL" "$COMPOSE_FILE" "$PAUSE_COMPOSE_FILE" "$ENV_FILE"; do
     resolved="$(realpath -m -- "$path")"
     case "$resolved" in
       "$resolved_staging"/*) ;;
@@ -229,6 +236,7 @@ export_child_environment() {
   export PORTAL_DATA_DIR="$DATA_DIR"
   export PORTAL_UPLOADS_DIR="$UPLOADS_DIR"
   export PORTAL_AUTH_DIR="$AUTH_DIR"
+  export PORTAL_SRC_DIR="$SRC_DIR"
   export PORTAL_BACKUP_DIR="$BACKUP_DIR"
   export PORTAL_COMPOSE_FILE="$COMPOSE_FILE"
   export PORTAL_PAUSE_COMPOSE_FILE="$PAUSE_COMPOSE_FILE"
@@ -239,7 +247,20 @@ drill_rollback() {
   assert_staging_safety
   command -v docker >/dev/null 2>&1 || drill_fail "docker is required on PATH"
   [ -f "$DEPLOY_TOOL" ] || drill_fail "deploy tool not found: $DEPLOY_TOOL"
-  [ -f "$SOURCE_TARBALL" ] || drill_fail "source tarball not found: $SOURCE_TARBALL"
+  if [ ! -f "$SOURCE_TARBALL" ]; then
+    # On a real W3b host the drill job uploads no source: the pipeline's
+    # tarball lands in the deploy user's home and the deploy gate deletes it
+    # after extracting it into the build context ($SRC_DIR). Rebuild the
+    # tarball from that context — the drill redeploys exactly the currently
+    # deployed staging source, so one staging deploy must have run first.
+    if [ -d "$SRC_DIR" ] && [ -n "$(find "$SRC_DIR" -mindepth 1 -print -quit)" ]; then
+      log "no source tarball at $SOURCE_TARBALL: rebuilding it from the staging build context $SRC_DIR (left by the last staging deploy)"
+      tar -czf "$SOURCE_TARBALL" -C "$SRC_DIR" . \
+        || drill_fail "failed to rebuild the source tarball from $SRC_DIR"
+    else
+      drill_fail "source tarball not found: $SOURCE_TARBALL and no staging build context at $SRC_DIR — a staging deploy must run first (it leaves the build context the drill redeploys)"
+    fi
+  fi
 
   WORK_DIR="$(mktemp -d)" || drill_fail "failed to create a work dir"
   local before_manifest="$WORK_DIR/manifest.before"
