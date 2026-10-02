@@ -202,9 +202,13 @@ this checklist):
   `smoke-staging` → `deploy-production` → `smoke-production`. A single
   concurrency group serializes runs: **one deploy at a time**, never two
   server deploys concurrently.
-- **Drills** — `workflow_dispatch` with a choice input `action` =
-  `drill-rollback` | `drill-restore` (staging only; the dispatcher enforces
-  that again on the server).
+- **Manual actions** — `workflow_dispatch` with a choice input `action` =
+  `drill-rollback` | `drill-restore` | `deploy-staging`. The drills are
+  staging only (the dispatcher enforces that again on the server);
+  `deploy-staging` deploys the dispatched ref to staging only and
+  smoke-tests it (see "Release rehearsal" below). Manual runs skip the test
+  job — the branch's tests are the PR's responsibility — and production jobs
+  never run for `workflow_dispatch`.
 
 Repository configuration:
 
@@ -420,6 +424,41 @@ and always runs the drill with `PORTAL_ENV_NAME=staging`, and the drill
 itself refuses to run unless `PORTAL_ENV_NAME` is exactly `staging` and
 every data path resolves inside the staging root (symlinks pointing outside
 are rejected). The drills are covered by `tests/deploy/drill.test.ts`.
+
+## Release rehearsal (staging deploy from any branch)
+
+The drills need a staging deploy to have run first, but staging otherwise
+only deploys on a push to `main` — so the release path cannot be rehearsed
+before the merge. The manual `deploy-staging` action closes that gap: it
+deploys the chosen branch to staging only and smoke-tests it, running the
+exact same tarball build, upload, `deploy staging` and `smoke staging`
+steps (and the same `DEPLOY_*` secrets) as the main-push `deploy-staging` /
+`smoke-staging` jobs. It never touches production.
+
+Rehearse from the Actions tab, in this order:
+
+1. **Actions → CI/CD → Run workflow** — pick the branch to rehearse, choose
+   action `deploy-staging`. A pass looks like: the job *Deploy branch to
+   staging (manual)* is green; the deploy-gate output ends in the cutover
+   health checks passing; both smoke steps print all checks green with no
+   `FAIL` line (the CI smoke validates the public path — DNS, Caddy, TLS —
+   against `$STAGING_URL`). On failure the failing step names the cause
+   (smoke prints `FAIL` lines with the observed response; the deploy gate
+   prints its abort reason and, post-freeze, rolls back automatically) —
+   read the job log, fix the branch, re-run; see Troubleshooting below.
+2. **Run workflow → `drill-rollback`** (same branch input is irrelevant;
+   drills redeploy the currently deployed staging source). A pass ends with
+   `DRILL PASS rollback` and exit 0. If it fails with
+   `DRILL FAIL rollback: source tarball not found … a staging deploy must
+   run first`, step 1 did not complete — run it again.
+3. **Run workflow → `drill-restore`**. A pass ends with `DRILL PASS
+   restore` and exit 0.
+
+A failing drill prints `DRILL FAIL <name>: <reason>` and exits 1; the job
+log shows the reason. Do not merge the rehearsed branch until all three
+actions pass in sequence — the rehearsal is the proof that the release
+path (deploy gate, automatic rollback, restore) works before it is trusted
+with production.
 
 ## Backups and retention
 
