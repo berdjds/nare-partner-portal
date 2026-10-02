@@ -20,8 +20,10 @@
  *
  * The safety refusals (PORTAL_ENV_NAME must be "staging"; every data path
  * must resolve inside the staging root) are asserted to happen BEFORE any
- * docker call. The deploy gate hook is also exercised directly to prove it
- * is honoured in staging mode and ignored in production mode or when
+ * docker call. The rollback drill also refuses with a clear "run
+ * deploy-staging first" message when no staging app image exists yet (a
+ * brand-new environment). The deploy gate hook is also exercised directly to
+ * prove it is honoured in staging mode and ignored in production mode or when
  * PORTAL_ENV_NAME is unset.
  */
 
@@ -296,6 +298,25 @@ describe("scripts/portal-drill.sh rollback drill", () => {
     expect(out).toContain("source tarball not found");
     expect(out).toContain("a staging deploy must run first");
     expect(ctx.dockerLog).toBe(""); // the refusal happens before any docker call
+    expectMarkersIntact(stagingRoot);
+  });
+
+  it("fails with a clear message when no staging app image exists yet (run deploy-staging first)", () => {
+    const stagingRoot = setupStagingRoot();
+    // A brand-new environment: no staging deploy has ever run, so
+    // portal-staging:latest does not exist and there is nothing to roll back.
+    const ctx = runDrill("rollback", stagingRoot, {
+      STUB_IMAGE_MISSING: "portal-staging:latest",
+    });
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("DRILL FAIL rollback:");
+    expect(out).toContain("no staging app image 'portal-staging:latest' exists yet");
+    expect(out).toContain("run deploy-staging first");
+    // The refusal happens before any deploy runs: no build, no compose up.
+    expect(ctx.dockerLog).not.toContain("build");
+    expect(ctx.dockerLog).not.toContain("up -d");
     expectMarkersIntact(stagingRoot);
   });
 

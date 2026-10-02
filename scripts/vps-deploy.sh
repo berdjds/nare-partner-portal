@@ -21,7 +21,11 @@
 # Sequence (production and staging alike):
 #   1. extract the uploaded source into the build context, build
 #      $CANDIDATE_IMAGE WHILE the app keeps serving
-#   2. tag the running image $PREVIOUS_IMAGE
+#   2. tag the running image $PREVIOUS_IMAGE — skipped on a FIRST DEPLOY (a
+#      brand-new environment: the app container is not running AND
+#      $LATEST_IMAGE does not exist), detected BEFORE the build and logged as
+#      FIRST DEPLOY. A stopped container whose $LATEST_IMAGE exists is NOT a
+#      first deploy: previous is tagged from $LATEST_IMAGE as usual
 #   3. assert no OTHER container mounts the three data dirs
 #   4. WRITE FREEZE: stop the app container (HTTP writes, the in-process
 #      WhatsApp client and all background jobs); freeze start/end are logged
@@ -37,7 +41,8 @@
 #      untouched data, exit 1
 #   7. TRIAL B: previous image in trial mode on the MIGRATED copy; its health
 #      check decides ROLLBACK_COMPATIBLE=yes|no (yes also when the schema is
-#      unchanged)
+#      unchanged). Skipped on a first deploy (no previous image exists):
+#      ROLLBACK_COMPATIBLE=no
 #   8. CUTOVER: start the candidate on the real data (writes accepted from
 #      here) THROUGH the deploy-managed override that pins the app service
 #      image to $LATEST_IMAGE (see below) — the live compose may pin a dated
@@ -45,7 +50,10 @@
 #      container's image id equals the candidate's image id, then internal
 #      health check, bootstrap seeds, then the PUBLIC health check
 #      ($PORTAL_PUBLIC_URL/login must return 200)
-#   9. ON ANY FAILURE after the freeze: ROLLBACK_COMPATIBLE=yes -> stop the
+#   9. ON ANY FAILURE after the freeze: first deploy -> there is no previous
+#      image, so stop the candidate, print "first deploy: nothing to roll back
+#      to; data left as the candidate wrote it" and exit 1. Otherwise
+#      ROLLBACK_COMPATIBLE=yes -> stop the
 #      candidate and start $PREVIOUS_IMAGE on the CURRENT data (newly
 #      accepted data is kept; nothing is restored from backup); =no -> stop
 #      the candidate, do NOT restore anything automatically, print the manual
@@ -194,6 +202,7 @@ APP_WAS_RUNNING="false"
 CURRENT_IMAGE="$LATEST_IMAGE"
 BACKUP_FILE=""
 FREEZE_START_TS=""
+FIRST_DEPLOY="false"
 ROLLBACK_COMPATIBLE="no"
 WORK_DIR=""
 
@@ -480,6 +489,13 @@ EOF
 
 cutover_failed() {
   log "CUTOVER FAILED: $1" >&2
+  if [ "$FIRST_DEPLOY" = "true" ]; then
+    # No previous image exists, so there is nothing to roll back to. Stop the
+    # candidate and leave the data exactly as the candidate wrote it.
+    docker stop "$APP_CONTAINER" >/dev/null 2>&1 || true
+    log "first deploy: nothing to roll back to; data left as the candidate wrote it" >&2
+    exit 1
+  fi
   if [ "$ROLLBACK_COMPATIBLE" = "yes" ]; then
     log "rolling back: starting $PREVIOUS_IMAGE on the CURRENT data (newly accepted data kept; nothing is restored from backup)" >&2
     write_rollback_compose_file
@@ -516,6 +532,22 @@ main() {
     log "DRILL HOOK active (staging): PORTAL_DRILL_FAIL_HEALTH=1 — the post-cutover health check will fail on purpose"
   fi
 
+  # First deploy of a brand-new environment: the app container is not running
+  # AND $LATEST_IMAGE does not exist yet, so there is no rollback target to
+  # tag (step 2) and no previous image for trial B (step 7). Detected before
+  # the build so the run is marked FIRST DEPLOY from the start. A stopped
+  # container whose $LATEST_IMAGE exists is NOT a first deploy — step 2 tags
+  # previous from $LATEST_IMAGE and everything runs as for a running app.
+  APP_RUNNING_NOW="false"
+  if docker inspect "$APP_CONTAINER" >/dev/null 2>&1 \
+    && [ "$(docker inspect -f '{{.State.Running}}' "$APP_CONTAINER" 2>/dev/null || true)" = "true" ]; then
+    APP_RUNNING_NOW="true"
+  fi
+  if [ "$APP_RUNNING_NOW" != "true" ] && ! docker image inspect "$LATEST_IMAGE" >/dev/null 2>&1; then
+    FIRST_DEPLOY="true"
+    log "FIRST DEPLOY: $APP_CONTAINER is not running and $LATEST_IMAGE does not exist — no previous image will be tagged, TRIAL B is skipped (ROLLBACK_COMPATIBLE=no)"
+  fi
+
   # --- 1. extract + build while the app runs ---------------------------------
   log "deploy gate [$ENV_NAME]: extracting $(basename "$SOURCE_TARBALL")"
   rm -rf "${SRC_DIR:?}"
@@ -527,15 +559,19 @@ main() {
   docker build -t "$CANDIDATE_IMAGE" "$SRC_DIR" || die "candidate build failed; the running app is untouched"
 
   # --- 2. tag the running image as previous ----------------------------------
-  if docker inspect "$APP_CONTAINER" >/dev/null 2>&1; then
-    if [ "$(docker inspect -f '{{.State.Running}}' "$APP_CONTAINER" 2>/dev/null || true)" = "true" ]; then
-      APP_WAS_RUNNING="true"
-      CURRENT_IMAGE="$(docker inspect -f '{{.Config.Image}}' "$APP_CONTAINER" 2>/dev/null || true)"
-      [ -n "$CURRENT_IMAGE" ] || die "could not determine the image of the running $APP_CONTAINER"
+  if [ "$FIRST_DEPLOY" = "true" ]; then
+    log "first deploy: no previous image to tag (no running app, no $LATEST_IMAGE yet)"
+  else
+    if docker inspect "$APP_CONTAINER" >/dev/null 2>&1; then
+      if [ "$(docker inspect -f '{{.State.Running}}' "$APP_CONTAINER" 2>/dev/null || true)" = "true" ]; then
+        APP_WAS_RUNNING="true"
+        CURRENT_IMAGE="$(docker inspect -f '{{.Config.Image}}' "$APP_CONTAINER" 2>/dev/null || true)"
+        [ -n "$CURRENT_IMAGE" ] || die "could not determine the image of the running $APP_CONTAINER"
+      fi
     fi
+    docker tag "$CURRENT_IMAGE" "$PREVIOUS_IMAGE" || die "failed to tag $CURRENT_IMAGE as $PREVIOUS_IMAGE"
+    log "tagged $CURRENT_IMAGE as $PREVIOUS_IMAGE (rollback target)"
   fi
-  docker tag "$CURRENT_IMAGE" "$PREVIOUS_IMAGE" || die "failed to tag $CURRENT_IMAGE as $PREVIOUS_IMAGE"
-  log "tagged $CURRENT_IMAGE as $PREVIOUS_IMAGE (rollback target)"
 
   # --- 3. nobody else may mount the data dirs --------------------------------
   assert_exclusive_data_mounts
@@ -577,12 +613,19 @@ main() {
   log "TRIAL A passed: candidate migrated the copy, bootstrap seeds ran, /login is 200"
 
   # --- 7. TRIAL B: previous image on the migrated copy --------------------------
-  if run_trial_container "$PREVIOUS_IMAGE" "$TRIAL_B_CONTAINER" "$TRIAL_B_PORT" "$TRIAL_DATA/data" "$TRIAL_DATA/uploads" \
-    && wait_for_login "$TRIAL_B_CONTAINER"; then
-    ROLLBACK_COMPATIBLE="yes"
+  if [ "$FIRST_DEPLOY" = "true" ]; then
+    # No previous image exists on a first deploy, so there is nothing to test
+    # for rollback compatibility — and nothing to roll back to.
+    ROLLBACK_COMPATIBLE="no"
+    log "first deploy: TRIAL B skipped (no previous image) — ROLLBACK_COMPATIBLE=no"
+  else
+    if run_trial_container "$PREVIOUS_IMAGE" "$TRIAL_B_CONTAINER" "$TRIAL_B_PORT" "$TRIAL_DATA/data" "$TRIAL_DATA/uploads" \
+      && wait_for_login "$TRIAL_B_CONTAINER"; then
+      ROLLBACK_COMPATIBLE="yes"
+    fi
+    remove_trial_container "$TRIAL_B_CONTAINER"
+    log "ROLLBACK_COMPATIBLE=$ROLLBACK_COMPATIBLE (previous image $PREVIOUS_IMAGE on the migrated copy)"
   fi
-  remove_trial_container "$TRIAL_B_CONTAINER"
-  log "ROLLBACK_COMPATIBLE=$ROLLBACK_COMPATIBLE (previous image $PREVIOUS_IMAGE on the migrated copy)"
 
   # --- 8. CUTOVER: candidate on the real data -----------------------------------
   log "CUTOVER: starting the candidate on the real data (writes accepted from here)"

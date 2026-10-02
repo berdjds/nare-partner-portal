@@ -5,6 +5,10 @@
 #   STUB_FAIL_BUILD=1          `docker build` exits 1
 #   STUB_CONTAINER_MISSING=1   `docker inspect <name>` / `docker image inspect
 #                              <ref>` (no -f) exits 1
+#   STUB_IMAGE_MISSING="<refs...>"
+#                              `docker image inspect <ref>` (no -f) exits 1 for
+#                              each listed ref only — a brand-new environment
+#                              where e.g. portal:latest does not exist yet
 #   STUB_INSPECT_RUNNING=false the app container is not running
 #   STUB_INSPECT_IMAGE=<ref>   image ref of the app container
 #   STUB_APP_ID=<id>           id of the app container
@@ -113,6 +117,14 @@ case "$cmd" in
     fi
     if [ -n "${STUB_CONTAINER_MISSING:-}" ]; then
       exit 1
+    fi
+    if [ -n "$image_inspect" ]; then
+      # Intentional word splitting: STUB_IMAGE_MISSING holds one ref per word.
+      for missing_ref in ${STUB_IMAGE_MISSING:-}; do
+        if [ "${1:-}" = "$missing_ref" ]; then
+          exit 1
+        fi
+      done
     fi
     exit 0
     ;;

@@ -12,6 +12,9 @@
  * trial A failure, trial B yes/no, cutover failure with and without rollback
  * compatibility, public health check failure, mount/build aborts before the
  * freeze, the missing-compose-file refusal, compose-file immutability, the
+ * first deploy of a brand-new environment (no previous tag, no trial B, no
+ * rollback target on a cutover failure) versus a stopped container with an
+ * existing latest image (NOT a first deploy), the
  * deploy-managed image override in both environments (a live compose pinning
  * a dated image still runs the candidate; an image-id mismatch after cutover
  * fails the deploy and rolls back), the staging WHATSAPP_DISABLED=1 override
@@ -213,6 +216,103 @@ describe("scripts/vps-deploy.sh", () => {
       expect(listing.stdout).toContain(`${dir}/MARKER.txt`);
     }
 
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("first deploy (no running app, no latest image): no previous tag, no trial B, backup and cutover proceed", () => {
+    const appRoot = setupAppRoot();
+    // A brand-new environment: no app container and no portal:latest image.
+    const ctx = runDeploy(appRoot, {
+      STUB_CONTAINER_MISSING: "1",
+      STUB_IMAGE_MISSING: "portal:latest",
+    });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("FIRST DEPLOY");
+    expect(out).toContain("first deploy: TRIAL B skipped");
+    expect(out).toContain("ROLLBACK_COMPATIBLE=no");
+    expect(out).toContain("TRIAL A passed");
+    expect(out).toContain("CUTOVER complete");
+    expect(out).toContain("deploy finished successfully");
+
+    // No previous tag is ever created and trial B never runs.
+    expect(ctx.dockerLog).not.toContain("portal:previous");
+    expect(ctx.dockerLog).not.toContain("-p portal-trial-b");
+    expect(ctx.dockerLog).toContain("-p portal-trial-a");
+    // The app was not running, so the freeze stops nothing.
+    expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(0);
+    // The cutover still tags the candidate as latest and starts it.
+    expect(ctx.dockerLog).toContain("tag portal:candidate portal:latest");
+    expect(ctx.dockerLog).toContain("up -d portal");
+
+    // The verified backup of the (new) data dirs still happens.
+    expect(backupArchives(appRoot)).toHaveLength(1);
+    expect(ctx.curlLog).toContain("https://portal.test/login");
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("first deploy with a failing health check: exits 1 with no rollback attempt and no running candidate", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      STUB_CONTAINER_MISSING: "1",
+      STUB_IMAGE_MISSING: "portal:latest",
+      STUB_FAIL_EXEC_ON: "portal-app:login",
+    });
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("FIRST DEPLOY");
+    expect(out).toContain("CUTOVER FAILED");
+    expect(out).toContain("first deploy: nothing to roll back to; data left as the candidate wrote it");
+    // No rollback is possible and none is attempted.
+    expect(out).not.toContain("rollback OK");
+    expect(out).not.toContain("MANUAL RECOVERY PROCEDURE");
+    expect(ctx.dockerLog).not.toContain("rollback-compose.yml");
+    expect(ctx.dockerLog).not.toContain("portal:previous");
+    // The candidate is stopped — the only stop of the run, as the freeze had
+    // nothing to stop — so no candidate is left running.
+    expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(1);
+    // The pre-cutover backup of the data dirs was still taken.
+    expect(backupArchives(appRoot)).toHaveLength(1);
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("a deploy over the state a first deploy leaves behind (running app, latest exists) is not a first deploy", () => {
+    const appRoot = setupAppRoot();
+    // After a successful first deploy the environment has the app running on
+    // portal:latest — exactly the stub's default state — so the next deploy
+    // must tag previous and run trial B exactly as before.
+    const ctx = runDeploy(appRoot, { STUB_INSPECT_IMAGE: "portal:latest" });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).not.toContain("FIRST DEPLOY");
+    expect(out).toContain("ROLLBACK_COMPATIBLE=yes");
+    expect(ctx.dockerLog).toContain("tag portal:latest portal:previous");
+    expect(ctx.dockerLog).toContain("-p portal-trial-b");
+    expect(ctx.dockerLog).toContain("tag portal:candidate portal:latest");
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("a stopped container with an existing latest image is not a first deploy", () => {
+    const appRoot = setupAppRoot();
+    // The app container exists but is stopped, and portal:latest exists:
+    // previous is tagged from portal:latest and trial B runs — nothing about
+    // the first-deploy path applies.
+    const ctx = runDeploy(appRoot, { STUB_INSPECT_RUNNING: "false" });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).not.toContain("FIRST DEPLOY");
+    expect(out).toContain("tagged portal:latest as portal:previous");
+    expect(out).toContain("ROLLBACK_COMPATIBLE=yes");
+    expect(ctx.dockerLog).toContain("tag portal:latest portal:previous");
+    expect(ctx.dockerLog).toContain("-p portal-trial-b");
+    // The freeze had nothing to stop (the app was already stopped).
+    expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(0);
     expectNoAutomaticRestore(ctx);
   });
 

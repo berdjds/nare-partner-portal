@@ -16,7 +16,9 @@
 #              the currently deployed staging source: when no source tarball
 #              is pending it is rebuilt from the staging build context
 #              (portal/src) left by the last staging deploy, so at least one
-#              staging deploy must have run first.
+#              staging deploy must have run first. It also refuses up front
+#              when no staging app image exists yet (brand-new environment):
+#              run deploy-staging first.
 #   restore    Take a verified backup of the staging data dirs, plant a
 #              marker file, run the restore tool (portal-restore) over the
 #              staging data, then verify the marker is gone and the restored
@@ -260,6 +262,14 @@ drill_rollback() {
     else
       drill_fail "source tarball not found: $SOURCE_TARBALL and no staging build context at $SRC_DIR — a staging deploy must run first (it leaves the build context the drill redeploys)"
     fi
+  fi
+  # The rollback drill redeploys and rolls back the CURRENT staging release,
+  # so it needs the image a successful staging deploy left behind. On a
+  # brand-new environment there is nothing deployed yet — say so instead of
+  # failing deep inside the deploy gate. This runs after the source check
+  # above so the no-source refusal still happens before any docker call.
+  if ! docker image inspect "$LATEST_IMAGE" >/dev/null 2>&1; then
+    drill_fail "no staging app image '$LATEST_IMAGE' exists yet — the rollback drill verifies a rollback of an already-deployed release; run deploy-staging first"
   fi
 
   WORK_DIR="$(mktemp -d)" || drill_fail "failed to create a work dir"

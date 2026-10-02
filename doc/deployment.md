@@ -249,7 +249,8 @@ identically for staging and production:
    (`portal/src/`) and `portal:<env-prefix>:candidate` is built **while the
    app keeps serving**.
 2. The running image is tagged `...:previous` (the rollback target), and the
-   gate asserts that **no other container** mounts the data dirs.
+   gate asserts that **no other container** mounts the data dirs. On a **first
+   deploy** (below) there is no previous image, so nothing is tagged.
 3. **WRITE FREEZE**: the app container is stopped — HTTP writes, the
    in-process WhatsApp client, the notification outbox worker and all
    background jobs stop with it. Freeze start/end are logged with UTC
@@ -282,6 +283,18 @@ identically for staging and production:
    (newly accepted data is kept; nothing is restored from backup). With `no`,
    the candidate is stopped, **nothing is restored automatically**, and the
    manual recovery procedure (below) is printed.
+
+**First deploy of a new environment.** When the app container is not running
+**and** `...:latest` does not exist yet, the gate logs `FIRST DEPLOY` at the
+start and adapts: no `...:previous` tag is created, trial B is skipped with
+`ROLLBACK_COMPATIBLE=no`, and the verified backup, trial A and the cutover
+run as usual. A stopped container whose `...:latest` exists is **not** a
+first deploy — previous is tagged from `...:latest` and everything runs as
+for a running app. On any post-freeze failure during a first deploy there is
+nothing to roll back to: the gate stops the candidate, prints `first deploy:
+nothing to roll back to; data left as the candidate wrote it` and exits 1.
+The rollback drill (`portal-drill rollback`) refuses up front with a "run
+deploy-staging first" message when no staging app image exists yet.
 
 **Seeds are bootstrap-only.** The gate runs `npm run db:seed` and
 `scripts/seed-travel-catalog.ts` in trial A and after cutover; both self-skip
