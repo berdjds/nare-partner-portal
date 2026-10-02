@@ -14,8 +14,9 @@
  *     smoke blocks anything from touching production;
  *   - deploy/smoke jobs run only for pushes to main, and pull requests still
  *     execute the test job only;
- *   - drills are offered only as drill-rollback | drill-restore and can
- *     never target production;
+ *   - drills are offered as drill-rollback | drill-restore alongside the
+ *     manual deploy-staging rehearsal choice, and can never target
+ *     production;
  *   - secrets are referenced only through env mappings — never interpolated
  *     into run scripts and never echoed to the log.
  */
@@ -55,6 +56,9 @@ const on = (doc.on ?? doc["true"]) as Record<string, any>;
 const jobs = doc.jobs ?? {};
 
 const DEPLOY_JOBS = ["deploy-staging", "smoke-staging", "deploy-production", "smoke-production"];
+// Manual-only jobs (workflow_dispatch): the staging drills and the W3g
+// staging deploy rehearsal.
+const MANUAL_JOBS = ["drill", "deploy-staging-manual"];
 
 function needsOf(job: Job | undefined): string[] {
   if (!job || job.needs === undefined) return [];
@@ -73,7 +77,7 @@ function mentionsVar(line: string, name: string): boolean {
 
 describe("workflow triggers", () => {
   it("is valid YAML with the expected jobs", () => {
-    for (const name of ["test", ...DEPLOY_JOBS, "drill"]) {
+    for (const name of ["test", ...DEPLOY_JOBS, ...MANUAL_JOBS]) {
       expect(jobs[name], name).toBeDefined();
     }
   });
@@ -167,23 +171,26 @@ describe("SSH authentication", () => {
       expect(scripts, name).toContain("printf '%s\\n' \"$DEPLOY_SSH_KEY\" > ~/.ssh/deploy_key");
       expect(scripts, name).toContain("printf '%s\\n' \"$DEPLOY_KNOWN_HOSTS\" > ~/.ssh/known_hosts");
     }
-    // The four deploy/smoke jobs plus the drill job all install the key.
-    expect(installers).toBe(DEPLOY_JOBS.length + 1);
+    // The four deploy/smoke jobs plus the two manual jobs install the key.
+    expect(installers).toBe(DEPLOY_JOBS.length + MANUAL_JOBS.length);
   });
 });
 
 describe("staging drills", () => {
-  it("offers only drill-rollback and drill-restore as the workflow_dispatch action", () => {
+  it("offers drill-rollback, drill-restore and deploy-staging as the workflow_dispatch action", () => {
     const action = on.workflow_dispatch?.inputs?.action;
     expect(action?.required).toBe(true);
     expect(action?.type).toBe("choice");
-    expect(action?.options).toEqual(["drill-rollback", "drill-restore"]);
+    expect(action?.options).toEqual(["drill-rollback", "drill-restore", "deploy-staging"]);
   });
 
   it("runs drills only on workflow_dispatch and can never target production", () => {
     const drill = jobs.drill;
     expect(drill).toBeDefined();
     expect(String(drill?.if)).toContain("github.event_name == 'workflow_dispatch'");
+    // The deploy-staging choice must not fall through to the drill job: the
+    // dispatcher would reject it as an unknown command.
+    expect(String(drill?.if)).toContain("inputs.action");
     const scripts = runScripts(drill).join("\n");
     // The action reaches the ssh command through an env var, and no drill
     // step can name production — the only production restore path
@@ -192,6 +199,57 @@ describe("staging drills", () => {
     expect(scripts).toContain('"$DRILL_ACTION"');
     expect(scripts).not.toContain("production");
     expect(raw).not.toContain("restore --production");
+  });
+});
+
+describe("manual staging deploy (W3g)", () => {
+  const manual = jobs["deploy-staging-manual"];
+
+  it("exists and runs only for workflow_dispatch with action deploy-staging", () => {
+    expect(manual).toBeDefined();
+    const cond = String(manual?.if ?? "");
+    expect(cond).toContain("github.event_name == 'workflow_dispatch'");
+    expect(cond).toContain("inputs.action == 'deploy-staging'");
+    // Never on push or pull_request, and never chained into the release jobs.
+    expect(cond).not.toContain("push");
+    expect(cond).not.toContain("refs/heads/main");
+  });
+
+  it("deploys and smokes staging through the same forced commands as the push path", () => {
+    // The steps must mirror deploy-staging + smoke-staging so the manual
+    // rehearsal and the main-push path cannot drift.
+    const scripts = runScripts(manual).join("\n");
+    expect(scripts).toContain(
+      'ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "upload portal-source.tar.gz" < "$RUNNER_TEMP/portal-source.tar.gz"'
+    );
+    expect(scripts).toContain('"deploy staging portal-source.tar.gz"');
+    expect(scripts).toContain('"smoke staging"');
+    expect(scripts).toContain('bash scripts/smoke-test.sh "$STAGING_URL"');
+    expect(String(manual?.env?.STAGING_URL)).toContain("vars.STAGING_URL");
+    expect(scripts).not.toMatch(/^\s*scp\s/m);
+    expect(scripts).not.toMatch(/^\s*sftp\s/m);
+  });
+
+  it("checks out the dispatched ref and never touches production", () => {
+    expect((manual?.steps ?? []).some((step) => step.uses === "actions/checkout@v4")).toBe(true);
+    const scripts = runScripts(manual).join("\n");
+    expect(scripts).not.toContain("production");
+    expect(String(manual?.env?.PORTAL_URL ?? "")).toBe("");
+  });
+
+  it("uses the same DEPLOY_* secrets as every other deploy job", () => {
+    expect(String(manual?.env?.DEPLOY_HOST)).toBe("${{ secrets.DEPLOY_HOST }}");
+    expect(String(manual?.env?.DEPLOY_USER)).toBe("${{ secrets.DEPLOY_USER }}");
+    expect(String(manual?.env?.DEPLOY_SSH_KEY)).toBe("${{ secrets.DEPLOY_SSH_KEY }}");
+    expect(String(manual?.env?.DEPLOY_KNOWN_HOSTS)).toBe("${{ secrets.DEPLOY_KNOWN_HOSTS }}");
+  });
+
+  it("never runs the production jobs for workflow_dispatch", () => {
+    for (const name of ["deploy-production", "smoke-production"]) {
+      const cond = String(jobs[name]?.if ?? "");
+      expect(cond, name).not.toContain("workflow_dispatch");
+      expect(cond, name).toContain("github.event_name == 'push'");
+    }
   });
 });
 
