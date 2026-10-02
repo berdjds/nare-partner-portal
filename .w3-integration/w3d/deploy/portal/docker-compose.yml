@@ -1,0 +1,42 @@
+# Reference copy of the live production layout on the owner's server
+# (/opt/stack/docker-compose.yml, portal.nare.am). Kept in the repo so the
+# provisioning script and the staging project stay in sync with production.
+# This file is documentation of the live layout — the provisioning script
+# never rewrites the live compose file. Secrets stay on the server and appear
+# here only as ${VAR} placeholders.
+services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - portal_net
+
+  portal:
+    build: ./portal/src
+    image: portal:${PORTAL_IMAGE_TAG}
+    container_name: portal-app
+    env_file: /opt/stack/.env
+    volumes:
+      - ./portal/data:/app/data
+      - ./portal/uploads:/app/public/uploads
+      - ./portal/auth:/app/.wwebjs_auth
+    networks:
+      - portal_net
+
+networks:
+  # Compose project default network; its real name (<project>_portal_net) is
+  # discovered at provisioning time, never hard-coded.
+  portal_net:
+
+volumes:
+  caddy_data:
+  caddy_config:
