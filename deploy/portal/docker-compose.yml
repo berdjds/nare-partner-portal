@@ -1,94 +1,52 @@
-# Production compose project for portal.nare.am — DOCUMENTATION-GRADE TEMPLATE.
+# Reference copy of the live production layout on the owner's server
+# (/opt/stack/docker-compose.yml, portal.nare.am). Kept in the repo so the
+# provisioning script and the staging project stay in sync with production.
+# This file is documentation of the live layout — the provisioning script
+# never rewrites the live compose file. Secrets stay on the server and appear
+# here only as ${VAR} placeholders.
 #
-# This file documents the production server layout at /opt/stack. It is
-# installed by the OWNER (copied from this template to
-# /opt/stack/docker-compose.yml) during provisioning. The deploy gate
-# (scripts/vps-deploy.sh) REFUSES to deploy when the server compose file is
-# missing and never creates, syncs or modifies it — the compose file belongs
-# to provisioning, because deployments must not be able to rewrite the
-# environment they deploy into.
-#
-# Fixed server layout (phase W3b):
-#   /opt/stack/docker-compose.yml   this file (production project)
-#   /opt/stack/.env                 PORTAL_* secrets, interpolated below
-#   /opt/stack/portal/src           build context (source tree uploaded by the
-#                                   deploy gate)
-#   /opt/stack/portal/{data,uploads,auth}  app data (SQLite, media, WhatsApp
-#                                   session)
-#   /opt/stack/backups              deploy-gate backup archives
-#   /opt/stack/staging/             SECOND compose project (staging), which
-#                                   joins the portal-web network created here
-#                                   as an external network — so the production
-#                                   project must exist before staging starts.
-#
-# Secrets come from /opt/stack/.env using PORTAL_-prefixed names
-# (PORTAL_NEXTAUTH_SECRET, PORTAL_ADMIN_EMAIL, PORTAL_ADMIN_PASSWORD, and the
-# optional PORTAL_SMTP_* set for travel-module e-mail). Required secrets use
-# `${VAR:?...}` interpolation so a missing value fails loudly at `docker
-# compose up` instead of booting the app with an empty secret.
-
+# /opt/stack/.env contract: the `env_file:` below passes the file RAW to the
+# container (no name mapping), so it must define the app's UNPREFIXED runtime
+# variables — NEXTAUTH_SECRET, NEXTAUTH_URL, ADMIN_EMAIL, ADMIN_PASSWORD,
+# DATABASE_URL, SMTP_* — and additionally the PORTAL_* names that the deploy
+# gate's trial containers interpolate from the same file
+# (PORTAL_NEXTAUTH_SECRET, PORTAL_ADMIN_EMAIL, PORTAL_ADMIN_PASSWORD; see
+# scripts/vps-deploy.sh), plus PORTAL_IMAGE_TAG=latest (the deploy gate moves
+# that tag at cutover).
 services:
   caddy:
     image: caddy:2
-    container_name: portal-caddy
-    restart: always
+    container_name: caddy
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp" # HTTP/3
+      - "443:443/udp"
     volumes:
-      # The Caddyfile and the staging-site import live on the host under
-      # /etc/caddy because they are provisioning artifacts, not app data —
-      # they must survive `docker compose down -v` of this project.
-      - /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - /etc/caddy/staging.portal.nare.am.caddy:/etc/caddy/staging.portal.nare.am.caddy:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      - web
+      - portal_net
 
   portal:
-    image: portal:latest
-    # `portal:latest` is tagged by the deploy gate at cutover (after the
-    # trials pass). Never edit the image reference by hand — a hand-tagged
-    # image bypasses the gate's backup-and-trial safety net.
+    build: ./portal/src
+    # Safe default: a missing PORTAL_IMAGE_TAG must never produce the invalid
+    # image reference `portal:` at cutover.
+    image: portal:${PORTAL_IMAGE_TAG:-latest}
     container_name: portal-app
-    restart: always
-    environment:
-      - NODE_ENV=production
-      - HOSTNAME=0.0.0.0
-      - PORT=3000
-      - DATABASE_URL=file:/app/data/dev.db
-      - NEXTAUTH_URL=https://portal.nare.am
-      - NEXTAUTH_SECRET=${PORTAL_NEXTAUTH_SECRET:?PORTAL_NEXTAUTH_SECRET must be set in /opt/stack/.env}
-      - ADMIN_EMAIL=${PORTAL_ADMIN_EMAIL:?PORTAL_ADMIN_EMAIL must be set in /opt/stack/.env}
-      - ADMIN_PASSWORD=${PORTAL_ADMIN_PASSWORD:?PORTAL_ADMIN_PASSWORD must be set in /opt/stack/.env}
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-      # Travel-module e-mail notifications. Optional: with the SMTP_* values
-      # empty the app still boots but flags notification deliveries FAILED,
-      # which is preferable to refusing to start on a mail outage.
-      - SMTP_HOST=${PORTAL_SMTP_HOST:-}
-      - SMTP_PORT=${PORTAL_SMTP_PORT:-}
-      - SMTP_USER=${PORTAL_SMTP_USER:-}
-      - SMTP_PASS=${PORTAL_SMTP_PASS:-}
-      - SMTP_FROM=${PORTAL_SMTP_FROM:-}
+    env_file: /opt/stack/.env
     volumes:
       - ./portal/data:/app/data
       - ./portal/uploads:/app/public/uploads
       - ./portal/auth:/app/.wwebjs_auth
-    # No published host port: caddy proxies to portal-app:3000 over the
-    # portal-web network, so the app is never reachable except through TLS.
-    expose:
-      - "3000"
     networks:
-      - web
+      - portal_net
 
 networks:
-  web:
-    # Fixed name: the staging project (/opt/stack/staging) joins this network
-    # as an EXTERNAL network, which only works if the name is stable and not
-    # prefixed with the compose project name.
-    name: portal-web
+  # Compose project default network; its real name (<project>_portal_net) is
+  # discovered at provisioning time, never hard-coded.
+  portal_net:
 
 volumes:
   caddy_data:

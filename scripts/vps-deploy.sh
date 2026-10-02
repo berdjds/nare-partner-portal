@@ -66,7 +66,8 @@
 # PORTAL_UPLOADS_DIR, PORTAL_AUTH_DIR, PORTAL_SRC_DIR, PORTAL_BACKUP_DIR,
 # PORTAL_PUBLIC_URL, PORTAL_ENV_NAME, PORTAL_ENV_FILE, PORTAL_SOURCE_TARBALL,
 # PORTAL_*_IMAGE (defaults are per-env: portal:* for production,
-# portal-staging:* for staging), PORTAL_BACKUP_KEEP_DAYS,
+# portal-staging:* for staging; PORTAL_APP_SERVICE likewise defaults to
+# portal for production and portal-staging for staging), PORTAL_BACKUP_KEEP_DAYS,
 # PORTAL_HEALTH_RETRIES, PORTAL_HEALTH_INTERVAL_SECONDS, PORTAL_TRIAL_A_PORT,
 # PORTAL_TRIAL_B_PORT, PORTAL_STAGING_OVERRIDE_FILE.
 # W3c staging drill hook: PORTAL_DRILL_FAIL_HEALTH=1 fails the post-cutover health check on purpose; honoured only when the target env is staging.
@@ -106,12 +107,14 @@ case "$ENV_NAME" in
   production)
     DEFAULT_ROOT="/opt/stack"
     DEFAULT_CONTAINER="portal-app"
+    DEFAULT_SERVICE="portal"
     DEFAULT_PUBLIC_URL="https://portal.nare.am"
     DEFAULT_IMAGE_REPO="portal"
     ;;
   staging)
     DEFAULT_ROOT="/opt/stack/staging"
     DEFAULT_CONTAINER="portal-staging"
+    DEFAULT_SERVICE="portal-staging"
     DEFAULT_PUBLIC_URL="https://staging.portal.nare.am"
     DEFAULT_IMAGE_REPO="portal-staging"
     ;;
@@ -123,7 +126,11 @@ esac
 
 ROOT="${PORTAL_ROOT:-$DEFAULT_ROOT}"
 COMPOSE_FILE="${PORTAL_COMPOSE_FILE:-$ROOT/docker-compose.yml}"
-APP_SERVICE="${PORTAL_APP_SERVICE:-portal}"
+# The compose service name is per-environment (portal for production,
+# portal-staging for staging): compose registers it as a DNS alias on every
+# network the service joins, and staging joins the production network where
+# `portal` already resolves to the production app.
+APP_SERVICE="${PORTAL_APP_SERVICE:-$DEFAULT_SERVICE}"
 APP_CONTAINER="${PORTAL_APP_CONTAINER:-$DEFAULT_CONTAINER}"
 DATA_DIR="${PORTAL_DATA_DIR:-$ROOT/portal/data}"
 UPLOADS_DIR="${PORTAL_UPLOADS_DIR:-$ROOT/portal/uploads}"

@@ -1,32 +1,39 @@
 #!/usr/bin/env bash
 #
-# Staging operational drills (W3c, task portal-drills). Installed by the
-# portal provisioning tooling as /usr/local/lib/portal-deploy/portal-drill
-# and invoked by the portal dispatcher as:
+# Staging operational drills (W3c, task portal-drills; adapted to the W3b
+# portal layout in task layout-merge). Installed by deploy/provision-server.sh
+# as /usr/local/lib/portal-deploy/portal-drill and invoked by the portal
+# dispatcher as:
 #
 #   PORTAL_ENV_NAME=staging /usr/local/lib/portal-deploy/portal-drill rollback|restore
 #
-#   rollback   Deploy the staging app with the vps-deploy.sh drill hook
+#   rollback   Deploy the staging stack through the deploy gate
+#              (portal-deploy) with the drill hook
 #              (PORTAL_DRILL_FAIL_HEALTH=1) so the post-cutover health check
 #              fails on purpose, then verify the automatic rollback: the
 #              container runs the previous image, /login is healthy, and the
 #              staging data is byte-for-byte unchanged.
 #   restore    Take a verified backup of the staging data dirs, plant a
-#              marker file, run restore-backup.sh over the staging data, then
-#              verify the marker is gone and the restored data matches the
-#              backup byte for byte.
+#              marker file, run the restore tool (portal-restore) over the
+#              staging data, then verify the marker is gone and the restored
+#              data matches the backup byte for byte.
 #
-# Both drills run against the STAGING copy of the app (default root
-# /root/stagingapp), whose layout mirrors production: wacontrol-data/,
-# wacontrol-uploads/, wacontrol-auth/, docker-compose.yml, backups/,
-# wacontrol-source.tar.gz and wacontrol-src/scripts/{vps-deploy.sh,
-# restore-backup.sh}.
+# Both drills run against the STAGING stack (default root /opt/stack/staging),
+# whose layout mirrors production: portal/{data,uploads,auth},
+# docker-compose.yml, backups/ and portal-source.tar.gz. The child tools are
+# the installed deploy/restore tools (portal-deploy / portal-restore under
+# /usr/local/lib/portal-deploy), pointed at the staging root through PORTAL_*
+# overrides.
 #
 # Safety: the drills refuse to run unless PORTAL_ENV_NAME is exactly
-# "staging", the staging root does not overlap the production root, and every
-# data path resolves strictly inside the staging root (symlinks pointing
-# outside are caught). Production is never touched: the child tools are
-# pointed at the staging root through WACONTROL_* overrides.
+# "staging", the production root is neither equal to nor inside the staging
+# root (the staging root itself MAY be nested under the production root —
+# that is the W3b layout, /opt/stack/staging under /opt/stack), every data
+# path resolves strictly inside the staging root (symlinks pointing outside
+# are caught), and no data path lands in the production data areas
+# ($PRODUCTION_ROOT/portal, $PRODUCTION_ROOT/backups) or on the production
+# compose/env file. Production is never touched: the child tools are pointed
+# at the staging root through PORTAL_* overrides.
 
 set -euo pipefail
 
@@ -40,7 +47,7 @@ usage: portal-drill rollback|restore
              (PORTAL_DRILL_FAIL_HEALTH=1) and verify the automatic rollback
              leaves the staging app healthy and the data unchanged.
   restore    Run the staging restore drill: verified backup, marker file,
-             restore-backup.sh, then verify the marker is gone and the data
+             portal-restore, then verify the marker is gone and the data
              matches the backup.
 
 Refuses to run unless PORTAL_ENV_NAME=staging.
@@ -55,23 +62,27 @@ case "$DRILL_NAME" in
     ;;
 esac
 
-STAGING_ROOT="${PORTAL_STAGING_ROOT:-/root/stagingapp}"
-PRODUCTION_ROOT="${PORTAL_PRODUCTION_ROOT:-/root/productionapp}"
-APP_CONTAINER="${PORTAL_APP_CONTAINER:-wacontrol-staging-app}"
-CANDIDATE_IMAGE="${PORTAL_CANDIDATE_IMAGE:-wacontrol-staging:candidate}"
-PREVIOUS_IMAGE="${PORTAL_PREVIOUS_IMAGE:-wacontrol-staging:previous}"
-LATEST_IMAGE="${PORTAL_LATEST_IMAGE:-wacontrol-staging:latest}"
-DEPLOY_SCRIPT="${PORTAL_DEPLOY_SCRIPT:-$STAGING_ROOT/wacontrol-src/scripts/vps-deploy.sh}"
-RESTORE_SCRIPT="${PORTAL_RESTORE_SCRIPT:-$STAGING_ROOT/wacontrol-src/scripts/restore-backup.sh}"
-SOURCE_TARBALL="${PORTAL_SOURCE_TARBALL:-$STAGING_ROOT/wacontrol-source.tar.gz}"
+LIB_DIR="${PORTAL_DEPLOY_LIB_DIR:-/usr/local/lib/portal-deploy}"
+STAGING_ROOT="${PORTAL_STAGING_ROOT:-/opt/stack/staging}"
+PRODUCTION_ROOT="${PORTAL_PRODUCTION_ROOT:-/opt/stack}"
+APP_CONTAINER="${PORTAL_APP_CONTAINER:-portal-staging}"
+CANDIDATE_IMAGE="${PORTAL_CANDIDATE_IMAGE:-portal-staging:candidate}"
+PREVIOUS_IMAGE="${PORTAL_PREVIOUS_IMAGE:-portal-staging:previous}"
+LATEST_IMAGE="${PORTAL_LATEST_IMAGE:-portal-staging:latest}"
+DEPLOY_TOOL="${PORTAL_DEPLOY_TOOL:-$LIB_DIR/portal-deploy}"
+RESTORE_TOOL="${PORTAL_RESTORE_TOOL:-$LIB_DIR/portal-restore}"
+SOURCE_TARBALL="${PORTAL_SOURCE_TARBALL:-$STAGING_ROOT/portal-source.tar.gz}"
+PAUSE_COMPOSE_FILE="${PORTAL_PAUSE_COMPOSE_FILE:-$STAGING_ROOT/portal-restore-paused.compose.yml}"
+ENV_FILE="${PORTAL_ENV_FILE:-$STAGING_ROOT/.env}"
 HEALTH_RETRIES="${PORTAL_HEALTH_RETRIES:-30}"
 HEALTH_INTERVAL_SECONDS="${PORTAL_HEALTH_INTERVAL_SECONDS:-3}"
 
 # Derived from the staging root on purpose (NOT separately overridable): the
-# safety gate below proves these stay inside the staging root.
-DATA_DIR="$STAGING_ROOT/wacontrol-data"
-UPLOADS_DIR="$STAGING_ROOT/wacontrol-uploads"
-AUTH_DIR="$STAGING_ROOT/wacontrol-auth"
+# safety gate below proves these stay inside the staging root. Same relative
+# layout the deploy gate and the restore tool use under $PORTAL_ROOT.
+DATA_DIR="$STAGING_ROOT/portal/data"
+UPLOADS_DIR="$STAGING_ROOT/portal/uploads"
+AUTH_DIR="$STAGING_ROOT/portal/auth"
 BACKUP_DIR="$STAGING_ROOT/backups"
 COMPOSE_FILE="$STAGING_ROOT/docker-compose.yml"
 
@@ -117,33 +128,47 @@ assert_staging_safety() {
   local resolved_prod
   resolved_staging="$(realpath -m -- "$STAGING_ROOT")"
   resolved_prod="$(realpath -m -- "$PRODUCTION_ROOT")"
-  case "$resolved_staging" in
-    "$resolved_prod" | "$resolved_prod"/*)
-      drill_fail "refusing to run: staging root '$resolved_staging' overlaps the production root '$resolved_prod'"
-      ;;
-  esac
+  # The staging root MAY live inside the production root — that is the W3b
+  # layout (/opt/stack/staging under /opt/stack). Refuse only the reverse:
+  # the roots are identical or the production root lies inside the staging
+  # root, because then the staging data paths could BE the production ones.
+  # Nested staging paths are kept out of the production data areas by the
+  # per-path check below.
   case "$resolved_prod" in
-    "$resolved_staging"/*)
-      drill_fail "refusing to run: staging root '$resolved_staging' overlaps the production root '$resolved_prod'"
+    "$resolved_staging" | "$resolved_staging"/*)
+      drill_fail "refusing to run: production root '$resolved_prod' equals or lies inside the staging root '$resolved_staging'"
       ;;
   esac
 
   # Every path the drill or its children act on must resolve strictly under
   # the staging root; realpath -m resolves symlinks, so a path linked out of
-  # the staging tree is caught. The overridable inputs (source tarball, child
-  # deploy/restore scripts, compose file) are checked too: vps-deploy.sh
-  # deletes the tarball and restore-backup.sh consumes the compose files, so a
-  # stray override pointing at production must be refused here, before any
-  # docker call.
+  # the staging tree is caught. The overridable inputs (source tarball, pause
+  # override, env file) are checked too: the deploy gate deletes the tarball
+  # and the restore tool writes the pause override, so a stray override
+  # pointing at production must be refused here, before any docker call. The
+  # child tools themselves are NOT data paths: by default they are the
+  # installed root-owned tools under /usr/local/lib/portal-deploy (the
+  # PORTAL_*_TOOL overrides exist for the test suite).
   local path
   local resolved
   for path in "$DATA_DIR" "$UPLOADS_DIR" "$AUTH_DIR" "$BACKUP_DIR" \
-    "$SOURCE_TARBALL" "$DEPLOY_SCRIPT" "$RESTORE_SCRIPT" "$COMPOSE_FILE"; do
+    "$SOURCE_TARBALL" "$COMPOSE_FILE" "$PAUSE_COMPOSE_FILE" "$ENV_FILE"; do
     resolved="$(realpath -m -- "$path")"
     case "$resolved" in
       "$resolved_staging"/*) ;;
       *)
         drill_fail "refusing to run: data path '$path' resolves to '$resolved', outside the staging root '$resolved_staging'"
+        ;;
+    esac
+    # Even inside the staging root a path must never land in the production
+    # data areas or on the production compose/env file — possible when the
+    # staging root is nested inside the production data dirs, or through a
+    # PORTAL_* override.
+    case "$resolved" in
+      "$resolved_prod/portal" | "$resolved_prod/portal"/* | \
+      "$resolved_prod/backups" | "$resolved_prod/backups"/* | \
+      "$resolved_prod/docker-compose.yml" | "$resolved_prod/.env")
+        drill_fail "refusing to run: data path '$path' resolves to '$resolved', inside the production data areas under '$resolved_prod'"
         ;;
     esac
   done
@@ -162,7 +187,7 @@ write_manifest() {
   done
 }
 
-# Internal health check (same approach as vps-deploy.sh): the image has no
+# Internal health check (same approach as the deploy gate): the image has no
 # curl, but it has Node 20 with global fetch, and the container probes its own
 # HTTP server so no port has to be published beyond localhost.
 container_login_ok() {
@@ -183,32 +208,37 @@ wait_for_login() {
 }
 
 export_child_environment() {
-  # Point the child tool (vps-deploy.sh / restore-backup.sh) at the staging
-  # layout. PORTAL_ENV_NAME itself is inherited from the environment, so the
-  # vps-deploy.sh drill hook stays staging-only.
-  export WACONTROL_APP_ROOT="$STAGING_ROOT"
-  export WACONTROL_APP_CONTAINER="$APP_CONTAINER"
-  export WACONTROL_SOURCE_TARBALL="$SOURCE_TARBALL"
-  export WACONTROL_CANDIDATE_IMAGE="$CANDIDATE_IMAGE"
-  export WACONTROL_PREVIOUS_IMAGE="$PREVIOUS_IMAGE"
-  export WACONTROL_LATEST_IMAGE="$LATEST_IMAGE"
-  export WACONTROL_HEALTH_RETRIES="$HEALTH_RETRIES"
-  export WACONTROL_HEALTH_INTERVAL_SECONDS="$HEALTH_INTERVAL_SECONDS"
-  # Pin the remaining child overrides too: restore-backup.sh honours
-  # WACONTROL_COMPOSE_FILE / WACONTROL_PAUSE_COMPOSE_FILE and vps-deploy.sh
-  # honours WACONTROL_ENV_FILE, so an inherited value from the caller would
-  # make a child write to a non-staging compose project or read a foreign
-  # .env. assert_staging_safety already proved these paths are inside the
-  # staging root.
-  export WACONTROL_COMPOSE_FILE="$COMPOSE_FILE"
-  export WACONTROL_PAUSE_COMPOSE_FILE="$STAGING_ROOT/wacontrol-restore-paused.compose.yml"
-  export WACONTROL_ENV_FILE="$STAGING_ROOT/.env"
+  # Point the child tool (portal-deploy / portal-restore) at the staging
+  # layout. PORTAL_ENV_NAME is pinned to staging (not just inherited): the
+  # deploy gate's drill hook stays staging-only and both tools pick the
+  # staging defaults (portal-staging container, portal-staging:* images).
+  export PORTAL_ENV_NAME="staging"
+  export PORTAL_ROOT="$STAGING_ROOT"
+  export PORTAL_APP_CONTAINER="$APP_CONTAINER"
+  export PORTAL_SOURCE_TARBALL="$SOURCE_TARBALL"
+  export PORTAL_CANDIDATE_IMAGE="$CANDIDATE_IMAGE"
+  export PORTAL_PREVIOUS_IMAGE="$PREVIOUS_IMAGE"
+  export PORTAL_LATEST_IMAGE="$LATEST_IMAGE"
+  export PORTAL_HEALTH_RETRIES="$HEALTH_RETRIES"
+  export PORTAL_HEALTH_INTERVAL_SECONDS="$HEALTH_INTERVAL_SECONDS"
+  # Pin the remaining child overrides too: the restore tool honours
+  # PORTAL_PAUSE_COMPOSE_FILE and both tools honour PORTAL_ENV_FILE, so an
+  # inherited value from the caller would make a child write to a non-staging
+  # compose project or read a foreign .env. assert_staging_safety already
+  # proved these paths are inside the staging root.
+  export PORTAL_DATA_DIR="$DATA_DIR"
+  export PORTAL_UPLOADS_DIR="$UPLOADS_DIR"
+  export PORTAL_AUTH_DIR="$AUTH_DIR"
+  export PORTAL_BACKUP_DIR="$BACKUP_DIR"
+  export PORTAL_COMPOSE_FILE="$COMPOSE_FILE"
+  export PORTAL_PAUSE_COMPOSE_FILE="$PAUSE_COMPOSE_FILE"
+  export PORTAL_ENV_FILE="$ENV_FILE"
 }
 
 drill_rollback() {
   assert_staging_safety
   command -v docker >/dev/null 2>&1 || drill_fail "docker is required on PATH"
-  [ -f "$DEPLOY_SCRIPT" ] || drill_fail "deploy script not found: $DEPLOY_SCRIPT"
+  [ -f "$DEPLOY_TOOL" ] || drill_fail "deploy tool not found: $DEPLOY_TOOL"
   [ -f "$SOURCE_TARBALL" ] || drill_fail "source tarball not found: $SOURCE_TARBALL"
 
   WORK_DIR="$(mktemp -d)" || drill_fail "failed to create a work dir"
@@ -219,7 +249,7 @@ drill_rollback() {
 
   export_child_environment
 
-  # The drill hook in vps-deploy.sh fails the post-cutover health check on
+  # The drill hook in the deploy gate fails the post-cutover health check on
   # purpose, so the deploy MUST reach the cutover, fail there, and roll back.
   # A non-zero exit alone does not prove that: any pre-cutover failure (build,
   # tarball extract, backup, trial) also exits 1 with the container untouched
@@ -232,7 +262,7 @@ drill_rollback() {
   log "running the deploy with PORTAL_DRILL_FAIL_HEALTH=1 — expecting a cutover failure and an automatic rollback"
   local deploy_log="$WORK_DIR/deploy.log"
   local status=0
-  PORTAL_DRILL_FAIL_HEALTH=1 bash "$DEPLOY_SCRIPT" 2>&1 | tee "$deploy_log" || status="${PIPESTATUS[0]}"
+  PORTAL_DRILL_FAIL_HEALTH=1 bash "$DEPLOY_TOOL" staging 2>&1 | tee "$deploy_log" || status="${PIPESTATUS[0]}"
 
   if [ "$status" -eq 0 ]; then
     drill_fail "the deploy succeeded although PORTAL_DRILL_FAIL_HEALTH=1 — the drill hook was ignored"
@@ -273,7 +303,7 @@ drill_rollback() {
 drill_restore() {
   assert_staging_safety
   command -v docker >/dev/null 2>&1 || drill_fail "docker is required on PATH"
-  [ -f "$RESTORE_SCRIPT" ] || drill_fail "restore script not found: $RESTORE_SCRIPT"
+  [ -f "$RESTORE_TOOL" ] || drill_fail "restore tool not found: $RESTORE_TOOL"
   [ -f "$COMPOSE_FILE" ] || drill_fail "compose file not found: $COMPOSE_FILE"
 
   WORK_DIR="$(mktemp -d)" || drill_fail "failed to create a work dir"
@@ -284,7 +314,7 @@ drill_restore() {
   # have left its marker behind. If it stayed, it would be captured by the
   # manifest and the backup below, restored from that backup, and then fail
   # this run as "the drill marker survived the restore" — on every subsequent
-  # run, wrongly implicating restore-backup.sh. Remove it up front.
+  # run, wrongly implicating the restore tool. Remove it up front.
   if [ -e "$DATA_DIR/DRILL-MARKER.txt" ]; then
     log "removing a leftover drill marker from a previous run: $DATA_DIR/DRILL-MARKER.txt"
     rm -f -- "$DATA_DIR/DRILL-MARKER.txt"
@@ -295,14 +325,15 @@ drill_restore() {
   export_child_environment
 
   # Verified backup in the same format as the deploy gate's backup_data_dirs
-  # (verified tar + sha256 sidecar), so restore-backup.sh can consume it.
+  # (verified tar + sha256 sidecar, data dirs archived by basename), so the
+  # restore tool can consume it.
   local stamp
   local backup
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-  backup="$BACKUP_DIR/wacontrol-$stamp.tar.gz"
+  backup="$BACKUP_DIR/portal-staging-$stamp.tar.gz"
   mkdir -p "$BACKUP_DIR" || drill_fail "failed to take the staging backup"
   log "backup: archiving staging data dirs to $backup"
-  tar -czf "$backup" -C "$STAGING_ROOT" wacontrol-data wacontrol-uploads wacontrol-auth \
+  tar -czf "$backup" -C "$STAGING_ROOT/portal" data uploads auth \
     || drill_fail "failed to take the staging backup"
   tar -tzf "$backup" >/dev/null || drill_fail "failed to take the staging backup"
   sha256sum "$backup" > "$backup.sha256" || drill_fail "failed to take the staging backup"
@@ -311,17 +342,17 @@ drill_restore() {
   printf 'portal drill marker\n' > "$DATA_DIR/DRILL-MARKER.txt"
 
   # The backup above was taken from the currently running release, so restore
-  # with the image that matches it: the running latest (restore-backup.sh's
+  # with the image that matches it: the running latest (the restore tool's
   # retag of latest becomes a no-op). Restoring the older `previous` image
   # would boot old code on current-schema data — and refuse to run at all on a
   # staging host where no previous tag exists yet.
-  export WACONTROL_RESTORE_IMAGE="$LATEST_IMAGE"
+  export PORTAL_RESTORE_IMAGE="$LATEST_IMAGE"
 
   # --no-export-ack is correct here: the drill intentionally discards the
   # marker, so no export-since output exists.
   log "restoring $(basename "$backup") over the staging data dirs"
   local status=0
-  bash "$RESTORE_SCRIPT" "$backup" --yes --no-export-ack || status=$?
+  bash "$RESTORE_TOOL" "$backup" --yes --no-export-ack || status=$?
   if [ "$status" -ne 0 ]; then
     # The restore tool can refuse before extracting the archive (missing
     # restore image, another container mounting a data dir, missing compose

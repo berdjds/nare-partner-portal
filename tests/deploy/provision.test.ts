@@ -1,26 +1,50 @@
 /**
- * Provisioning tests (W3b, task provision) for deploy/provision-server.sh and
- * deploy/portal-deploy-entry.sh.
+ * Merged provisioning tests (W3b provisioning + W3d live layout) for
+ * deploy/provision-server.sh and deploy/portal-deploy-entry.sh.
  *
  * deploy/provision-server.sh is the owner's one-time, idempotent server
- * provisioning script. These tests run the real script with bash in
- * "transplant mode" (PORTAL_PROVISION_ROOT=<tmpdir>): every absolute target
- * path lands under the temp root while system mutations (apt-get, useradd,
- * chown, systemctl) are logged as [skip]. Covered:
+ * provisioning script, fitted to the live /opt/stack layout: the production
+ * compose project runs the caddy container (PORTAL_CADDY_CONTAINER, default
+ * "caddy") and the app container (PORTAL_APP_CONTAINER, default "portal-app")
+ * on a compose-managed network whose real name is discovered from the running
+ * app container, and the staging site is a marker-delimited block inside the
+ * single live Caddyfile (PORTAL_CADDYFILE, default /opt/stack/Caddyfile) that
+ * is validated and reloaded INSIDE the caddy container via docker exec.
+ *
+ * These tests run the real script with bash in "transplant mode"
+ * (PORTAL_PROVISION_ROOT=<tmpdir>): every absolute target path lands under
+ * the temp root while system mutations (apt-get, useradd, chown, systemctl)
+ * are logged as [skip]. Docker is replaced by a PATH stub that records every
+ * invocation, discovers a scripted network, names the caddy container as
+ * running, captures the validate stdin, and scripts failures per scenario.
+ * Covered:
  *
  *   - --dry-run prints every action and creates nothing under the root;
  *   - two real runs converge: the second reports only [unchanged]/[skip]
  *     action lines, the seeded production data under
  *     opt/stack/portal/{data,uploads,auth} stays byte-identical, and the
  *     before/after manifest lines are equal;
+ *   - the installed layout (dispatcher, tool library incl. portal-drill,
+ *     sudoers drop-in, systemd units, staging compose project, .env.staging
+ *     + .env symlink) and the absence of the old host-level etc/caddy layout;
  *   - the exact authorized_keys line (forced command + all four no-* options)
  *     and a sudoers drop-in with exactly one non-comment line naming only the
  *     dispatcher;
- *   - .env.staging ships EMPTY credentials (never a fixed known secret) so
- *     the compose :? guards refuse to boot a forgotten staging;
- *   - the caddy validate gate: a PATH stub caddy validates the edited
- *     Caddyfile; a failing stub makes the script restore the backup and die;
- *     a failing visudo stub aborts before the sudoers drop-in is installed.
+ *   - .env.staging ships EMPTY credentials and an empty PORTAL_NETWORK line
+ *     (never a fixed known secret) so the compose :? guards refuse to boot a
+ *     forgotten staging;
+ *   - the live-layout caddy flow: the managed staging block is appended with
+ *     BEGIN/END markers, the candidate is validated inside the caddy
+ *     container BEFORE the live path is touched, a timestamped backup is
+ *     kept, a validation failure leaves the live file untouched, a reload
+ *     failure restores the backup, a preset PORTAL_NETWORK skips discovery,
+ *     and missing docker degrades to warnings (block installed without
+ *     validation, empty PORTAL_NETWORK recorded);
+ *   - the visudo gate: a failing visudo stub aborts before the sudoers
+ *     drop-in is installed;
+ *   - static checks: nothing under deploy/ or scripts/ references the old
+ *     portal-caddy / portal-web names, and the compose/Caddyfile fixtures the
+ *     script depends on match the live layout.
  *
  * deploy/portal-deploy-entry.sh is the forced-command dispatcher installed as
  * /usr/local/sbin/portal-deploy-entry. Its tests drive the repo copy directly
@@ -68,18 +92,21 @@ const STAGING_URL = "https://staging.example.test";
 
 // Arbitrary bytes — provisioning must leave the seeded production data
 // byte-identical across both runs.
-const DEV_DB_BYTES = Buffer.from("provision fixture db bytes ");
-const UPLOAD_BYTES = Buffer.from("provision fixture upload bytes ");
-const AUTH_BYTES = Buffer.from("provision fixture auth bytes ");
+const DEV_DB_BYTES = Buffer.from("provision fixture db bytes ");
+const UPLOAD_BYTES = Buffer.from("provision fixture upload bytes ");
+const AUTH_BYTES = Buffer.from("provision fixture auth bytes ");
 
-const CADDYFILE_BASE = "portal.nare.am {\n    reverse_proxy portal-app:3000\n}\n";
-const IMPORT_LINE = "import /etc/caddy/staging.portal.nare.am.caddy";
+// Mirrors the live /opt/stack/Caddyfile (deploy/portal/Caddyfile.example).
+const CADDYFILE_FIXTURE =
+  "{\n\temail admin@nare.am\n}\n\nportal.nare.am {\n\tencode gzip\n\treverse_proxy portal:3000\n}\n";
+const BEGIN_MARKER = "# BEGIN staging.portal.nare.am (managed by provision-server.sh)";
+const END_MARKER = "# END staging.portal.nare.am";
 
 /**
- * The stub scripts below deliberately use only "$var" expansions (the one
- * ${...} form is escaped) so they can live inside TypeScript template
- * literals. No `set -e` in the stubs on purpose: their scripted failures are
- * driven by explicit exit codes.
+ * The stub scripts below deliberately use only "$var" expansions (the ${...}
+ * forms are escaped) so they can live inside TypeScript template literals.
+ * No `set -e` in the stubs on purpose: their scripted failures are driven by
+ * explicit exit codes.
  */
 const SUDO_STUB = `#!/usr/bin/env bash
 # sudo test double: records the exact argv it was asked to run, then runs it —
@@ -101,13 +128,55 @@ const TOOL_STUB = `#!/usr/bin/env bash
 printf 'tool=%s argv=%s PORTAL_ENV_NAME=%s\\n' "$(basename "$0")" "$*" "\${PORTAL_ENV_NAME:-}" >> "$STUB_TOOL_LOG"
 `;
 
-function caddyStub(exitCode: number): string {
-  return `#!/usr/bin/env bash
-# caddy test double: logs the invocation, then exits with a scripted status.
-printf '%s\\n' "$*" >> "$STUB_CADDY_LOG"
-exit ${exitCode}
+// Docker CLI double for the provisioning script: every invocation is appended
+// to $STUB_LOG as one space-joined line; behavior is driven by STUB_* env:
+//   STUB_NETWORK=<name>        network printed by `docker inspect portal-app`
+//   STUB_PS_NAME=<name>        container list printed by `docker ps`
+//   STUB_FAIL_INSPECT=1        `docker inspect` exits 1
+//   STUB_FAIL_VALIDATE=1       the `caddy validate` exec exits 1
+//   STUB_FAIL_RELOAD=1         the `caddy reload` exec exits 1
+//   STUB_VALIDATE_CAPTURE=<p>  where the validate exec saves its stdin
+const DOCKER_STUB = `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$STUB_LOG"
+
+cmd="\${1:-}"
+
+case "$cmd" in
+  inspect)
+    if [ -n "\${STUB_FAIL_INSPECT:-}" ]; then
+      exit 1
+    fi
+    printf '%s\\n' "\${STUB_NETWORK:-stack_portal_net}"
+    exit 0
+    ;;
+  ps)
+    printf '%s\\n' "\${STUB_PS_NAME:-caddy}"
+    exit 0
+    ;;
+  exec)
+    joined="$*"
+    case "$joined" in
+      *"caddy validate"*)
+        cat > "\${STUB_VALIDATE_CAPTURE:-$STUB_LOG.validate}"
+        if [ -n "\${STUB_FAIL_VALIDATE:-}" ]; then
+          exit 1
+        fi
+        exit 0
+        ;;
+      *"caddy reload"*)
+        if [ -n "\${STUB_FAIL_RELOAD:-}" ]; then
+          exit 1
+        fi
+        exit 0
+        ;;
+    esac
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
 `;
-}
 
 const VISUDO_FAIL_STUB = `#!/usr/bin/env bash
 # visudo test double that always fails validation.
@@ -135,16 +204,18 @@ interface ProvisionFixture {
   root: string;
   pubkeyPath: string;
   portalDir: string;
-  caddyDir: string;
+  stackDir: string;
   caddyfilePath: string;
   stubBin: string;
-  caddyLog: string;
+  dockerLog: string;
 }
 
 /**
  * A throwaway transplant root with production data seeded under
  * opt/stack/portal/{data,uploads,auth} (three files total). When `caddyfile`
- * is given, etc/caddy/Caddyfile is pre-created with that content.
+ * is given, opt/stack/Caddyfile — the live-layout location — is pre-created
+ * with that content. `stubBin` is an empty dir the tests drop PATH stubs
+ * (docker, visudo) into.
  */
 function makeProvisionFixture(opts: { caddyfile?: string } = {}): ProvisionFixture {
   const work = mkdtempSync(path.join(tmpdir(), "portal-provision-"));
@@ -157,10 +228,10 @@ function makeProvisionFixture(opts: { caddyfile?: string } = {}): ProvisionFixtu
   writeFileSync(path.join(portalDir, "uploads", "x.jpg"), UPLOAD_BYTES);
   writeFileSync(path.join(portalDir, "auth", "session", "Cookies"), AUTH_BYTES);
 
-  const caddyDir = path.join(root, "etc", "caddy");
-  const caddyfilePath = path.join(caddyDir, "Caddyfile");
+  const stackDir = path.join(root, "opt", "stack");
+  const caddyfilePath = path.join(stackDir, "Caddyfile");
   if (opts.caddyfile !== undefined) {
-    mkdirSync(caddyDir, { recursive: true });
+    mkdirSync(stackDir, { recursive: true });
     writeFileSync(caddyfilePath, opts.caddyfile);
   }
 
@@ -169,17 +240,18 @@ function makeProvisionFixture(opts: { caddyfile?: string } = {}): ProvisionFixtu
   const stubBin = path.join(work, "bin");
   mkdirSync(stubBin, { recursive: true });
 
-  return { work, root, pubkeyPath, portalDir, caddyDir, caddyfilePath, stubBin, caddyLog: path.join(work, "caddy.log") };
+  return { work, root, pubkeyPath, portalDir, stackDir, caddyfilePath, stubBin, dockerLog: path.join(work, "docker.log") };
 }
 
 /**
  * Run the real provisioning script against the fixture's transplant root with
  * a minimal, controlled environment (the stub dir first on PATH, nothing else
- * inherited) so runs stay deterministic.
+ * inherited) so runs stay deterministic. Scenario variables for the docker
+ * stub (STUB_FAIL_*, PORTAL_NETWORK, ...) go through `extraEnv`.
  */
 function runProvision(
   fx: Pick<ProvisionFixture, "root" | "pubkeyPath"> & Partial<ProvisionFixture>,
-  opts: { dryRun?: boolean } = {}
+  opts: { dryRun?: boolean; extraEnv?: Record<string, string> } = {}
 ): RunResult {
   const args = [PROVISION, "--pubkey-file", fx.pubkeyPath];
   if (opts.dryRun) args.push("--dry-run");
@@ -187,10 +259,36 @@ function runProvision(
     NODE_ENV: process.env.NODE_ENV ?? "test",
     PATH: fx.stubBin ? `${fx.stubBin}${path.delimiter}${process.env.PATH ?? ""}` : (process.env.PATH ?? ""),
     PORTAL_PROVISION_ROOT: fx.root,
-    STUB_CADDY_LOG: fx.caddyLog ?? "",
+    STUB_LOG: fx.dockerLog ?? "",
+    ...opts.extraEnv,
   };
   const res = spawnSync("bash", args, { env, encoding: "utf8" });
   return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+}
+
+/** Install the docker stub into the fixture's stub dir. */
+function withDockerStub(fx: ProvisionFixture): void {
+  writeExecutable(path.join(fx.stubBin, "docker"), DOCKER_STUB);
+}
+
+/** Everything the docker stub recorded (empty when docker was never called). */
+function readDockerLog(fx: ProvisionFixture): string {
+  return existsSync(fx.dockerLog) ? readFileSync(fx.dockerLog, "utf8") : "";
+}
+
+/** Timestamped Caddyfile backups next to the live file. */
+function caddyBackups(fx: ProvisionFixture): string[] {
+  return readdirSync(fx.stackDir).filter((entry) => entry.startsWith("Caddyfile.bak-"));
+}
+
+/** Assert that the given steps appear in the log in order. */
+function assertInOrder(log: string, steps: string[]): void {
+  let cursor = 0;
+  for (const step of steps) {
+    const idx = log.indexOf(step, cursor);
+    expect(idx, `docker step out of order or missing: "${step}"`).toBeGreaterThanOrEqual(0);
+    cursor = idx + step.length;
+  }
 }
 
 /** The current bytes of the three seeded production files. */
@@ -209,6 +307,21 @@ function manifestLines(stdout: string): { before: string; after: string } {
   expect(before, stdout).not.toBeNull();
   expect(after, stdout).not.toBeNull();
   return { before: before?.[1] ?? "", after: after?.[1] ?? "" };
+}
+
+/** Recursive file listing for the static checks. */
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    if (entry === "node_modules" || entry === ".git") continue;
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      out.push(...walk(full));
+    } else {
+      out.push(full);
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,9 +401,8 @@ describe("deploy/provision-server.sh --dry-run", () => {
 
 describe("deploy/provision-server.sh idempotency and manifests", () => {
   it("two runs converge; the second reports only [unchanged]/[skip] and leaves production data byte-identical", () => {
-    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_BASE });
-    // A passing caddy on PATH keeps the validate gate deterministic.
-    writeExecutable(path.join(fx.stubBin, "caddy"), caddyStub(0));
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    withDockerStub(fx);
     const seeded = seededBytes(fx);
 
     const run1 = runProvision(fx);
@@ -299,13 +411,18 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
     const manifest1 = manifestLines(run1.stdout);
     expect(manifest1.before).toBe(manifest1.after);
     expect(manifest1.before).toContain("files=3");
-    // The staging import was appended to the Caddyfile and validated.
-    expect(readFileSync(fx.caddyfilePath, "utf8")).toContain(IMPORT_LINE);
-    expect(readFileSync(fx.caddyLog, "utf8")).toContain(`validate --config ${fx.caddyfilePath}`);
+    // The managed staging block was appended to the live Caddyfile and the
+    // discovered production network recorded for staging.
+    expect(readFileSync(fx.caddyfilePath, "utf8")).toContain(BEGIN_MARKER);
+    expect(readFileSync(fx.caddyfilePath, "utf8")).toContain("reverse_proxy portal-staging:3000");
+    expect(readFileSync(path.join(fx.root, "opt", "stack", "staging", ".env.staging"), "utf8")).toContain(
+      "PORTAL_NETWORK=stack_portal_net"
+    );
     // Seeded production data is byte-identical after run 1.
     expect(seededBytes(fx).db.equals(seeded.db)).toBe(true);
     expect(seededBytes(fx).upload.equals(seeded.upload)).toBe(true);
     expect(seededBytes(fx).auth.equals(seeded.auth)).toBe(true);
+    const caddyfileAfterRun1 = readFileSync(fx.caddyfilePath, "utf8");
 
     const run2 = runProvision(fx);
     expect(run2.status, run2.stdout + run2.stderr).toBe(0);
@@ -320,16 +437,21 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
     const manifest2 = manifestLines(run2.stdout);
     expect(manifest2.before).toBe(manifest2.after);
     expect(manifest2.before).toBe(manifest1.before);
+    // The live Caddyfile regenerated byte-identically.
+    expect(readFileSync(fx.caddyfilePath, "utf8")).toBe(caddyfileAfterRun1);
     // Seeded production data is still byte-identical after run 2.
     expect(seededBytes(fx).db.equals(seeded.db)).toBe(true);
     expect(seededBytes(fx).upload.equals(seeded.upload)).toBe(true);
     expect(seededBytes(fx).auth.equals(seeded.auth)).toBe(true);
   });
 
-  it("installs the layout: dispatcher, tool library, systemd units, staging project and caddy site", () => {
+  it("installs the layout: dispatcher, tool library, systemd units and the staging project", () => {
+    // No Caddyfile and no docker stub: the live-stack steps degrade to
+    // warnings while the rest of the layout is installed.
     const fx = makeProvisionFixture();
     const res = runProvision(fx);
     expect(res.status, res.stdout + res.stderr).toBe(0);
+    expect(res.stderr).toContain("[warn]");
 
     const expectedFiles = [
       "usr/local/sbin/portal-deploy-entry",
@@ -338,11 +460,11 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
       "usr/local/lib/portal-deploy/portal-export",
       "usr/local/lib/portal-deploy/portal-backup",
       "usr/local/lib/portal-deploy/portal-smoke",
+      "usr/local/lib/portal-deploy/portal-drill",
       "etc/sudoers.d/portal-deploy",
       "etc/systemd/system/portal-backup.service",
       "etc/systemd/system/portal-backup.timer",
       "etc/portal-backup.env",
-      "etc/caddy/staging.portal.nare.am.caddy",
       "opt/stack/staging/docker-compose.yml",
       "opt/stack/staging/.env.staging",
     ];
@@ -359,6 +481,9 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
     // .env is a relative symlink to .env.staging.
     const envLink = path.join(fx.root, "opt/stack/staging/.env");
     expect(lstatSync(envLink).isSymbolicLink()).toBe(true);
+    // The old host-level caddy layout is gone: provisioning never creates
+    // etc/caddy — the live Caddyfile is a single file under /opt/stack.
+    expect(existsSync(path.join(fx.root, "etc", "caddy"))).toBe(false);
   });
 
   it("writes the exact authorized_keys line with the forced command and all four no-* options", () => {
@@ -400,6 +525,9 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
     expect(content).toMatch(/^PORTAL_NEXTAUTH_SECRET=$/m);
     expect(content).toMatch(/^PORTAL_ADMIN_EMAIL=$/m);
     expect(content).toMatch(/^PORTAL_ADMIN_PASSWORD=$/m);
+    // The production network line ships empty too: it is recorded by
+    // discovery (or set by hand), never hard-coded.
+    expect(content).toMatch(/^PORTAL_NETWORK=$/m);
     // Staging never starts the WhatsApp client and mails to a sink.
     expect(content).toContain("WHATSAPP_DISABLED=1");
     expect(content).toContain("PORTAL_SMTP_HOST=mail-sink.invalid");
@@ -418,20 +546,6 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
 });
 
 describe("deploy/provision-server.sh validation gates", () => {
-  it("restores the Caddyfile backup and dies when caddy validate fails", () => {
-    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_BASE });
-    writeExecutable(path.join(fx.stubBin, "caddy"), caddyStub(1));
-
-    const res = runProvision(fx);
-    expect(res.status, res.stdout + res.stderr).toBe(1);
-    expect(res.stderr).toContain("caddy validate failed");
-    // The Caddyfile was restored byte-for-byte and the backup kept.
-    expect(readFileSync(fx.caddyfilePath, "utf8")).toBe(CADDYFILE_BASE);
-    const backups = readdirSync(fx.caddyDir).filter((entry) => entry.startsWith("Caddyfile.bak-"));
-    expect(backups).toHaveLength(1);
-    expect(readFileSync(path.join(fx.caddyDir, backups[0]), "utf8")).toBe(CADDYFILE_BASE);
-  });
-
   it("aborts without installing the sudoers drop-in when visudo validation fails", () => {
     const fx = makeProvisionFixture();
     writeExecutable(path.join(fx.stubBin, "visudo"), VISUDO_FAIL_STUB);
@@ -440,6 +554,132 @@ describe("deploy/provision-server.sh validation gates", () => {
     expect(res.status, res.stdout + res.stderr).toBe(1);
     expect(res.stderr).toMatch(/visudo/);
     expect(existsSync(path.join(fx.root, "etc", "sudoers.d", "portal-deploy"))).toBe(false);
+  });
+});
+
+describe("deploy/provision-server.sh live layout", () => {
+  it("success: network recorded, managed block installed, backup kept, validate before reload", () => {
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    withDockerStub(fx);
+
+    const res = runProvision(fx);
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+
+    // The network came from the stubbed `docker inspect portal-app`.
+    expect(readFileSync(path.join(fx.root, "opt", "stack", "staging", ".env.staging"), "utf8")).toContain(
+      "PORTAL_NETWORK=stack_portal_net"
+    );
+    const dockerLog = readDockerLog(fx);
+    expect(dockerLog).toContain("inspect");
+    expect(dockerLog).toContain("portal-app");
+
+    // Exactly one managed staging block in the live Caddyfile.
+    const content = readFileSync(fx.caddyfilePath, "utf8");
+    expect(content.match(/^# BEGIN staging\.portal\.nare\.am/gm)).toHaveLength(1);
+    expect(content.match(/^# END staging\.portal\.nare\.am$/gm)).toHaveLength(1);
+    expect(content).toContain("staging.portal.nare.am {");
+    expect(content).toContain("reverse_proxy portal-staging:3000");
+
+    // Exactly one timestamped backup, holding the pre-provisioning content.
+    const backups = caddyBackups(fx);
+    expect(backups).toHaveLength(1);
+    expect(readFileSync(path.join(fx.stackDir, backups[0]), "utf8")).toBe(CADDYFILE_FIXTURE);
+
+    // The candidate was validated inside the caddy container BEFORE reload.
+    assertInOrder(dockerLog, ["caddy validate", "caddy reload --config /etc/caddy/Caddyfile"]);
+    const captured = readFileSync(`${fx.dockerLog}.validate`, "utf8");
+    expect(captured).toContain("# BEGIN staging.portal.nare.am");
+    expect(captured).toContain("reverse_proxy portal-staging:3000");
+  });
+
+  it("idempotent: a second run regenerates a byte-identical Caddyfile and makes no new backup", () => {
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    withDockerStub(fx);
+
+    const run1 = runProvision(fx);
+    expect(run1.status, run1.stdout + run1.stderr).toBe(0);
+    const afterFirst = readFileSync(fx.caddyfilePath, "utf8");
+
+    const run2 = runProvision(fx);
+    expect(run2.status, run2.stdout + run2.stderr).toBe(0);
+    const afterSecond = readFileSync(fx.caddyfilePath, "utf8");
+
+    expect(afterSecond).toBe(afterFirst);
+    expect(afterSecond.match(/^# BEGIN staging\.portal\.nare\.am/gm)).toHaveLength(1);
+    expect(afterSecond.match(/^# END staging\.portal\.nare\.am$/gm)).toHaveLength(1);
+    expect(caddyBackups(fx)).toHaveLength(1);
+  });
+
+  it("keeps the live Caddyfile inode when the block is installed (single-file bind mount)", () => {
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    withDockerStub(fx);
+    const inoBefore = statSync(fx.caddyfilePath).ino;
+
+    const res = runProvision(fx);
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+
+    // The live layout bind-mounts the single Caddyfile into the caddy
+    // container (./Caddyfile:/etc/caddy/Caddyfile:ro), and a single-file bind
+    // mount stays pinned to the inode it was created with. Unlinking and
+    // recreating the file would leave the container serving the OLD content
+    // while `caddy reload` reports success — the staging site would never
+    // activate without a container restart.
+    expect(statSync(fx.caddyfilePath).ino).toBe(inoBefore);
+    expect(readFileSync(fx.caddyfilePath, "utf8")).toContain("reverse_proxy portal-staging:3000");
+  });
+
+  it("invalid candidate: exits 1, live Caddyfile untouched, backup kept, no reload attempted", () => {
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    withDockerStub(fx);
+
+    const res = runProvision(fx, { extraEnv: { STUB_FAIL_VALIDATE: "1" } });
+    expect(res.status, res.stdout + res.stderr).toBe(1);
+    expect(res.stderr).toContain("candidate Caddyfile failed validation");
+    expect(readFileSync(fx.caddyfilePath, "utf8")).toBe(CADDYFILE_FIXTURE);
+    expect(caddyBackups(fx)).toHaveLength(1);
+    const dockerLog = readDockerLog(fx);
+    expect(dockerLog).toContain("caddy validate");
+    expect(dockerLog).not.toContain("caddy reload");
+  });
+
+  it("reload failure: exits 1 and restores the live Caddyfile from the backup", () => {
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    withDockerStub(fx);
+    const inoBefore = statSync(fx.caddyfilePath).ino;
+
+    const res = runProvision(fx, { extraEnv: { STUB_FAIL_RELOAD: "1" } });
+    expect(res.status, res.stdout + res.stderr).toBe(1);
+    expect(res.stderr).toContain("caddy reload failed");
+    expect(readFileSync(fx.caddyfilePath, "utf8")).toBe(CADDYFILE_FIXTURE);
+    // The restore is in-place too: the container's single-file bind mount
+    // must keep seeing the restored content without a restart.
+    expect(statSync(fx.caddyfilePath).ino).toBe(inoBefore);
+    expect(caddyBackups(fx)).toHaveLength(1);
+  });
+
+  it("preset PORTAL_NETWORK: skips discovery and records the given network", () => {
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    withDockerStub(fx);
+
+    const res = runProvision(fx, { extraEnv: { PORTAL_NETWORK: "custom_net" } });
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+    expect(readDockerLog(fx)).not.toContain("inspect");
+    expect(readFileSync(path.join(fx.root, "opt", "stack", "staging", ".env.staging"), "utf8")).toContain(
+      "PORTAL_NETWORK=custom_net"
+    );
+  });
+
+  it("docker unavailable: warns, records an empty network and installs the block without validation", () => {
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    // Deliberately no docker stub on PATH.
+
+    const res = runProvision(fx);
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+    expect(res.stderr).toContain("[warn]");
+    expect(readFileSync(path.join(fx.root, "opt", "stack", "staging", ".env.staging"), "utf8")).toMatch(
+      /^PORTAL_NETWORK=$/m
+    );
+    expect(readFileSync(fx.caddyfilePath, "utf8")).toContain(BEGIN_MARKER);
   });
 });
 
@@ -648,6 +888,85 @@ describe("deploy/portal-deploy-entry.sh upload", () => {
     expect(res.stderr ?? "").toContain("portal-deploy-entry: rejected:");
     expect(existsSync(fx.toolLog)).toBe(false);
     expect(readdirSync(fx.uploadDir)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// static checks
+// ---------------------------------------------------------------------------
+
+describe("provisioning static checks", () => {
+  it("provision-server.sh keeps /etc/caddy strictly container-internal", () => {
+    const src = readFileSync(PROVISION, "utf8");
+    expect(src).not.toContain("portal-caddy");
+    expect(src).not.toContain("portal-web");
+    for (const line of src.split("\n")) {
+      if (line.includes("/etc/caddy")) {
+        expect(line, `host-level caddy path outside docker exec: ${line}`).toContain("docker exec");
+      }
+    }
+  });
+
+  it("no file under deploy/ or scripts/ references portal-caddy or portal-web", () => {
+    for (const dir of ["deploy", "scripts"]) {
+      for (const file of walk(path.join(REPO_ROOT, dir))) {
+        const src = readFileSync(file, "utf8");
+        expect(src, file).not.toContain("portal-caddy");
+        expect(src, file).not.toContain("portal-web");
+      }
+    }
+  });
+
+  it("deploy/staging/docker-compose.yml matches the provisioned staging layout", () => {
+    const src = readFileSync(path.join(REPO_ROOT, "deploy", "staging", "docker-compose.yml"), "utf8");
+    expect(src).toContain("container_name: portal-staging");
+    expect(src).toContain("image: portal-staging:latest");
+    expect(src).toContain("WHATSAPP_DISABLED");
+    expect(src).toContain("external: true");
+    expect(src).toContain("${PORTAL_NETWORK");
+    expect(src).toContain("./portal/data");
+    expect(src).not.toContain("portal-web");
+  });
+
+  it("deploy/portal/docker-compose.yml matches the live production layout", () => {
+    const src = readFileSync(path.join(REPO_ROOT, "deploy", "portal", "docker-compose.yml"), "utf8");
+    expect(src).toContain("container_name: caddy");
+    expect(src).toContain("image: caddy:2");
+    expect(src).toContain("container_name: portal-app");
+    expect(src).toContain("portal_net");
+    expect(src).toContain("./Caddyfile:/etc/caddy/Caddyfile:ro");
+    expect(src).toContain("${PORTAL_IMAGE_TAG:-latest}");
+  });
+
+  it("deploy/portal/Caddyfile.example mirrors the live site block", () => {
+    const src = readFileSync(path.join(REPO_ROOT, "deploy", "portal", "Caddyfile.example"), "utf8");
+    expect(src).toContain("portal.nare.am");
+    expect(src).toContain("reverse_proxy portal:3000");
+  });
+
+  it("the staging service name cannot collide with the production Caddy upstream host", () => {
+    const stagingCompose = readFileSync(path.join(REPO_ROOT, "deploy", "staging", "docker-compose.yml"), "utf8");
+    const caddyfile = readFileSync(path.join(REPO_ROOT, "deploy", "portal", "Caddyfile.example"), "utf8");
+    // Compose registers each service name as a DNS alias on every network the
+    // service joins; staging joins the PRODUCTION network, so a staging
+    // service named like the production Caddy upstream would let the live
+    // caddy route portal.nare.am traffic to the staging app and database.
+    const servicesBlock = stagingCompose.split(/^networks:/m)[0];
+    const serviceNames: string[] = [];
+    const serviceRe = /^  ([a-z0-9-]+):\s*$/gm;
+    for (let m = serviceRe.exec(servicesBlock); m !== null; m = serviceRe.exec(servicesBlock)) {
+      serviceNames.push(m[1]);
+    }
+    expect(serviceNames).toContain("portal-staging");
+    const upstreams: string[] = [];
+    const upstreamRe = /reverse_proxy\s+([a-z0-9.-]+):\d+/g;
+    for (let m = upstreamRe.exec(caddyfile); m !== null; m = upstreamRe.exec(caddyfile)) {
+      upstreams.push(m[1]);
+    }
+    expect(upstreams.length).toBeGreaterThan(0);
+    for (const host of upstreams) {
+      expect(serviceNames, `staging service name collides with production upstream ${host}`).not.toContain(host);
+    }
   });
 });
 

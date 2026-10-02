@@ -448,7 +448,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(ctx.dockerLog).not.toContain("stop portal-app");
     // The cutover merges the provisioning compose file with the staging
     // override that disables the WhatsApp client.
-    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} up -d portal`;
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} up -d portal-staging`;
     expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
     const overrideContent = readFileSync(path.join(appRoot, "portal-staging.overrides.yml"), "utf8");
     expect(overrideContent).toContain("WHATSAPP_DISABLED=1");
@@ -459,7 +459,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(archives).toHaveLength(1);
     expect(archives[0]).toMatch(/^portal-staging-.*\.tar\.gz$/);
     // EVERY start of the real app goes through the staging override.
-    const upLines = lines(ctx.dockerLog).filter((line) => line.includes("up -d portal"));
+    const upLines = lines(ctx.dockerLog).filter((line) => line.includes("up -d portal-staging"));
     expect(upLines.length).toBeGreaterThan(0);
     for (const line of upLines) {
       expect(line).toContain("portal-staging.overrides.yml");
@@ -514,7 +514,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("rollback OK");
     const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
     expect(rollbackLines).toHaveLength(1);
-    expect(rollbackLines[0]).toContain("up -d portal");
+    expect(rollbackLines[0]).toContain("up -d portal-staging");
     // The staging override is merged ahead of the rollback compose file, so
     // the rolled-back container also runs with WHATSAPP_DISABLED=1.
     const overrideIdx = rollbackLines[0].indexOf("portal-staging.overrides.yml");

@@ -538,7 +538,7 @@ describe("scripts/restore-backup.sh", () => {
     assertInOrder(ctx.dockerLog, [
       `tag portal-staging:previous portal-staging:latest`,
       `stop portal-staging`,
-      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} -f ${path.join(appRoot, "portal-restore-paused.compose.yml")} up -d portal`,
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} -f ${path.join(appRoot, "portal-restore-paused.compose.yml")} up -d portal-staging`,
     ]);
 
     // The staging override was written (it was missing) and carries the

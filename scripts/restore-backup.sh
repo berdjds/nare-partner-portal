@@ -70,11 +70,13 @@ case "$ENV_NAME" in
   production)
     DEFAULT_ROOT="/opt/stack"
     DEFAULT_CONTAINER="portal-app"
+    DEFAULT_SERVICE="portal"
     DEFAULT_IMAGE_REPO="portal"
     ;;
   staging)
     DEFAULT_ROOT="/opt/stack/staging"
     DEFAULT_CONTAINER="portal-staging"
+    DEFAULT_SERVICE="portal-staging"
     DEFAULT_IMAGE_REPO="portal-staging"
     ;;
   *)
@@ -84,7 +86,9 @@ esac
 
 ROOT="${PORTAL_ROOT:-$DEFAULT_ROOT}"
 COMPOSE_FILE="${PORTAL_COMPOSE_FILE:-$ROOT/docker-compose.yml}"
-APP_SERVICE="${PORTAL_APP_SERVICE:-portal}"
+# Per-environment service name (portal production, portal-staging staging —
+# see the DNS-alias note in scripts/vps-deploy.sh).
+APP_SERVICE="${PORTAL_APP_SERVICE:-$DEFAULT_SERVICE}"
 APP_CONTAINER="${PORTAL_APP_CONTAINER:-$DEFAULT_CONTAINER}"
 DATA_DIR="${PORTAL_DATA_DIR:-$ROOT/portal/data}"
 UPLOADS_DIR="${PORTAL_UPLOADS_DIR:-$ROOT/portal/uploads}"

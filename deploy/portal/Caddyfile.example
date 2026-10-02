@@ -1,18 +1,12 @@
-# Example /etc/caddy/Caddyfile — copy to /etc/caddy/Caddyfile during
-# provisioning (the file on the host is the live config; this is the
-# template it starts from).
-#
-# Caddy runs inside the PRODUCTION compose project (/opt/stack) and reaches
-# the app containers by their container names over the shared portal-web
-# docker network — so the upstreams below are container names, not
-# localhost, and no app port is ever published on the host.
-
-portal.nare.am {
-	reverse_proxy portal-app:3000
+# Reference copy of the live /opt/stack/Caddyfile (portal.nare.am).
+# The staging site (staging.portal.nare.am) is NOT part of this file: it is
+# inserted into the live Caddyfile as a managed block by
+# deploy/provision-server.sh.
+{
+	email admin@nare.am
 }
 
-# deploy/provision-server.sh writes /etc/caddy/staging.portal.nare.am.caddy
-# (the staging site block) and appends this import line when it is missing.
-# Keeping the staging site in a separate file lets provisioning manage it
-# without parsing or rewriting the production site block above.
-import /etc/caddy/staging.portal.nare.am.caddy
+portal.nare.am {
+	encode gzip
+	reverse_proxy portal:3000
+}
