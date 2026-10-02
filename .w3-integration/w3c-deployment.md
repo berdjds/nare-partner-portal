@@ -181,7 +181,7 @@ WAControl maintains the WhatsApp client as an in-memory singleton in `lib/whatsa
 1. **Test job** — `npm ci` (Chromium download skipped), `prisma generate`, `tsc --noEmit`,
    `vitest run`, `next build`.
 2. **Deploy job** (main only, serialized via concurrency group) — tars the source, uploads to
-   the VPS (`213.136.80.87`, `/root/productionapp`), builds the Docker image, restarts
+   the VPS (`<server-ip>`, `/root/productionapp`), builds the Docker image, restarts
    `wacontrol-app` via docker compose, seeds the admin user, runs the travel catalog seed,
    then health-checks `https://wa.hayk.ae/login`.
 
