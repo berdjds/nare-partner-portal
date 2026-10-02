@@ -48,8 +48,8 @@ import {
 } from "../workflow/fixtures";
 import { handleUploadsRequest, routeUploadsRequest } from "@/lib/uploads";
 
-const SECRET = "account-separation-test-secret-32chars!!";
-process.env.NEXTAUTH_SECRET = SECRET;
+const AUTH_SIGNING_VALUE = "account-separation-test-secret-32chars!!";
+process.env.NEXTAUTH_SECRET = AUTH_SIGNING_VALUE;
 
 const { sessionRef } = vi.hoisted(() => ({ sessionRef: { current: null as any } }));
 // The chats API route resolves its session via getServerSession; everything
@@ -285,7 +285,7 @@ function sessionFor(user: { id: string; role: string; email: string; name: strin
 }
 
 async function cookieFor(u: { id: string; role: string }, maxAge = 60 * 60): Promise<string> {
-  const token = await encode({ token: { id: u.id, role: u.role }, secret: SECRET, maxAge });
+  const token = await encode({ token: { id: u.id, role: u.role }, secret: AUTH_SIGNING_VALUE, maxAge });
   return `next-auth.session-token=${token}`;
 }
 
