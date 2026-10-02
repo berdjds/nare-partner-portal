@@ -69,6 +69,7 @@
 # portal-staging:* for staging), PORTAL_BACKUP_KEEP_DAYS,
 # PORTAL_HEALTH_RETRIES, PORTAL_HEALTH_INTERVAL_SECONDS, PORTAL_TRIAL_A_PORT,
 # PORTAL_TRIAL_B_PORT, PORTAL_STAGING_OVERRIDE_FILE.
+# W3c staging drill hook: PORTAL_DRILL_FAIL_HEALTH=1 fails the post-cutover health check on purpose; honoured only when the target env is staging.
 
 set -euo pipefail
 
@@ -156,6 +157,15 @@ TRIAL_A_CONTAINER="portal-trial-a"
 TRIAL_B_CONTAINER="portal-trial-b"
 TRIAL_A_PORT="${PORTAL_TRIAL_A_PORT:-13001}"
 TRIAL_B_PORT="${PORTAL_TRIAL_B_PORT:-13002}"
+
+# W3c drill hook (staging-only): the portal rollback drill sets
+# PORTAL_ENV_NAME=staging and PORTAL_DRILL_FAIL_HEALTH=1 so the post-cutover
+# health check fails on purpose and the automatic rollback is exercised.
+# Ignored in production even when the variable is set.
+DRILL_FAIL_HEALTH="false"
+if [ "$ENV_NAME" = "staging" ] && [ "${PORTAL_DRILL_FAIL_HEALTH:-}" = "1" ]; then
+  DRILL_FAIL_HEALTH="true"
+fi
 
 APP_WAS_RUNNING="false"
 CURRENT_IMAGE="$LATEST_IMAGE"
@@ -465,6 +475,10 @@ main() {
   assert_distinct_dir_names
   mkdir -p "$DATA_DIR" "$UPLOADS_DIR" "$AUTH_DIR" || die "failed to create the data dirs"
 
+  if [ "$DRILL_FAIL_HEALTH" = "true" ]; then
+    log "DRILL HOOK active (staging): PORTAL_DRILL_FAIL_HEALTH=1 — the post-cutover health check will fail on purpose"
+  fi
+
   # --- 1. extract + build while the app runs ---------------------------------
   log "deploy gate [$ENV_NAME]: extracting $(basename "$SOURCE_TARBALL")"
   rm -rf "${SRC_DIR:?}"
@@ -538,6 +552,9 @@ main() {
   docker tag "$CANDIDATE_IMAGE" "$LATEST_IMAGE" || cutover_failed "failed to tag $CANDIDATE_IMAGE as $LATEST_IMAGE"
   if ! compose up -d "$APP_SERVICE"; then
     cutover_failed "docker compose failed to start the candidate"
+  fi
+  if [ "$DRILL_FAIL_HEALTH" = "true" ]; then
+    cutover_failed "drill hook PORTAL_DRILL_FAIL_HEALTH=1 (staging only): simulating a post-cutover health check failure"
   fi
   if ! wait_for_login "$APP_CONTAINER"; then
     cutover_failed "$APP_CONTAINER did not serve /login (HTTP 200) after cutover"

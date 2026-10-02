@@ -18,9 +18,25 @@
 #                              contains <c> and the args contain <substr>
 #   STUB_FAIL_FIRST="<c>:<substr>:<n> ..."
 #                              same, but only the first n invocations fail
+#   STUB_WRITE_ON="<substr>:<path> ..."
+#                              append a line to <path> when the full joined
+#                              args contain <substr> — simulates the started
+#                              container writing into a mounted data dir
+#                              (used by the staging drill tests); unset = no-op
 # No `set -e` here on purpose: `&&`/`||` chains drive the scripted failures.
 
 printf '%s\n' "$*" >> "${STUB_LOG:?STUB_LOG is required}"
+
+# Intentional word splitting: STUB_WRITE_ON holds one spec per word.
+for spec in ${STUB_WRITE_ON:-}; do
+  write_pat="${spec%%:*}"
+  write_path="${spec#*:}"
+  case "$*" in
+    *"$write_pat"*)
+      printf 'stub write: %s\n' "$*" >> "$write_path"
+      ;;
+  esac
+done
 
 cmd="${1:-}"
 if [ -n "$cmd" ]; then
