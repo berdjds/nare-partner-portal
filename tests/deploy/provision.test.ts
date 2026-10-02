@@ -44,7 +44,11 @@
  *     drop-in is installed;
  *   - static checks: nothing under deploy/ or scripts/ references the old
  *     portal-caddy / portal-web names, and the compose/Caddyfile fixtures the
- *     script depends on match the live layout.
+ *     script depends on match the live layout — the reference production
+ *     compose pins the dated live image and interpolates the PORTAL_* names
+ *     through an environment: list (no env_file, no image-tag variable),
+ *     and the printed NEXT STEPS never tell the operator to overwrite the
+ *     live files.
  *
  * deploy/portal-deploy-entry.sh is the forced-command dispatcher installed as
  * /usr/local/sbin/portal-deploy-entry. Its tests drive the repo copy directly
@@ -394,6 +398,18 @@ describe("deploy/provision-server.sh --dry-run", () => {
     expect(res.stdout).toContain("[skip] system step in test root:");
     expect(res.stdout).toContain("[dry-run] would symlink");
     expect(res.stdout).toContain("NEXT STEPS:");
+    // The NEXT STEPS must never tell the operator to overwrite the live
+    // compose or Caddyfile, or to create unprefixed runtime variables — the
+    // live files stay exactly as they are; only staging credentials and the
+    // drills remain.
+    const nextSteps = res.stdout.slice(res.stdout.indexOf("NEXT STEPS:"));
+    expect(nextSteps).not.toContain("install -m 0644");
+    expect(nextSteps).not.toContain("Caddyfile.example");
+    expect(nextSteps).not.toContain("unprefixed");
+    expect(nextSteps).not.toContain("PORTAL_IMAGE_TAG");
+    expect(nextSteps).toMatch(/staging credentials/);
+    expect(nextSteps).toContain("/opt/stack/staging/.env.staging");
+    expect(nextSteps).toContain("drill-rollback");
     // Not a single file or directory was created under the root.
     expect(existsSync(root)).toBe(false);
   });
@@ -933,9 +949,25 @@ describe("provisioning static checks", () => {
     expect(src).toContain("container_name: caddy");
     expect(src).toContain("image: caddy:2");
     expect(src).toContain("container_name: portal-app");
+    expect(src).toContain("build: ./portal/src");
     expect(src).toContain("portal_net");
     expect(src).toContain("./Caddyfile:/etc/caddy/Caddyfile:ro");
-    expect(src).toContain("${PORTAL_IMAGE_TAG:-latest}");
+    // The live compose pins a dated image (2026-10-02 live facts). Cutover
+    // independence comes from the deploy gate's own override file, never
+    // from an image-tag variable in the live compose.
+    expect(src).toContain("image: portal:2026-09-30");
+    expect(src).not.toContain("PORTAL_IMAGE_TAG");
+    // No env_file: the live compose interpolates the PORTAL_* names that
+    // /opt/stack/.env defines through an environment: list.
+    expect(src).not.toContain("env_file");
+    expect(src).toContain("NEXTAUTH_SECRET=${PORTAL_NEXTAUTH_SECRET}");
+    expect(src).toContain("ADMIN_EMAIL=${PORTAL_ADMIN_EMAIL}");
+    expect(src).toContain("ADMIN_PASSWORD=${PORTAL_ADMIN_PASSWORD}");
+    for (const name of ["HOST", "PORT", "USER", "PASS", "FROM"]) {
+      expect(src).toContain(`SMTP_${name}=\${PORTAL_SMTP_${name}:-}`);
+    }
+    expect(src).toContain("DATABASE_URL=file:/app/data/dev.db");
+    expect(src).toContain("NEXTAUTH_URL=https://portal.nare.am");
   });
 
   it("deploy/portal/Caddyfile.example mirrors the live site block", () => {

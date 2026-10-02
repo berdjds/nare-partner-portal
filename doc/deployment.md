@@ -34,7 +34,8 @@ change the tools, the compose files, or anything else on the server.
 ├── Caddyfile                   live Caddy config (owner-installed from
 │                               deploy/portal/Caddyfile.example, bind-mounted
 │                               read-only into the caddy container)
-├── .env                        app + PORTAL_* secrets (owner-installed, mode 0600)
+├── .env                        PORTAL_* secrets only (owner-installed, mode 0600;
+│                               interpolated into the compose environment: list)
 ├── portal/
 │   ├── src/                    build context (source tarball extracted by the deploy gate)
 │   ├── data/                   SQLite database (dev.db)
@@ -53,6 +54,14 @@ change the tools, the compose files, or anything else on the server.
 - Images: `portal:candidate` / `portal:previous` / `portal:latest`
   (production) and `portal-staging:*` (staging). The tags are per-environment
   so a staging deploy can never move a production tag.
+- The live production compose pins the app image to a dated tag
+  (`portal:2026-09-30`) and the pipeline never edits that file: the deploy
+  gate starts the app through a deploy-managed override
+  (`portal-production.overrides.yml` next to the compose file) that pins the
+  image to `portal:latest` — the candidate it just tagged — so cutover always
+  runs the candidate whatever the live compose pins. After cutover the gate
+  verifies the running container's image ID equals the candidate's and rolls
+  back automatically otherwise.
 - Caddy (container `caddy`, in the production project) terminates TLS for both
   sites and proxies to the app containers over the production project's
   compose-managed network (`portal_net`; its real name is project-prefixed,
@@ -82,7 +91,7 @@ Run once from a repo checkout — rehearse first, then run for real:
 1. **Dry run** (no root required — prints every action, changes nothing):
 
    ```bash
-   deploy/provision-server.sh --pubkey-file <path-to-deploy-key.pub> --dry-run
+   bash deploy/provision-server.sh --pubkey-file <path-to-deploy-key.pub> --dry-run
    ```
 
 2. **Record the before checksum** of the live Caddyfile (when it already
@@ -95,7 +104,7 @@ Run once from a repo checkout — rehearse first, then run for real:
 3. **Run the real provisioning** as root:
 
    ```bash
-   sudo deploy/provision-server.sh --pubkey-file <path-to-deploy-key.pub>
+   sudo bash deploy/provision-server.sh --pubkey-file <path-to-deploy-key.pub>
    ```
 
 4. **Verify.** The script prints before/after manifests of the production
@@ -161,30 +170,28 @@ suite; the defaults are the live layout):
 | `PORTAL_NETWORK` | *(discovered)* | production Docker network the staging project joins; set only to override discovery |
 
 Provisioning deliberately does **not** install
-`/opt/stack/docker-compose.yml`, `/opt/stack/.env` or `/opt/stack/Caddyfile`.
-After provisioning, the owner (the script prints this checklist):
+`/opt/stack/docker-compose.yml`, `/opt/stack/.env` or `/opt/stack/Caddyfile` —
+on the live server these files already exist and are left exactly as they
+are, by provisioning and by every deploy. `deploy/portal/docker-compose.yml`
+in the repo is only a **reference copy** of the live layout, including its
+pinned dated app image (`portal:2026-09-30` — not what a deploy runs; see
+"Release flow" below) and the `environment:` list that interpolates the
+`PORTAL_*` names from `/opt/stack/.env`. That `.env` file holds **only**
+`PORTAL_NEXTAUTH_SECRET`, `PORTAL_ADMIN_EMAIL`, `PORTAL_ADMIN_PASSWORD` and
+the `PORTAL_SMTP_*` names. After provisioning, the owner (the script prints
+this checklist):
 
-1. `install -m 0644 deploy/portal/docker-compose.yml /opt/stack/docker-compose.yml`
-2. Create `/opt/stack/.env` (mode 0600). The production compose passes this
-   file raw to the container via `env_file:`, so it must contain both the
-   app's unprefixed runtime variables (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`,
-   `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `DATABASE_URL`, `SMTP_*`) and the
-   `PORTAL_*` names the deploy gate's trial containers interpolate from the
-   same file (`PORTAL_NEXTAUTH_SECRET`, `PORTAL_ADMIN_EMAIL`,
-   `PORTAL_ADMIN_PASSWORD`, plus `PORTAL_IMAGE_TAG=latest` — the deploy gate
-   moves that tag at cutover). Required values use `${VAR:?}` interpolation,
-   so a missing secret fails loudly instead of booting the app with an empty
-   one.
-3. Set the staging credentials in `/opt/stack/staging/.env.staging` —
+1. Leave the live files (`/opt/stack/docker-compose.yml`, `/opt/stack/.env`,
+   `/opt/stack/Caddyfile`) exactly as they are.
+2. Set the staging credentials in `/opt/stack/staging/.env.staging` —
    provisioning leaves them **empty on purpose** and the compose `:?` guards
    refuse to boot staging until real values are set.
-4. Install `/opt/stack/Caddyfile` from `deploy/portal/Caddyfile.example`
-   (the production site only — the staging site is the provisioning-managed
-   block), then re-run provisioning once the production stack is up so the
+3. Re-run provisioning once the production stack is up (or set
+   `PORTAL_NETWORK` in `/opt/stack/staging/.env.staging` by hand) so the
    production network is recorded and the staging block is validated and
    activated.
-5. Add the CI secrets and variables (below) to the repository settings.
-6. Run the staging drills (below) before enabling the production release.
+4. Add the CI secrets and variables (below) to the repository settings.
+5. Run the staging drills (below) before enabling the production release.
 
 ## CI pipeline (`.github/workflows/ci-cd.yml`)
 
@@ -261,7 +268,11 @@ identically for staging and production:
 7. **Cutover**: the candidate is tagged `...:latest` and started on the real
    data. Internal health check (`/login` 200 inside the container), bootstrap
    seeds, then the **public** health check (`$PUBLIC_URL/login` 200 through
-   Caddy).
+   Caddy). The app is started through the deploy-managed override that pins
+   the image to the candidate (`portal:latest`), so the dated pin in the live
+   compose file never decides what runs; the gate then verifies that the
+   running container's image ID equals the candidate's and treats a mismatch
+   as a cutover failure (automatic rollback).
 8. **On any failure after the freeze**: with `ROLLBACK_COMPATIBLE=yes` the
    candidate is stopped and `...:previous` restarted on the **current** data
    (newly accepted data is kept; nothing is restored from backup). With `no`,
@@ -337,8 +348,16 @@ the post-backup rows must be preserved first:
 
    ```bash
    rm /opt/stack/portal-restore-paused.compose.yml
-   docker compose -f /opt/stack/docker-compose.yml up -d portal
+   docker compose -f /opt/stack/docker-compose.yml \
+     -f /opt/stack/portal-production.overrides.yml up -d portal
    ```
+
+   The override must always be included when starting production by hand: a
+   plain `compose up` on the live file alone would recreate `portal-app`
+   from the dated image it pins, not from `portal:latest` (which the restore
+   retagged to the pre-deploy image). Note that the resume command the
+   restore tool itself prints (`scripts/restore-backup.sh`) is not yet
+   aligned with this and still merges only the live file.
 
 Not covered by a restore: media added to `uploads/` after the backup (neither
 exported nor restored), rows in untimestamped tables, and the WhatsApp
@@ -459,9 +478,11 @@ stage. `SMOKE_CURL_MAX_TIME` overrides the per-request timeout (default 15s).
   must match `[A-Za-z0-9._/-]`, end in `.tar.gz`, contain no `..`, and an
   upload name must be a bare file name. The rejection reason is printed on
   stderr.
-- **Deploy refuses: "compose file not found"** — provisioning step 1 was
-  skipped; install `/opt/stack/docker-compose.yml` from
-  `deploy/portal/docker-compose.yml`. The gate never creates it.
+- **Deploy refuses: "compose file not found"** — the live
+  `/opt/stack/docker-compose.yml` is owner-managed and the gate never
+  creates, syncs or modifies it; restore it from the owner's copy (the
+  repo mirrors the live layout in `deploy/portal/docker-compose.yml` for
+  reference only).
 - **Compose fails with "PORTAL_* must be set"** — a required secret is missing
   from `/opt/stack/.env` (production) or `/opt/stack/staging/.env.staging`
   (staging). The `:?` guards are deliberate.

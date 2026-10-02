@@ -633,28 +633,21 @@ fi
 
 cat <<'EOF'
 NEXT STEPS:
-  1. Install the production compose file (provisioning never installs it):
-       install -m 0644 deploy/portal/docker-compose.yml /opt/stack/docker-compose.yml
-  2. Install the Caddyfile (provisioning never installs it):
-       install -m 0644 deploy/portal/Caddyfile.example /opt/stack/Caddyfile
-  3. Create /opt/stack/.env (mode 0600). The production compose passes this
-     file RAW to the container via env_file:, so it must contain BOTH:
-       - the app's unprefixed runtime variables: NEXTAUTH_SECRET,
-         NEXTAUTH_URL, ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL, SMTP_*; and
-       - the PORTAL_* names the deploy gate's trial containers interpolate
-         from the same file: PORTAL_NEXTAUTH_SECRET, PORTAL_ADMIN_EMAIL,
-         PORTAL_ADMIN_PASSWORD, plus PORTAL_IMAGE_TAG=latest (the deploy gate
-         moves that tag at cutover).
-  4. Set the staging credentials in /opt/stack/staging/.env.staging
+  1. Leave the live files exactly as they are: /opt/stack/docker-compose.yml,
+     /opt/stack/.env and /opt/stack/Caddyfile already exist on this server
+     and are never installed or overwritten by provisioning or by a deploy
+     (deploy/portal/docker-compose.yml in the repo is only a reference copy
+     of the live layout).
+  2. Set the staging credentials in /opt/stack/staging/.env.staging
      (PORTAL_NEXTAUTH_SECRET, PORTAL_ADMIN_EMAIL, PORTAL_ADMIN_PASSWORD) —
      provisioning leaves them empty on purpose, and the compose :? guards
      refuse to boot staging until real values are set.
-  5. Re-run this script once the production stack is up (or set
+  3. Re-run this script once the production stack is up (or set
      PORTAL_NETWORK in /opt/stack/staging/.env.staging by hand) so the
      production network is recorded and the staging Caddy block is
      validated and activated.
-  6. Add the DEPLOY_* secrets and the PORTAL_URL / STAGING_URL variables to
+  4. Add the DEPLOY_* secrets and the PORTAL_URL / STAGING_URL variables to
      the CI project settings.
-  7. Run the staging drills (drill-rollback / drill-restore through the
+  5. Run the staging drills (drill-rollback / drill-restore through the
      deploy key) before enabling the production release pipeline.
 EOF
