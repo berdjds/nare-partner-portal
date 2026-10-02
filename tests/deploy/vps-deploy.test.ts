@@ -12,10 +12,12 @@
  * trial A failure, trial B yes/no, cutover failure with and without rollback
  * compatibility, public health check failure, mount/build aborts before the
  * freeze, the missing-compose-file refusal, compose-file immutability, the
- * staging WHATSAPP_DISABLED=1 override (cutover and rollback), the per-env
- * image tags (staging never builds or tags the shared portal:* production
- * tags), and the success path. Every scenario also asserts that data is
- * never restored automatically.
+ * deploy-managed image override in both environments (a live compose pinning
+ * a dated image still runs the candidate; an image-id mismatch after cutover
+ * fails the deploy and rolls back), the staging WHATSAPP_DISABLED=1 override
+ * (cutover and rollback), the per-env image tags (staging never builds or
+ * tags the shared portal:* production tags), and the success path. Every
+ * scenario also asserts that data is never restored automatically.
  */
 
 import { spawnSync } from "child_process";
@@ -189,7 +191,7 @@ describe("scripts/vps-deploy.sh", () => {
       "rm -f portal-trial-a",
       "-p portal-trial-b",
       "tag portal:candidate portal:latest",
-      `compose -f ${path.join(appRoot, "docker-compose.yml")} up -d portal`,
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d portal`,
       `exec ${APP_CONTAINER}`,
     ]);
     expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(1);
@@ -301,7 +303,9 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("CUTOVER complete");
     expect(out).toContain("deploy finished successfully");
     expect(ctx.dockerLog).toContain("-p portal-trial-b");
-    expect(ctx.dockerLog).toContain(`compose -f ${path.join(appRoot, "docker-compose.yml")} up -d portal`);
+    expect(ctx.dockerLog).toContain(
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d portal`
+    );
     expectNoAutomaticRestore(ctx);
   });
 
@@ -386,6 +390,65 @@ describe("scripts/vps-deploy.sh", () => {
     const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
     expect(rollbackLines).toHaveLength(1);
     expect(rollbackLines[0]).toContain("up -d portal");
+    expect(ctx.dockerLog).toContain("tag portal:previous portal:latest");
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("production cutover runs the candidate even when the live compose pins a dated image", () => {
+    const appRoot = setupAppRoot();
+    // Mirror the live /opt/stack/docker-compose.yml (2026-10-02): the app
+    // image is pinned to a dated tag, NOT ${PORTAL_IMAGE_TAG} or latest.
+    writeFileSync(
+      path.join(appRoot, "docker-compose.yml"),
+      "services:\n  portal:\n    image: portal:2026-09-30\n"
+    );
+    const ctx = runDeploy(appRoot, { STUB_INSPECT_IMAGE: "portal:2026-09-30" });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("cutover image verified");
+    expect(out).toContain("CUTOVER complete");
+    expect(out).toContain("deploy finished successfully");
+    // The pinned tag becomes the rollback target; latest moves to the candidate.
+    expect(ctx.dockerLog).toContain("tag portal:2026-09-30 portal:previous");
+    expect(ctx.dockerLog).toContain("tag portal:candidate portal:latest");
+    // The cutover merges the deploy-managed override that pins the app image,
+    // so `compose up` starts the candidate despite the pinned compose file.
+    const overridePath = path.join(appRoot, "portal-production.overrides.yml");
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${overridePath} up -d portal`;
+    expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
+    const overrideContent = readFileSync(overridePath, "utf8");
+    expect(overrideContent).toContain("image: portal:latest");
+    expect(overrideContent).not.toContain("WHATSAPP_DISABLED"); // staging-only
+    // The pinned compose file itself is provisioning-owned and never modified.
+    expect(readFileSync(path.join(appRoot, "docker-compose.yml"), "utf8")).toContain("portal:2026-09-30");
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("image-id mismatch after cutover triggers cutover_failed and rollback", () => {
+    const appRoot = setupAppRoot();
+    // compose did not apply the image override: the app container still runs
+    // the OLD image id even though `compose up` reported success.
+    const ctx = runDeploy(appRoot, { STUB_CONTAINER_IMAGE_ID: "sha256:old-pinned" });
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("CUTOVER FAILED");
+    expect(out).toContain("sha256:old-pinned");
+    expect(out).toContain("not candidate portal:candidate");
+    expect(out).toContain("ROLLBACK_COMPATIBLE=yes");
+    expect(out).toContain("rollback OK");
+    const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
+    expect(rollbackLines).toHaveLength(1);
+    expect(rollbackLines[0]).toContain("up -d portal");
+    // The rollback start also merges the image override, with the rollback
+    // image override merged last so the previous image wins.
+    expect(rollbackLines[0]).toContain("portal-production.overrides.yml");
+    expect(rollbackLines[0].indexOf("portal-production.overrides.yml")).toBeLessThan(
+      rollbackLines[0].indexOf("rollback-compose.yml")
+    );
     expect(ctx.dockerLog).toContain("tag portal:previous portal:latest");
     expectDataMarkersIntact(appRoot);
     expectNoAutomaticRestore(ctx);

@@ -8,6 +8,13 @@
 #   STUB_INSPECT_RUNNING=false the app container is not running
 #   STUB_INSPECT_IMAGE=<ref>   image ref of the app container
 #   STUB_APP_ID=<id>           id of the app container
+#   STUB_CONTAINER_IMAGE_ID=<id>
+#                              image id of the app container (`docker inspect
+#                              -f '{{.Image}}'`); default matches the candidate
+#                              so the post-cutover image check passes
+#   STUB_CANDIDATE_IMAGE_ID=<id>
+#                              id of the candidate image (`docker image inspect
+#                              -f '{{.Id}}' <ref>`); default sha256:candidate
 #   STUB_PS_IDS="<ids...>"     output of `docker ps -q`
 #   STUB_APP_SHORT_ID=<id>    abbreviated app id from default `docker ps -q`
 #   STUB_APP_MOUNTS=<paths>   mounts returned when inspecting that short id
@@ -44,9 +51,12 @@ if [ -n "$cmd" ]; then
 fi
 
 # `docker image inspect <ref>` is the image-only form of `docker inspect`;
-# both feed the inspect handling below.
+# both feed the inspect handling below, with image_inspect marking the form so
+# `-f '{{.Id}}'` can answer with an image id instead of the container id.
+image_inspect=""
 if [ "$cmd" = "image" ] && [ "${1:-}" = "inspect" ]; then
   cmd="inspect"
+  image_inspect="1"
   shift
 fi
 
@@ -79,8 +89,17 @@ case "$cmd" in
         *Config.Image*)
           printf '%s\n' "${STUB_INSPECT_IMAGE:-portal:latest}"
           ;;
+        *'.Image'*)
+          # Container image id (`docker inspect -f '{{.Image}}' <container>`),
+          # checked against the candidate image id after cutover.
+          printf '%s\n' "${STUB_CONTAINER_IMAGE_ID:-sha256:candidate}"
+          ;;
         *'.Id'*)
-          printf '%s\n' "${STUB_APP_ID:-aaa111}"
+          if [ -n "$image_inspect" ]; then
+            printf '%s\n' "${STUB_CANDIDATE_IMAGE_ID:-sha256:candidate}"
+          else
+            printf '%s\n' "${STUB_APP_ID:-aaa111}"
+          fi
           ;;
         *Mounts*)
           if [ "$target" = "${STUB_OTHER_ID:-}" ]; then
