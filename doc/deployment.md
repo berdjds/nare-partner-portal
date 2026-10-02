@@ -31,7 +31,10 @@ change the tools, the compose files, or anything else on the server.
 /opt/stack/
 ├── docker-compose.yml          production project: caddy + portal (owner-installed,
 │                               NEVER created or modified by a deploy)
-├── .env                        PORTAL_* secrets (owner-installed, mode 0600)
+├── Caddyfile                   live Caddy config (owner-installed from
+│                               deploy/portal/Caddyfile.example, bind-mounted
+│                               read-only into the caddy container)
+├── .env                        app + PORTAL_* secrets (owner-installed, mode 0600)
 ├── portal/
 │   ├── src/                    build context (source tarball extracted by the deploy gate)
 │   ├── data/                   SQLite database (dev.db)
@@ -50,11 +53,16 @@ change the tools, the compose files, or anything else on the server.
 - Images: `portal:candidate` / `portal:previous` / `portal:latest`
   (production) and `portal-staging:*` (staging). The tags are per-environment
   so a staging deploy can never move a production tag.
-- Caddy (`portal-caddy`, in the production project) terminates TLS for both
-  sites and proxies to the app containers over the shared `portal-web` docker
-  network. No app port is published on the host. Site configs live in
-  `/etc/caddy/` (`Caddyfile` + `staging.portal.nare.am.caddy`, both
-  provisioning artifacts — see `deploy/portal/Caddyfile.example`).
+- Caddy (container `caddy`, in the production project) terminates TLS for both
+  sites and proxies to the app containers over the production project's
+  compose-managed network (`portal_net`; its real name is project-prefixed,
+  e.g. `stack_portal_net`, and is discovered from the running `portal-app`
+  container — never hard-coded). No app port is published on the host. The
+  single site config is `/opt/stack/Caddyfile`, bind-mounted read-only into
+  the caddy container; there is no host-level caddy installation or config
+  path. The staging site is a managed marker-delimited block inside that
+  file, installed by provisioning (see below) — never edit between the
+  markers by hand.
 - The compose files belong to provisioning: the deploy gate **refuses** to run
   when the compose file is missing and never creates, syncs or modifies it.
 
@@ -69,16 +77,46 @@ Prerequisites on the server: Docker with the compose plugin, DNS for
 `portal.nare.am` and `staging.portal.nare.am` pointing at the host, and a
 dedicated SSH keypair for CI (the public key is the provisioning input).
 
-Run once from a repo checkout, as root:
+Run once from a repo checkout — rehearse first, then run for real:
 
-```bash
-sudo deploy/provision-server.sh --pubkey-file <path-to-deploy-key.pub>
-# rehearse first with: deploy/provision-server.sh --pubkey-file <path> --dry-run
-```
+1. **Dry run** (no root required — prints every action, changes nothing):
 
-The script is idempotent (re-running converges the server) and proves it never
-touched production data with before/after manifests of the data dirs. It
-installs:
+   ```bash
+   deploy/provision-server.sh --pubkey-file <path-to-deploy-key.pub> --dry-run
+   ```
+
+2. **Record the before checksum** of the live Caddyfile (when it already
+   exists):
+
+   ```bash
+   sha256sum /opt/stack/Caddyfile
+   ```
+
+3. **Run the real provisioning** as root:
+
+   ```bash
+   sudo deploy/provision-server.sh --pubkey-file <path-to-deploy-key.pub>
+   ```
+
+4. **Verify.** The script prints before/after manifests of the production
+   data dirs and dies when they differ (provisioning must never touch
+   production data). The Caddyfile checksum now differs from the before
+   checksum by exactly the managed staging block, and exactly one marker
+   pair exists:
+
+   ```bash
+   sha256sum /opt/stack/Caddyfile
+   grep -c 'BEGIN staging.portal.nare.am' /opt/stack/Caddyfile   # must print 1
+   ```
+
+5. **Re-run safety.** The script is idempotent: a second run regenerates the
+   staging block byte-identically (the checksum after run two equals the one
+   after run one, still exactly one marker pair) and reports `[unchanged]`
+   for everything already in place, so it is safe to re-apply — e.g. once the
+   production stack is up, to record the production network and validate and
+   activate the staging block.
+
+It installs:
 
 - `sqlite3` (apt) — needed for consistent live-database backups,
 - the `deploy` user: **no password, not in the docker group**, login shell
@@ -96,25 +134,55 @@ installs:
   that dispatcher as root (validated with `visudo` before install),
 - the daily backup units (`deploy/systemd/portal-backup.{service,timer}`) and
   `/etc/portal-backup.env`,
-- the `/opt/stack` layout, the staging compose project + `.env.staging`, and
-  the staging Caddy site with its import wiring.
+- the `/opt/stack` layout and the staging compose project + `.env.staging`,
+- the production Docker network, discovered from the running `portal-app`
+  container and recorded as `PORTAL_NETWORK` in
+  `/opt/stack/staging/.env.staging` (best-effort: when the stack is not up
+  yet a `[warn]` is printed and a later re-run records it),
+- the managed staging site block in `/opt/stack/Caddyfile` (delimited by
+  `# BEGIN/# END staging.portal.nare.am` markers): a timestamped backup
+  (`Caddyfile.bak-<UTC>`) is written, the candidate is validated **inside the
+  caddy container** before the live path is touched, installed in place (the
+  single-file bind mount stays pinned to its inode), and caddy is reloaded
+  inside the container. On a validation failure the live file is left
+  untouched; on a reload failure the backup is restored and the previous
+  config reloaded. Either way the backup remains for inspection. When the
+  Caddyfile or the caddy container is not there yet, this step warns and is
+  picked up by a later re-run.
+
+Provisioning settings (environment overrides, used by rehearsals and the test
+suite; the defaults are the live layout):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORTAL_CADDY_CONTAINER` | `caddy` | live caddy container; validation and reload run inside it via `docker exec` |
+| `PORTAL_CADDYFILE` | `/opt/stack/Caddyfile` | live Caddyfile path on the host |
+| `PORTAL_APP_CONTAINER` | `portal-app` | container the production network is discovered from |
+| `PORTAL_NETWORK` | *(discovered)* | production Docker network the staging project joins; set only to override discovery |
 
 Provisioning deliberately does **not** install
-`/opt/stack/docker-compose.yml`, `/opt/stack/.env` or `/etc/caddy/Caddyfile`.
+`/opt/stack/docker-compose.yml`, `/opt/stack/.env` or `/opt/stack/Caddyfile`.
 After provisioning, the owner (the script prints this checklist):
 
 1. `install -m 0644 deploy/portal/docker-compose.yml /opt/stack/docker-compose.yml`
-2. Create `/opt/stack/.env` (mode 0600) with the real `PORTAL_*` secrets
-   (`PORTAL_NEXTAUTH_SECRET`, `PORTAL_ADMIN_EMAIL`, `PORTAL_ADMIN_PASSWORD`,
-   optional `PORTAL_SMTP_HOST/PORT/USER/PASS/FROM` for travel-module e-mail).
-   Required values use `${VAR:?}` interpolation, so a missing secret fails
-   loudly instead of booting the app with an empty one.
+2. Create `/opt/stack/.env` (mode 0600). The production compose passes this
+   file raw to the container via `env_file:`, so it must contain both the
+   app's unprefixed runtime variables (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`,
+   `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `DATABASE_URL`, `SMTP_*`) and the
+   `PORTAL_*` names the deploy gate's trial containers interpolate from the
+   same file (`PORTAL_NEXTAUTH_SECRET`, `PORTAL_ADMIN_EMAIL`,
+   `PORTAL_ADMIN_PASSWORD`, plus `PORTAL_IMAGE_TAG=latest` — the deploy gate
+   moves that tag at cutover). Required values use `${VAR:?}` interpolation,
+   so a missing secret fails loudly instead of booting the app with an empty
+   one.
 3. Set the staging credentials in `/opt/stack/staging/.env.staging` —
    provisioning leaves them **empty on purpose** and the compose `:?` guards
    refuse to boot staging until real values are set.
-4. Install `/etc/caddy/Caddyfile` from `deploy/portal/Caddyfile.example`,
-   re-run provisioning (or append the import line) to wire the staging site,
-   and reload Caddy.
+4. Install `/opt/stack/Caddyfile` from `deploy/portal/Caddyfile.example`
+   (the production site only — the staging site is the provisioning-managed
+   block), then re-run provisioning once the production stack is up so the
+   production network is recorded and the staging block is validated and
+   activated.
 5. Add the CI secrets and variables (below) to the repository settings.
 6. Run the staging drills (below) before enabling the production release.
 
@@ -281,10 +349,14 @@ the admin panel.
 
 Staging is a second, fully isolated compose project (`/opt/stack/staging`,
 container `portal-staging`, own data dirs and `portal-staging:*` images) at
-https://staging.portal.nare.am. It joins the production project's `portal-web`
-network as an external network, so production must exist before staging
-starts and `docker compose down` in staging can never tear down the shared
-network.
+https://staging.portal.nare.am. It joins the production project's
+compose-managed network as an external network named by `PORTAL_NETWORK`
+(discovered from the `portal-app` container by provisioning and recorded in
+`/opt/stack/staging/.env.staging`; the staging compose `:?` guard refuses to
+boot without it), so production must exist before staging starts and
+`docker compose down` in staging can never tear down the shared network. The
+live caddy container reverse-proxies `staging.portal.nare.am` to
+`portal-staging:3000` over that network, via the managed Caddyfile block.
 
 - **WhatsApp is always disabled**: `WHATSAPP_DISABLED=1` defaults in the
   staging compose file *and* the deploy gate merges its own override file
@@ -398,12 +470,12 @@ stage. `SMOKE_CURL_MAX_TIME` overrides the per-request timeout (default 15s).
   in the CI log): usually a failed `prisma db push` or seed. The old container
   was restarted on the untouched data; fix forward.
 - **Public health check failed after cutover** — the app answers internally
-  but not through Caddy: check DNS, the Caddyfile and `docker logs
-  portal-caddy`. With `ROLLBACK_COMPATIBLE=yes` the gate has already rolled
-  back.
-- **Staging site 502s** — staging joins the production `portal-web` network;
-  if the production project is down (`docker compose down` in `/opt/stack`),
-  staging is unreachable. Bring production up first.
+  but not through Caddy: check DNS, `/opt/stack/Caddyfile` and
+  `docker logs caddy`. With `ROLLBACK_COMPATIBLE=yes` the gate has already
+  rolled back.
+- **Staging site 502s** — staging joins the production network named by
+  `PORTAL_NETWORK`; if the production project is down (`docker compose down`
+  in `/opt/stack`), staging is unreachable. Bring production up first.
 - **Backup timer did not run** — `systemctl list-timers portal-backup.timer`
   and `journalctl -u portal-backup.service`; `Persistent=true` catches up
   after downtime.
