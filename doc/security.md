@@ -288,7 +288,8 @@ permission keys (`admin.users`, `admin.settings`, `whatsapp.inbox.view`,
 `whatsapp.inbox.send`, `whatsapp.admin`, `whatsapp.nare.view`,
 `whatsapp.nare.send`, `whatsapp.nare.admin`, `travel.access`, `travel.create`,
 `travel.review`, `travel.issue`, `travel.client_docs.download`,
-`travel.client_docs.send`, `travel.internal.view`, `travel.internal.download`),
+`travel.client_docs.send`, `travel.internal.view`, `travel.internal.download`,
+`partners.review`),
 a default preset per role and the effective-permission resolution: **(role
 preset ∪ grants) − denies** — deny has the highest precedence, a grant adds a
 key the preset lacks. Presets reproduce the interim role policy exactly, with
@@ -299,7 +300,9 @@ migration (D3); and (W3) the Nare triple (`whatsapp.nare.view`,
 `whatsapp.nare.send`, `whatsapp.nare.admin`) is likewise preset for ADMIN only
 — no other role preset opts in, so other users reach the Nare account only
 through per-user overrides. `ACCOUNT_PERMISSIONS` maps each account key
-(`marhaba`, `nare`) to its view/send/admin triple. Per-user overrides live in the `UserPermission` table (one row
+(`marhaba`, `nare`) to its view/send/admin triple. The W5b partner-enrollment
+key `partners.review` (the B2B partner application queue and KYC document
+download) is also preset for ADMIN only. Per-user overrides live in the `UserPermission` table (one row
 per `(userId, key)`, `allowed` = grant/deny; rows with unknown keys are
 ignored and can never widen access). `getActiveUser()` /
 `getActiveUserById()` resolve the effective set from the same database read
