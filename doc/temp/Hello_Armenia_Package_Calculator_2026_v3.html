@@ -8,19 +8,19 @@
 
   <style>
     :root {
-      --bg: #f4f7fb;
+      --bg: #F5F5F5;
       --surface: #ffffff;
-      --surface-2: #f8fafc;
-      --text: #172033;
-      --muted: #667085;
-      --border: #dfe5ee;
-      --primary: #315efb;
-      --primary-dark: #2449c7;
-      --accent: #f7b500;
+      --surface-2: #F6F6F6;
+      --text: #2D3032;
+      --muted: #666E73;
+      --border: #E0E0E0;
+      --primary: #0B7BC1;
+      --primary-dark: #085C91;
+      --accent: #085C91;
       --success: #16865c;
       --danger: #cc3d3d;
-      --input: #fffbea;
-      --shadow: 0 14px 40px rgba(22, 34, 58, 0.09);
+      --input: #FAFAFA;
+      --shadow: 0 14px 40px rgba(45, 48, 50, 0.08);
       --radius: 18px;
     }
 
@@ -36,8 +36,8 @@
       margin: 0;
       min-height: 100vh;
       background:
-        radial-gradient(circle at top left, rgba(49, 94, 251, 0.09), transparent 34%),
-        linear-gradient(180deg, #f8faff 0%, var(--bg) 100%);
+        radial-gradient(circle at top left, rgba(11, 123, 193, 0.06), transparent 34%),
+        linear-gradient(180deg, #FAFAFA 0%, var(--bg) 100%);
       color: var(--text);
       font-family: Inter, "Segoe UI", Arial, sans-serif;
       line-height: 1.45;
@@ -59,9 +59,9 @@
       align-items: center;
       gap: 24px;
       padding: 26px 28px;
-      border: 1px solid rgba(49, 94, 251, 0.13);
+      border: 1px solid rgba(45, 48, 50, 0.10);
       border-radius: 24px;
-      background: linear-gradient(135deg, #ffffff 0%, #f5f8ff 100%);
+      background: linear-gradient(135deg, #ffffff 0%, #F5F5F5 100%);
       box-shadow: var(--shadow);
       margin-bottom: 22px;
     }
@@ -75,7 +75,7 @@
       align-items: center;
       gap: 8px;
       margin-bottom: 8px;
-      color: var(--primary);
+      color: #085C91;
       font-size: 12px;
       font-weight: 800;
       letter-spacing: 0.12em;
@@ -87,7 +87,7 @@
       height: 9px;
       border-radius: 50%;
       background: var(--accent);
-      box-shadow: 0 0 0 5px rgba(247, 181, 0, 0.15);
+      box-shadow: 0 0 0 5px rgba(11, 123, 193, 0.15);
     }
 
     h1 {
@@ -107,11 +107,11 @@
       flex: 0 0 auto;
       padding: 12px 16px;
       border-radius: 999px;
-      background: #eef3ff;
-      color: var(--primary-dark);
+      background: #E6F3FB;
+      color: #085C91;
       font-size: 13px;
       font-weight: 800;
-      border: 1px solid #d9e3ff;
+      border: 1px solid #BFE0F4;
       white-space: nowrap;
     }
 
@@ -140,9 +140,9 @@
 
 
     .input-wrap.locked input {
-      background: #eef2f7;
-      color: #667085;
-      border-color: #d8dee8;
+      background: #EEEEEE;
+      color: #666E73;
+      border-color: #C6C6C6;
       cursor: not-allowed;
       padding-right: 76px;
     }
@@ -155,8 +155,8 @@
       transform: none;
       padding: 3px 6px;
       border-radius: 6px;
-      background: #dfe5ee;
-      color: #5f6b7c;
+      background: #E0E0E0;
+      color: #666E73;
       font-size: 8px;
       font-weight: 900;
       letter-spacing: .07em;
@@ -175,9 +175,9 @@
       margin-top: 14px;
       padding: 11px 13px;
       border-radius: 10px;
-      background: #f7f9fc;
-      border: 1px solid #e2e7ef;
-      color: #667085;
+      background: #F5F5F5;
+      border: 1px solid #E0E0E0;
+      color: #666E73;
       font-size: 11px;
     }
 
@@ -199,7 +199,7 @@
       margin: 0 0 15px;
       font-size: 14px;
       font-weight: 900;
-      color: #27354e;
+      color: #2D3032;
     }
 
     .variable-breakdown {
@@ -208,7 +208,7 @@
 
     .secondary-price {
       margin-top: 7px;
-      color: #4d5a71;
+      color: #666E73;
       font-size: 14px;
     }
 
@@ -216,7 +216,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      box-shadow: 0 8px 28px rgba(22, 34, 58, 0.055);
+      box-shadow: 0 8px 28px rgba(45, 48, 50, 0.05);
       overflow: hidden;
     }
 
@@ -247,7 +247,7 @@
 
     .currency-switch {
       display: inline-flex;
-      background: #edf1f7;
+      background: #EEEEEE;
       padding: 4px;
       border-radius: 12px;
       gap: 4px;
@@ -260,7 +260,7 @@
       padding: 8px 15px;
       font-size: 13px;
       font-weight: 800;
-      color: #677185;
+      color: #666E73;
       cursor: pointer;
       transition: 0.18s ease;
     }
@@ -268,7 +268,7 @@
     .currency-switch button.active {
       color: #fff;
       background: var(--primary);
-      box-shadow: 0 4px 12px rgba(49, 94, 251, 0.25);
+      box-shadow: 0 4px 12px rgba(11, 123, 193, 0.25);
     }
 
     .form-grid {
@@ -290,7 +290,7 @@
       margin-bottom: 7px;
       font-size: 12px;
       font-weight: 800;
-      color: #465066;
+      color: #2D3032;
     }
 
     .input-wrap {
@@ -300,7 +300,7 @@
     .input-wrap input {
       width: 100%;
       height: 46px;
-      border: 1px solid #d6ddea;
+      border: 1px solid #C6C6C6;
       border-radius: 11px;
       background: var(--input);
       color: var(--text);
@@ -314,7 +314,7 @@
     .input-wrap input:focus {
       border-color: var(--primary);
       background: #fff;
-      box-shadow: 0 0 0 4px rgba(49, 94, 251, 0.10);
+      box-shadow: 0 0 0 4px rgba(11, 123, 193, 0.10);
     }
 
     .suffix {
@@ -341,21 +341,21 @@
       padding: 12px 14px;
       margin-top: 14px;
       border-radius: 12px;
-      background: #f4f7fd;
-      border: 1px solid #e3e9f4;
+      background: #E6F3FB;
+      border: 1px solid #BFE0F4;
       font-size: 13px;
     }
 
     .derived-line strong {
-      color: var(--primary-dark);
+      color: #085C91;
     }
 
     .summary-card {
       background:
-        linear-gradient(135deg, rgba(49, 94, 251, .98), rgba(26, 67, 190, .98));
+        linear-gradient(135deg, rgba(11, 123, 193, .98), rgba(139, 25, 28, .98));
       color: white;
       border: none;
-      box-shadow: 0 18px 45px rgba(31, 76, 198, 0.23);
+      box-shadow: 0 18px 45px rgba(11, 123, 193, 0.23);
     }
 
     .summary-card .card-header {
@@ -421,8 +421,8 @@
     .quote-line {
       padding: 15px 16px;
       border-radius: 12px;
-      border: 1px solid #e1e7f0;
-      background: #fafbfd;
+      border: 1px solid #E0E0E0;
+      background: #FAFAFA;
     }
 
     .quote-label {
@@ -437,7 +437,7 @@
     .quote-text {
       font-size: 15px;
       font-weight: 800;
-      color: #1f2937;
+      color: #2D3032;
     }
 
     .quote-text.rtl {
@@ -466,7 +466,7 @@
     }
 
     .breakdown-row.total {
-      background: #f0f4fb;
+      background: #F5F5F5;
       font-weight: 900;
     }
 
@@ -504,12 +504,12 @@
 
     .btn-light {
       background: #fff;
-      color: #334155;
-      border-color: #dce3ed;
+      color: #2D3032;
+      border-color: #C6C6C6;
     }
 
     .btn-light:hover {
-      background: #f7f9fc;
+      background: #F5F5F5;
     }
 
     .btn-danger {
@@ -521,17 +521,17 @@
     .formula-note {
       margin-top: 16px;
       padding: 12px 14px;
-      border-left: 4px solid var(--primary);
-      background: #f4f7fd;
+      border-left: 4px solid #085C91;
+      background: #E6F3FB;
       border-radius: 8px;
-      color: #596579;
+      color: #666E73;
       font-size: 12px;
     }
 
     .footer {
       margin-top: 18px;
       text-align: center;
-      color: #8a94a6;
+      color: #919496;
       font-size: 11px;
     }
 
@@ -540,7 +540,7 @@
       right: 20px;
       bottom: 20px;
       padding: 11px 15px;
-      background: #13223b;
+      background: #2D3032;
       color: #fff;
       border-radius: 10px;
       font-size: 13px;
@@ -585,9 +585,9 @@
       .summary-grid,
   
     .input-wrap.locked input {
-      background: #eef2f7;
-      color: #667085;
-      border-color: #d8dee8;
+      background: #EEEEEE;
+      color: #666E73;
+      border-color: #C6C6C6;
       cursor: not-allowed;
       padding-right: 76px;
     }
@@ -600,8 +600,8 @@
       transform: none;
       padding: 3px 6px;
       border-radius: 6px;
-      background: #dfe5ee;
-      color: #5f6b7c;
+      background: #E0E0E0;
+      color: #666E73;
       font-size: 8px;
       font-weight: 900;
       letter-spacing: .07em;
@@ -620,9 +620,9 @@
       margin-top: 14px;
       padding: 11px 13px;
       border-radius: 10px;
-      background: #f7f9fc;
-      border: 1px solid #e2e7ef;
-      color: #667085;
+      background: #F5F5F5;
+      border: 1px solid #E0E0E0;
+      color: #666E73;
       font-size: 11px;
     }
 

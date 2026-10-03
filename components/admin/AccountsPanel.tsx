@@ -57,7 +57,9 @@ export default function AccountsPanel({ accounts, browserLink, busyAccount, onAc
                 <p>
                   WhatsApp state:{" "}
                   <Badge variant={state?.state === "ready" ? "default" : "outline"}>
-                    {state?.state || state?.info || "unknown"}
+                    {/* A disabled account has no running client; its lazy
+                        runtime would otherwise report "initializing" forever. */}
+                    {account.enabled ? state?.state || state?.info || "unknown" : "Disabled"}
                   </Badge>
                 </p>
               </div>

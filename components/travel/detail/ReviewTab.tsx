@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { badgeStatusStyles, badgeStatusTextStyles } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { versionLabel, type EngineIssue, type ScenarioResult } from "@/lib/travel/contracts";
 import { StateBadge, StatusBadge, apiError, formatDateTime, money, parseJson, shortHash } from "../utils";
 import TraceTable from "../TraceTable";
@@ -172,7 +174,7 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
               <CardTitle>
                 {versionLabel(version.versionNo)} — <StatusBadge status={version.status} />
                 {showingPreview && (
-                  <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-amber-800">
+                  <span className={cn("ml-2 rounded px-1.5 py-0.5 align-middle text-[10px] font-semibold", badgeStatusStyles.warning)}>
                     LIVE PREVIEW
                   </span>
                 )}
@@ -193,7 +195,7 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
         </CardHeader>
         <CardContent className="space-y-4">
           {showingPreview && (
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <p className={cn("rounded-md border px-3 py-2 text-xs", badgeStatusStyles.warning)}>
               Live preview of current content — not submitted yet; submitting binds this calculation.
             </p>
           )}
@@ -421,7 +423,7 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
                   {blockers.length > 0 && (
                     <ul className="mt-2 space-y-1 border-t pt-2">
                       {blockers.map((iss, i) => (
-                        <li key={i} className="flex items-start gap-2 text-xs text-red-600">
+                        <li key={i} className={cn("flex items-start gap-2 text-xs", badgeStatusTextStyles.danger)}>
                           <span className="font-mono">{iss.code}</span>
                           <span>{iss.message}</span>
                         </li>
@@ -434,11 +436,11 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
             {version.scenarios.some(
               (sc) => (ctx.quoteResults?.get(sc.id)?.issues ?? []).some((i) => i.severity === "BLOCKER"),
             ) && (
-              <p className="text-xs text-amber-700">
+              <p className={cn("text-xs", badgeStatusTextStyles.warning)}>
                 Blockers do not prevent submitting, but the validator cannot approve until they are resolved.
               </p>
             )}
-            {ctx.quoteError && <p className="text-xs text-red-600">{ctx.quoteError} — amounts may be stale.</p>}
+            {ctx.quoteError && <p className={cn("text-xs", badgeStatusTextStyles.danger)}>{ctx.quoteError} — amounts may be stale.</p>}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setSubmitOpen(false)}>
@@ -490,7 +492,7 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
           </DialogHeader>
           {belowFloor && (
             <div className="space-y-2">
-              <p className="text-sm text-amber-700">
+              <p className={cn("text-sm", badgeStatusTextStyles.warning)}>
                 The snapshot is below the pricing floor. Issuing requires a manager (ADMIN) and a recorded
                 exception reason.
               </p>

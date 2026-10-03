@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { badgeStatusTextStyles } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { formatDisplayDateRange } from "@/lib/travel/engine/dates";
 import DateField from "../DateField";
 import { apiError, formatDateTime, parseJson } from "../utils";
@@ -180,7 +182,7 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
                 </div>
               </div>
             </div>
-            {invalidDates && <p className="text-xs text-red-600">End date must be after the start date.</p>}
+            {invalidDates && <p className={cn("text-xs", badgeStatusTextStyles.danger)}>End date must be after the start date.</p>}
             <div>
               <Label>Travelers</Label>
               <TravelerSetupEditor

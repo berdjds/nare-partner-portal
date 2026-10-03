@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { getActiveUser } from "@/lib/access-policy";
 import { hasPermission } from "@/lib/permissions";
+import AppShell from "@/components/app/AppShell";
+import { PageHeader } from "@/components/app/PageHeader";
 import PermissionsReport from "@/components/admin/PermissionsReport";
 
 export default async function PermissionsReportPage() {
@@ -20,19 +21,16 @@ export default async function PermissionsReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/40 p-4">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold">Proposed permissions</h1>
-        <p className="text-sm text-muted-foreground">
-          Review the role-preset permissions each existing user would receive, then confirm the migration.
-        </p>
-        <p className="mt-2 text-sm">
-          <Link href="/admin" className="text-primary underline-offset-4 hover:underline">
-            ← Back to admin panel
-          </Link>
-        </p>
-      </header>
+    <AppShell>
+      <PageHeader
+        title="Proposed permissions"
+        subtitle="Review the role-preset permissions each existing user would receive, then confirm the migration."
+        breadcrumb={[
+          { label: "Admin panel", href: "/admin" },
+          { label: "Permissions report" },
+        ]}
+      />
       <PermissionsReport />
-    </div>
+    </AppShell>
   );
 }

@@ -3,30 +3,47 @@
 @tailwind utilities;
 
 @layer base {
-  /* Neutral ramp is zinc-family (cool, low chroma); the deep green primary is
-     reserved for primary actions and active nav states only — badges, pills
-     and status tints carry their own hues so the accent stays rare. */
+  /* Nare Travel and Tours brand (W4), taken from the Nare Travel and Tours
+     website repository (blue primary, warm orange secondary, lucide icons).
+     The whole palette lives in these CSS variables — a palette change touches
+     this file only. --brand is the exact brand blue (203 89% 53%) for the mark
+     and decorative accents; --primary is a deepened blue of the same hue
+     (203 89% 40%) so white text on buttons and link text meet WCAG AA contrast.
+     --warm is the brand orange, for rare highlights. Destructive keeps its own
+     red, visibly distinct from the blue. Badges, pills and status tints carry
+     their own hues (see the badge status map) so the accent stays rare. */
   :root {
-    --background: 240 4.8% 95.9%;
-    --foreground: 240 10% 3.9%;
+    --background: 0 0% 96%;
+    --foreground: 0 0% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 0 0% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 152 45% 26%;
-    --primary-foreground: 140 30% 97%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 72% 51%;
+    --popover-foreground: 0 0% 10%;
+    --brand: 203 89% 53%; /* exact Nare brand blue */
+    --warm: 27 96% 61%; /* Nare brand orange */
+    --primary: 203 89% 40%; /* deepened brand blue, AA with white text */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 93%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 203 87% 95%; /* light brand-blue tint */
+    --accent-foreground: 203 89% 28%;
+    --destructive: 0 84% 60%; /* alert red — distinct from brand blue */
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 88%;
-    --ring: 152 45% 26%;
+    --border: 0 0% 88%;
+    --input: 0 0% 78%;
+    --ring: 203 89% 40%;
     --radius: 0.75rem;
+    /* Sidebar: slim white rail; the active item is tinted in brand blue. */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 10%;
+    --sidebar-primary: 203 89% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 203 87% 95%;
+    --sidebar-accent-foreground: 203 89% 28%;
+    --sidebar-border: 0 0% 93%;
+    --sidebar-ring: 203 89% 40%;
   }
 }
 
