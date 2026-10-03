@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { BrandMark } from "@/components/app/BrandMark";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -41,12 +42,9 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground">
-            W
-          </div>
-          <CardTitle className="text-xl">WAControl</CardTitle>
-          <CardDescription>Sign in to manage WhatsApp messages.</CardDescription>
+        <CardHeader className="items-center gap-2 text-center">
+          <BrandMark />
+          <CardDescription>Sign in to your account.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
