@@ -9,15 +9,15 @@ import Link from "next/link";
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-2.5 px-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">
         N
       </span>
       {compact ? (
-        <span className="text-sm font-semibold tracking-tight">Nare Travel and Tours</span>
+        <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Nare Travel and Tours</span>
       ) : (
         <span className="leading-tight">
-          <span className="block text-sm font-semibold tracking-tight">Nare Travel and Tours</span>
-          <span className="block text-xs text-muted-foreground">Portal</span>
+          <span className="block text-sm font-semibold tracking-tight text-sidebar-foreground">Nare Travel and Tours</span>
+          <span className="block text-xs text-sidebar-foreground/60">Portal</span>
         </span>
       )}
     </Link>

@@ -3,30 +3,43 @@
 @tailwind utilities;
 
 @layer base {
-  /* Neutral ramp is zinc-family (cool, low chroma); the deep green primary is
-     reserved for primary actions and active nav states only — badges, pills
-     and status tints carry their own hues so the accent stays rare. */
+  /* Nare Travel and Tours brand (W4). The whole palette lives in these CSS
+     variables — a palette change touches this file only. Nare red #AE1F23 is
+     reserved for primary actions and active nav states; plum #592641 is the
+     accent hue; text is charcoal #2D3032 on calm, low-chroma neutrals
+     (#EEEEEE / #C6C6C6). Destructive keeps its own brighter red, visibly
+     distinct from the deeper brand red. Badges, pills and status tints carry
+     their own hues (see the badge status map) so the accent stays rare. */
   :root {
-    --background: 240 4.8% 95.9%;
-    --foreground: 240 10% 3.9%;
+    --background: 0 0% 96%;
+    --foreground: 204 5% 19%; /* charcoal #2D3032 */
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 204 5% 19%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 152 45% 26%;
-    --primary-foreground: 140 30% 97%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 72% 51%;
+    --popover-foreground: 204 5% 19%;
+    --primary: 358 70% 40%; /* Nare red #AE1F23 */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 93%; /* #EEEEEE */
+    --secondary-foreground: 204 5% 19%;
+    --muted: 0 0% 93%; /* #EEEEEE */
+    --muted-foreground: 204 4% 42%;
+    --accent: 328 33% 93%; /* plum tint */
+    --accent-foreground: 328 40% 25%; /* plum #592641 */
+    --destructive: 0 84% 60%; /* bright alert red — distinct from brand red */
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 88%;
-    --ring: 152 45% 26%;
+    --border: 0 0% 88%;
+    --input: 0 0% 78%; /* #C6C6C6 */
+    --ring: 358 70% 40%;
     --radius: 0.75rem;
+    /* Sidebar: slim white rail; the active item is tinted in brand red. */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 204 5% 19%;
+    --sidebar-primary: 358 70% 40%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 358 60% 95%;
+    --sidebar-accent-foreground: 358 60% 32%;
+    --sidebar-border: 0 0% 93%;
+    --sidebar-ring: 358 70% 40%;
   }
 }
 
