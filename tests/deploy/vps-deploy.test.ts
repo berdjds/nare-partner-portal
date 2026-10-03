@@ -17,7 +17,11 @@
  * existing latest image (NOT a first deploy), the
  * deploy-managed image override in both environments (a live compose pinning
  * a dated image still runs the candidate; an image-id mismatch after cutover
- * fails the deploy and rolls back), the staging WHATSAPP_DISABLED=1 override
+ * fails the deploy and rolls back), the W3i forced recreate (cutover and
+ * rollback pass --force-recreate --no-deps to only the app service; the
+ * recreate-aware stub keeps the old image id without the flags, and the W3f
+ * image-id safety net is proven against a compose that ignores the flags),
+ * the staging WHATSAPP_DISABLED=1 override
  * (cutover and rollback), the per-env image tags (staging never builds or
  * tags the shared portal:* production tags), and the success path. Every
  * scenario also asserts that data is never restored automatically.
@@ -194,7 +198,7 @@ describe("scripts/vps-deploy.sh", () => {
       "rm -f portal-trial-a",
       "-p portal-trial-b",
       "tag portal:candidate portal:latest",
-      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d portal`,
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d --force-recreate --no-deps portal`,
       `exec ${APP_CONTAINER}`,
     ]);
     expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(1);
@@ -244,7 +248,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(0);
     // The cutover still tags the candidate as latest and starts it.
     expect(ctx.dockerLog).toContain("tag portal:candidate portal:latest");
-    expect(ctx.dockerLog).toContain("up -d portal");
+    expect(ctx.dockerLog).toContain("up -d --force-recreate --no-deps portal");
 
     // The verified backup of the (new) data dirs still happens.
     expect(backupArchives(appRoot)).toHaveLength(1);
@@ -380,6 +384,7 @@ describe("scripts/vps-deploy.sh", () => {
       `start ${APP_CONTAINER}`,
     ]);
     expect(ctx.dockerLog).not.toContain("up -d portal"); // no cutover
+    expect(ctx.dockerLog).not.toContain("up -d --force-recreate --no-deps portal");
     expect(ctx.dockerLog).not.toContain("tag portal:candidate portal:latest");
     // The real data dirs were never mounted by any trial container.
     for (const line of lines(ctx.dockerLog)) {
@@ -404,7 +409,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("deploy finished successfully");
     expect(ctx.dockerLog).toContain("-p portal-trial-b");
     expect(ctx.dockerLog).toContain(
-      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d portal`
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d --force-recreate --no-deps portal`
     );
     expectNoAutomaticRestore(ctx);
   });
@@ -445,7 +450,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("rollback OK");
     const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
     expect(rollbackLines).toHaveLength(1);
-    expect(rollbackLines[0]).toContain("up -d portal");
+    expect(rollbackLines[0]).toContain("up -d --force-recreate --no-deps portal");
     expect(ctx.dockerLog).toContain("tag portal:previous portal:latest");
     // Newly accepted data is kept — nothing is wiped or replaced.
     expectDataMarkersIntact(appRoot);
@@ -489,7 +494,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(ctx.curlLog).toContain("https://portal.test/login");
     const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
     expect(rollbackLines).toHaveLength(1);
-    expect(rollbackLines[0]).toContain("up -d portal");
+    expect(rollbackLines[0]).toContain("up -d --force-recreate --no-deps portal");
     expect(ctx.dockerLog).toContain("tag portal:previous portal:latest");
     expectDataMarkersIntact(appRoot);
     expectNoAutomaticRestore(ctx);
@@ -516,7 +521,7 @@ describe("scripts/vps-deploy.sh", () => {
     // The cutover merges the deploy-managed override that pins the app image,
     // so `compose up` starts the candidate despite the pinned compose file.
     const overridePath = path.join(appRoot, "portal-production.overrides.yml");
-    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${overridePath} up -d portal`;
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${overridePath} up -d --force-recreate --no-deps portal`;
     expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
     const overrideContent = readFileSync(overridePath, "utf8");
     expect(overrideContent).toContain("image: portal:latest");
@@ -527,11 +532,16 @@ describe("scripts/vps-deploy.sh", () => {
     expectNoAutomaticRestore(ctx);
   });
 
-  it("image-id mismatch after cutover triggers cutover_failed and rollback", () => {
+  it("the W3f image-id safety net still fires when compose does not recreate the container", () => {
     const appRoot = setupAppRoot();
-    // compose did not apply the image override: the app container still runs
-    // the OLD image id even though `compose up` reported success.
-    const ctx = runDeploy(appRoot, { STUB_CONTAINER_IMAGE_ID: "sha256:old-pinned" });
+    // compose ignored --force-recreate (the stub models a compose that keeps
+    // the existing container): the app container still runs the OLD image id
+    // even though `compose up` reported success. The post-cutover image-id
+    // verification must catch exactly this and roll back.
+    const ctx = runDeploy(appRoot, {
+      STUB_CONTAINER_IMAGE_ID: "sha256:old-pinned",
+      STUB_COMPOSE_IGNORE_RECREATE: "1",
+    });
     expect(ctx.status).toBe(1);
     const out = ctx.stdout + ctx.stderr;
 
@@ -542,7 +552,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("rollback OK");
     const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
     expect(rollbackLines).toHaveLength(1);
-    expect(rollbackLines[0]).toContain("up -d portal");
+    expect(rollbackLines[0]).toContain("up -d --force-recreate --no-deps portal");
     // The rollback start also merges the image override, with the rollback
     // image override merged last so the previous image wins.
     expect(rollbackLines[0]).toContain("portal-production.overrides.yml");
@@ -551,6 +561,50 @@ describe("scripts/vps-deploy.sh", () => {
     );
     expect(ctx.dockerLog).toContain("tag portal:previous portal:latest");
     expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("switches the running image when the image reference is unchanged (W3i: --force-recreate)", () => {
+    // The second-deploy state from the staging rollback drill: the container
+    // already runs portal:latest — the SAME reference the cutover override
+    // pins — with an old image id, and the tag now points at the new
+    // candidate. The recreate-aware stub keeps the old image id unless
+    // `compose up` passes --force-recreate, so this deploy fails at the
+    // post-cutover image-id check if the flags are missing.
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot);
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    expect(ctx.stdout).toContain("cutover image verified");
+    expect(ctx.stdout).toContain("deploy finished successfully");
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("cutover and rollback recreate only the app service (W3i: --force-recreate --no-deps, caddy untouched)", () => {
+    const appRoot = setupAppRoot();
+    // A rollback scenario so both the cutover and the rollback start happen.
+    const ctx = runDeploy(appRoot, {
+      STUB_FAIL_FIRST: "portal-app:login:2",
+      PORTAL_HEALTH_RETRIES: "2",
+    });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("rollback OK");
+
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d --force-recreate --no-deps portal`;
+    expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
+    const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
+    expect(rollbackLines).toHaveLength(1);
+    // Every compose up of the REAL app carries both flags and names only the
+    // app service (last argument); caddy appears in no compose invocation.
+    const upLines = lines(ctx.dockerLog).filter((line) => line.startsWith("compose ") && line.includes(" up "));
+    expect(upLines.length).toBeGreaterThan(0);
+    for (const line of upLines) {
+      expect(line).not.toContain("caddy");
+      if (line.includes("trial-compose.yml")) {
+        expect(line).toMatch(/up -d app$/); // trials: fresh throwaway containers
+      } else {
+        expect(line).toMatch(/up -d --force-recreate --no-deps portal$/);
+      }
+    }
     expectNoAutomaticRestore(ctx);
   });
 
@@ -611,7 +665,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(ctx.dockerLog).not.toContain("stop portal-app");
     // The cutover merges the provisioning compose file with the staging
     // override that disables the WhatsApp client.
-    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} up -d portal-staging`;
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} up -d --force-recreate --no-deps portal-staging`;
     expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
     const overrideContent = readFileSync(path.join(appRoot, "portal-staging.overrides.yml"), "utf8");
     expect(overrideContent).toContain("WHATSAPP_DISABLED=1");
@@ -622,7 +676,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(archives).toHaveLength(1);
     expect(archives[0]).toMatch(/^portal-staging-.*\.tar\.gz$/);
     // EVERY start of the real app goes through the staging override.
-    const upLines = lines(ctx.dockerLog).filter((line) => line.includes("up -d portal-staging"));
+    const upLines = lines(ctx.dockerLog).filter((line) => line.includes("up -d --force-recreate --no-deps portal-staging"));
     expect(upLines.length).toBeGreaterThan(0);
     for (const line of upLines) {
       expect(line).toContain("portal-staging.overrides.yml");
@@ -677,7 +731,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("rollback OK");
     const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
     expect(rollbackLines).toHaveLength(1);
-    expect(rollbackLines[0]).toContain("up -d portal-staging");
+    expect(rollbackLines[0]).toContain("up -d --force-recreate --no-deps portal-staging");
     // The staging override is merged ahead of the rollback compose file, so
     // the rolled-back container also runs with WHATSAPP_DISABLED=1.
     const overrideIdx = rollbackLines[0].indexOf("portal-staging.overrides.yml");

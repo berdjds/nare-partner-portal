@@ -499,7 +499,11 @@ cutover_failed() {
   if [ "$ROLLBACK_COMPATIBLE" = "yes" ]; then
     log "rolling back: starting $PREVIOUS_IMAGE on the CURRENT data (newly accepted data kept; nothing is restored from backup)" >&2
     write_rollback_compose_file
-    if compose -f "$WORK_DIR/rollback-compose.yml" up -d "$APP_SERVICE"; then
+    # docker compose does not recreate the container when the merged config's
+    # image REFERENCE is unchanged, even though the tag now points at a
+    # different image id (found by the staging rollback drill) — force the
+    # recreate. --no-deps guarantees only the app service is touched (not caddy).
+    if compose -f "$WORK_DIR/rollback-compose.yml" up -d --force-recreate --no-deps "$APP_SERVICE"; then
       docker tag "$PREVIOUS_IMAGE" "$LATEST_IMAGE" || log "warning: failed to retag $LATEST_IMAGE back to $PREVIOUS_IMAGE" >&2
       if wait_for_login "$APP_CONTAINER"; then
         log "rollback OK: $APP_CONTAINER serves $PREVIOUS_IMAGE with all data kept"
@@ -630,7 +634,11 @@ main() {
   # --- 8. CUTOVER: candidate on the real data -----------------------------------
   log "CUTOVER: starting the candidate on the real data (writes accepted from here)"
   docker tag "$CANDIDATE_IMAGE" "$LATEST_IMAGE" || cutover_failed "failed to tag $CANDIDATE_IMAGE as $LATEST_IMAGE"
-  if ! compose up -d "$APP_SERVICE"; then
+  # docker compose does not recreate the container when the merged config's
+  # image REFERENCE is unchanged, even though the tag now points at a
+  # different image id (found by the staging rollback drill) — force the
+  # recreate. --no-deps guarantees only the app service is touched (not caddy).
+  if ! compose up -d --force-recreate --no-deps "$APP_SERVICE"; then
     cutover_failed "docker compose failed to start the candidate"
   fi
   # The override pins the app image to $LATEST_IMAGE, but a compose file that

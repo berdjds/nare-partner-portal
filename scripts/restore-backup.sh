@@ -350,7 +350,11 @@ if [ "$ENV_NAME" = "staging" ]; then
 fi
 
 log "restore: starting $APP_CONTAINER from $RESTORE_IMAGE with WACONTROL_NOTIFICATIONS_PAUSED=1 ($PAUSE_COMPOSE_FILE)"
-compose up -d "$APP_SERVICE" || die "docker compose failed to start $APP_CONTAINER"
+# The point of this start is to run $RESTORE_IMAGE, retagged as $LATEST_IMAGE —
+# but docker compose does not recreate the container when the merged config's
+# image REFERENCE is unchanged, so an existing container created from the same
+# reference would keep running the OLD image id. --no-deps touches only the app.
+compose up -d --force-recreate --no-deps "$APP_SERVICE" || die "docker compose failed to start $APP_CONTAINER"
 if ! wait_for_login "$APP_CONTAINER"; then
   die "$APP_CONTAINER did not serve /login (HTTP 200) after the restore — inspect the container; notifications remain paused"
 fi
@@ -373,7 +377,7 @@ Notifications are PAUSED (WACONTROL_NOTIFICATIONS_PAUSED=1 via
 $PAUSE_COMPOSE_FILE): outbox entries reverted by the restore were NOT
 re-sent. After reviewing the outbox, resume delivery with:
   rm "$PAUSE_COMPOSE_FILE"
-  docker compose $RESUME_COMPOSE_ARGS up -d $APP_SERVICE
+  docker compose $RESUME_COMPOSE_ARGS up -d --force-recreate --no-deps $APP_SERVICE
 
 What this did NOT cover:
   - media files added to $(basename "$UPLOADS_DIR") after the backup (not in

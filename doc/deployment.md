@@ -284,6 +284,16 @@ identically for staging and production:
    the candidate is stopped, **nothing is restored automatically**, and the
    manual recovery procedure (below) is printed.
 
+**Deploy-tool changes ship only via provisioning.** The gate and its sibling
+tools (`portal-restore`, `portal-backup`, ...) are the root-owned
+`/usr/local/lib/portal-deploy/*` copies installed by
+`deploy/provision-server.sh` from `scripts/*.sh`; the CI pipeline goes
+through the forced-command dispatcher and can call but never replace them.
+So when a release changes any of those `scripts/*.sh`, the release procedure
+includes an explicit extra step: re-run `deploy/provision-server.sh` (as
+root) to install the new tools, in addition to the normal push-to-main
+pipeline.
+
 **First deploy of a new environment.** When the app container is not running
 **and** `...:latest` does not exist yet, the gate logs `FIRST DEPLOY` at the
 start and adapts: no `...:previous` tag is created, trial B is skipped with

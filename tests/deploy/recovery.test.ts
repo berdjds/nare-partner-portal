@@ -14,7 +14,9 @@
  * the same test double as the deploy-gate tests (tests/deploy/docker-stub.sh).
  * Covers argument/checksum validation, the --yes refusal, the export-since
  * acknowledgement (--no-export-ack escape hatch), the paused-notification
- * start (compose override carrying WACONTROL_NOTIFICATIONS_PAUSED=1), the
+ * start (compose override carrying WACONTROL_NOTIFICATIONS_PAUSED=1, forced
+ * to recreate only the app service so the restored app really runs the
+ * restore image — W3i), the
  * restore image check (the previous pre-deploy image is verified and retagged
  * as the compose service image portal:latest — portal-staging:latest in
  * staging — never the failed candidate a broken cutover left behind, and
@@ -416,7 +418,7 @@ describe("scripts/restore-backup.sh", () => {
       `image inspect portal:previous`,
       `tag portal:previous portal:latest`,
       `stop ${APP_CONTAINER}`,
-      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-restore-paused.compose.yml")} up -d portal`,
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-restore-paused.compose.yml")} up -d --force-recreate --no-deps portal`,
       `exec ${APP_CONTAINER}`,
     ]);
 
@@ -439,6 +441,25 @@ describe("scripts/restore-backup.sh", () => {
     expect(ctx.stdout).toContain("portal-restore-paused.compose.yml");
     expect(ctx.stdout).toContain("portal:previous");
     expect(ctx.stdout).toContain("not the failed candidate");
+  });
+
+  it("the restore start and the documented resume command force-recreate only the app service (W3i)", () => {
+    const { appRoot, archive, exportFile } = setupRestoreFixture();
+    writeFileSync(exportFile, JSON.stringify({ tables: {}, counts: {}, totalRows: 0 }));
+
+    const ctx = runRestore([archive, "--yes"], appRoot);
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+
+    // The paused start recreates only the app service: without
+    // --force-recreate an existing container created from the same
+    // portal:latest reference would keep running the OLD (failed candidate)
+    // image id on the restored backup; --no-deps keeps caddy out of it.
+    const upLines = lines(ctx.dockerLog).filter((line) => line.startsWith("compose ") && line.includes(" up "));
+    expect(upLines).toHaveLength(1);
+    expect(upLines[0]).toMatch(/up -d --force-recreate --no-deps portal$/);
+    expect(upLines[0]).not.toContain("caddy");
+    // The documented resume step recreates the same way.
+    expect(ctx.stdout).toContain("up -d --force-recreate --no-deps portal");
   });
 
   it("does not mistake the running app's short Docker ID for another restore writer", () => {
@@ -477,7 +498,7 @@ describe("scripts/restore-backup.sh", () => {
       `image inspect portal:known-good`,
       `tag portal:known-good portal:latest`,
       `stop ${APP_CONTAINER}`,
-      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-restore-paused.compose.yml")} up -d portal`,
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-restore-paused.compose.yml")} up -d --force-recreate --no-deps portal`,
     ]);
     expect(ctx.stdout).toContain("portal:known-good");
     expectBackupMarkers(appRoot);
@@ -538,7 +559,7 @@ describe("scripts/restore-backup.sh", () => {
     assertInOrder(ctx.dockerLog, [
       `tag portal-staging:previous portal-staging:latest`,
       `stop portal-staging`,
-      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} -f ${path.join(appRoot, "portal-restore-paused.compose.yml")} up -d portal-staging`,
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} -f ${path.join(appRoot, "portal-restore-paused.compose.yml")} up -d --force-recreate --no-deps portal-staging`,
     ]);
 
     // The staging override was written (it was missing) and carries the

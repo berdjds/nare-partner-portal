@@ -254,7 +254,7 @@ describe("scripts/portal-drill.sh rollback drill", () => {
     expect(out).toContain("CUTOVER FAILED");
     expect(out).toContain("rollback OK");
     const rollbackLines = lines(ctx.dockerLog).filter(
-      (line) => line.includes("rollback-compose.yml") && line.includes("up -d portal-staging")
+      (line) => line.includes("rollback-compose.yml") && line.includes("up -d --force-recreate --no-deps portal-staging")
     );
     expect(rollbackLines).toHaveLength(1);
     expect(ctx.dockerLog).toContain("tag portal-staging:previous portal-staging:latest");
@@ -452,7 +452,7 @@ describe("scripts/portal-drill.sh restore drill", () => {
     expect(archives).toHaveLength(1);
     expect(archives[0]).toMatch(/^portal-staging-\d{8}T\d{6}Z\.tar\.gz$/);
     expect(backups.sort()).toEqual([archives[0], `${archives[0]}.sha256`].sort());
-    expect(ctx.dockerLog).toContain("up -d portal-staging");
+    expect(ctx.dockerLog).toContain("up -d --force-recreate --no-deps portal-staging");
     // The restore runs the image that matches the just-taken backup: the
     // running latest, retagged onto itself. Booting the older previous image
     // on current-schema data would be a silent downgrade.
