@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/toast";
 import { friendlyLoginError } from "@/lib/login-errors";
 import { BrandMark } from "@/components/app/BrandMark";
-import { FORGOT_ACCESS, LOGIN_PANEL, PRODUCT_NAME } from "@/lib/portal-content";
+import { FORGOT_ACCESS, LOGIN_PANEL, PARTNER_APPLY, PRODUCT_NAME } from "@/lib/portal-content";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -158,8 +158,14 @@ function LoginForm() {
           </CardContent>
         </Card>
         <Link
+          href="/partners/apply"
+          className="mt-4 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          {PARTNER_APPLY.linkLabel}
+        </Link>
+        <Link
           href="/"
-          className="mt-6 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          className="mt-2 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
           Back to home
         </Link>

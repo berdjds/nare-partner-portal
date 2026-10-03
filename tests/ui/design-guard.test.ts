@@ -101,6 +101,10 @@ const PAGE_ALLOWLIST: { file: string; reason: string }[] = [
     file: "app/login/page.tsx",
     reason: "public unauthenticated page — deliberately outside the authenticated shell",
   },
+  {
+    file: "app/partners/apply/page.tsx",
+    reason: "public unauthenticated partner application page (W5b) — deliberately outside the authenticated shell, like login",
+  },
 ];
 
 function listPages(): string[] {
@@ -188,8 +192,12 @@ describe("W4 design guards", () => {
       ).toEqual([]);
     });
 
-    it("the allow-listed pages are exactly the root redirect and login", () => {
-      expect(PAGE_ALLOWLIST.map((e) => e.file).sort()).toEqual(["app/login/page.tsx", "app/page.tsx"]);
+    it("the allow-listed pages are exactly the root redirect, login and the public partner application page", () => {
+      expect(PAGE_ALLOWLIST.map((e) => e.file).sort()).toEqual([
+        "app/login/page.tsx",
+        "app/page.tsx",
+        "app/partners/apply/page.tsx",
+      ]);
       // app/page.tsx must stay a redirect-only page to keep its exemption.
       expect(readRepoFile("app/page.tsx")).toContain("redirect(");
     });

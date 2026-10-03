@@ -1,0 +1,378 @@
+/**
+ * Public partner application page tests (W5b) — app/partners/apply/page.tsx
+ * and components/partners/ApplyForm.tsx.
+ *
+ * Contract under test:
+ *
+ * - The page is public (allow-listed in tests/ui/design-guard.test.ts), brands
+ *   itself like the landing page, mints the signed form token via
+ *   issueFormToken (lib/partners/abuse.ts), and renders ApplyForm with it.
+ *   When the token cannot be minted (NEXTAUTH_SECRET unset) the page fails
+ *   closed: PARTNER_APPLY.unavailable with role="alert" and the contact
+ *   mailto, never a form whose submissions can never pass.
+ * - The rendered form carries the abuse tripwires as inert inputs: the hidden
+ *   formToken (`<digits>.<64 hex>`), the hidden consentVersion
+ *   (CONSENT_VERSION), and the honeypot `companyFax` — invisible (container
+ *   class "hidden", aria-hidden), skipped by keyboard (tabindex -1) and not
+ *   autocompleted. The client component repeats the honeypot literal because
+ *   lib/partners/abuse.ts is node-only; these tests tie the two together.
+ * - Accessibility: required fields carry the required attribute, labels are
+ *   associated via for=, sections are fieldset/legend, input types are
+ *   date/email/tel/file with the PDF/JPG/PNG accept list, and both consent
+ *   checkboxes are required with value="true".
+ * - ApplySuccess shows the reference with role="status" and the contact
+ *   mailto. Metadata: PAGE_TITLES.partnerApply and robotsDirective().
+ *
+ * The page and ApplyForm render in their initial state only — the submit path
+ * (fetch POST to /api/partners/applications, ZodIssue-array mapping, client
+ * file checks, submitting state) runs only in a browser and is pinned by
+ * source-level guards, as in tests/ui/login-page.test.ts. NEXTAUTH_SECRET is
+ * set before the page module is imported dynamically (issueFormToken throws
+ * without it), mirroring tests/partners/apply-api.test.ts. Vitest only picks
+ * up *.test.ts, so elements are built with createElement instead of JSX.
+ */
+
+import { beforeAll, describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  CONTACT,
+  INDEXABLE,
+  PAGE_TITLES,
+  PARTNER_APPLY,
+  PRODUCT_NAME,
+  robotsDirective,
+} from "@/lib/portal-content";
+import { CONSENT_VERSION } from "@/lib/partners/validation";
+import { HONEYPOT_FIELD, verifyFormToken } from "@/lib/partners/abuse";
+import { Hero } from "@/components/landing/Hero";
+
+// lib/partners/abuse.ts fails closed when NEXTAUTH_SECRET is unset (it signs
+// the form token), so the page needs one — set before the page module loads.
+process.env.NEXTAUTH_SECRET = String("apply-page-test-secret-min-32-characters!");
+
+let PartnerApplyPage: typeof import("@/app/partners/apply/page").default;
+let pageMetadata: typeof import("@/app/partners/apply/page").metadata;
+let ApplySuccess: typeof import("@/components/partners/ApplyForm").ApplySuccess;
+
+beforeAll(async () => {
+  const page = await import("@/app/partners/apply/page");
+  PartnerApplyPage = page.default;
+  pageMetadata = page.metadata;
+  const form = await import("@/components/partners/ApplyForm");
+  ApplySuccess = form.ApplySuccess;
+});
+
+function renderApplyPage(): string {
+  return renderToStaticMarkup(createElement(PartnerApplyPage));
+}
+
+function readSource(rel: string): string {
+  return readFileSync(resolve(process.cwd(), rel), "utf8");
+}
+
+/** Escapes text the way React's server renderer does, for HTML assertions. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
+/** The full rendered input/textarea tag for a field name, failing if absent. */
+function fieldTag(html: string, name: string): string {
+  const match = html.match(new RegExp(`<(?:input|textarea)[^>]*\\bname="${name}"[^>]*>`));
+  expect(match, `expected a rendered field named ${name}`).not.toBeNull();
+  return match![0];
+}
+
+describe("rendered markup", () => {
+  it("renders the headline, intro, all five sections and the form copy from the content file", () => {
+    const html = renderApplyPage();
+
+    for (const copy of [
+      PRODUCT_NAME,
+      PARTNER_APPLY.headline,
+      PARTNER_APPLY.intro,
+      PARTNER_APPLY.sections.company,
+      PARTNER_APPLY.sections.licence,
+      PARTNER_APPLY.sections.contacts,
+      PARTNER_APPLY.sections.signatory,
+      PARTNER_APPLY.sections.consent,
+      PARTNER_APPLY.labels.consentKyc,
+      PARTNER_APPLY.labels.consentChannels,
+      PARTNER_APPLY.submitLabel,
+      PARTNER_APPLY.fileRules,
+    ]) {
+      expect(html).toContain(escapeHtml(copy));
+    }
+  });
+
+  it("shows no error and no success state before any interaction", () => {
+    const html = renderApplyPage();
+
+    expect(html).not.toContain('role="alert"');
+    expect(html).not.toContain('role="status"');
+    expect(html).not.toContain(escapeHtml(PARTNER_APPLY.successTitle));
+    expect(html).not.toContain(escapeHtml(PARTNER_APPLY.submittingLabel));
+    // The form starts idle.
+    expect(html).toContain('aria-busy="false"');
+  });
+});
+
+describe("abuse tripwires in the rendered form", () => {
+  it("embeds a hidden formToken that matches the issueFormToken format and verifies", () => {
+    const html = renderApplyPage();
+
+    const match = html.match(/<input type="hidden" name="formToken" value="([^"]+)"/);
+    expect(match, "hidden formToken input").not.toBeNull();
+    const token = match![1];
+    expect(token).toMatch(/^\d+\.[0-9a-f]{64}$/);
+    // Issued just now; verify with a clock beyond MIN_FILL_MS (3 s).
+    expect(verifyFormToken(token, Date.now() + 60_000)).toEqual({ ok: true });
+  });
+
+  it("embeds the current consent version as a hidden input", () => {
+    const html = renderApplyPage();
+
+    expect(html).toContain(`<input type="hidden" name="consentVersion" value="${CONSENT_VERSION}"/>`);
+  });
+
+  it("renders the honeypot invisibly, off the tab order and without autocomplete", () => {
+    const html = renderApplyPage();
+
+    // The form repeats the literal because lib/partners/abuse.ts is node-only;
+    // this ties the repeated name to the real HONEYPOT_FIELD.
+    expect(HONEYPOT_FIELD).toBe("companyFax");
+    expect(readSource("components/partners/ApplyForm.tsx")).toContain(`"${HONEYPOT_FIELD}"`);
+
+    const tag = fieldTag(html, HONEYPOT_FIELD);
+    expect(tag).toContain('type="text"');
+    expect(tag).toContain('tabindex="-1"');
+    expect(tag).toMatch(/autocomplete="off"/i);
+    expect(tag).not.toContain("required");
+    // Invisible to humans: wrapped in a hidden, aria-hidden container.
+    expect(html).toContain(`<div class="hidden" aria-hidden="true">`);
+  });
+});
+
+describe("consent checkboxes", () => {
+  it("renders consentKyc and consentChannels as required checkboxes with value true", () => {
+    const html = renderApplyPage();
+
+    for (const name of ["consentKyc", "consentChannels"]) {
+      const tag = fieldTag(html, name);
+      expect(tag, name).toContain('type="checkbox"');
+      expect(tag, name).toContain('value="true"');
+      expect(tag, name).toContain('required=""');
+    }
+  });
+});
+
+describe("accessibility of the rendered form", () => {
+  const REQUIRED_FIELDS = [
+    "companyLegalName",
+    "country",
+    "city",
+    "address",
+    "licenceNumber",
+    "licenceAuthority",
+    "licenceExpiry",
+    "contactName",
+    "contactEmail",
+    "contactPhone",
+    "licenceFile",
+  ];
+
+  it("marks every required field with the required attribute", () => {
+    const html = renderApplyPage();
+
+    for (const name of REQUIRED_FIELDS) {
+      expect(fieldTag(html, name), name).toContain('required=""');
+    }
+  });
+
+  it("associates a label with every required field and the honeypot", () => {
+    const html = renderApplyPage();
+
+    for (const name of [...REQUIRED_FIELDS, HONEYPOT_FIELD]) {
+      // React renders the Label htmlFor prop as the for attribute.
+      expect(html, name).toContain(`for="${name}"`);
+    }
+  });
+
+  it("groups the five sections with fieldset and legend", () => {
+    const html = renderApplyPage();
+
+    expect(html.match(/<fieldset/g) ?? []).toHaveLength(5);
+    expect(html.match(/<legend/g) ?? []).toHaveLength(5);
+  });
+
+  it("uses the semantic input types: date, email, tel", () => {
+    const html = renderApplyPage();
+
+    expect(fieldTag(html, "licenceExpiry")).toContain('type="date"');
+    expect(fieldTag(html, "contactEmail")).toContain('type="email"');
+    expect(fieldTag(html, "contactPhone")).toContain('type="tel"');
+  });
+
+  it("restricts file inputs to PDF/JPG/PNG and requires only the licence file", () => {
+    const html = renderApplyPage();
+
+    for (const name of ["licenceFile", "signatoryIdFile", "otherFile"]) {
+      const tag = fieldTag(html, name);
+      expect(tag, name).toContain('type="file"');
+      expect(tag, name).toContain('accept=".pdf,.jpg,.jpeg,.png"');
+    }
+    expect(fieldTag(html, "licenceFile")).toContain('required=""');
+    expect(fieldTag(html, "signatoryIdFile")).not.toContain("required");
+    expect(fieldTag(html, "otherFile")).not.toContain("required");
+  });
+});
+
+describe("success view", () => {
+  it("renders the reference, the success copy and the contact mailto with role=status", () => {
+    const reference = "PA-2026-0001";
+    const html = renderToStaticMarkup(createElement(ApplySuccess, { reference }));
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain(reference);
+    expect(html).toContain(escapeHtml(PARTNER_APPLY.successTitle));
+    expect(html).toContain(escapeHtml(PARTNER_APPLY.successReferenceLabel));
+    expect(html).toContain(escapeHtml(PARTNER_APPLY.successBody));
+    expect(html).toContain(`href="mailto:${CONTACT.email}"`);
+  });
+});
+
+describe("fail-closed fallback", () => {
+  it("renders the unavailable notice instead of the form when the token cannot be minted", () => {
+    const saved = process.env.NEXTAUTH_SECRET;
+    delete process.env.NEXTAUTH_SECRET;
+    try {
+      const html = renderApplyPage();
+
+      expect(html).toContain('role="alert"');
+      expect(html).toContain(escapeHtml(PARTNER_APPLY.unavailable));
+      expect(html).toContain(`href="mailto:${CONTACT.email}"`);
+      expect(html).not.toContain('name="formToken"');
+      expect(html).not.toContain("<form");
+    } finally {
+      process.env.NEXTAUTH_SECRET = saved;
+    }
+  });
+});
+
+describe("metadata", () => {
+  it("carries the partner-apply title and the shared robots directive", () => {
+    expect(pageMetadata.title).toBe(PAGE_TITLES.partnerApply);
+    expect(pageMetadata.robots).toBe(robotsDirective());
+    // "noindex" contains the substring "index", so a bare /index/ match would
+    // false-positive; assert the standalone directive instead.
+    if (!INDEXABLE) {
+      expect(String(pageMetadata.robots)).toMatch(/\bnoindex\b/);
+      expect(String(pageMetadata.robots)).not.toMatch(/(^|,\s*)index\b/);
+    }
+  });
+});
+
+describe("submit and error handling contract (source-level)", () => {
+  const formSource = readSource("components/partners/ApplyForm.tsx");
+  const pageSource = readSource("app/partners/apply/page.tsx");
+
+  it("posts the multipart FormData to the applications endpoint", () => {
+    expect(formSource).toContain("new FormData(event.currentTarget)");
+    expect(formSource).toContain(
+      'fetch("/api/partners/applications", { method: "POST", body: data })',
+    );
+  });
+
+  it("keeps the client-side file checks (10 MB limit and the extension list)", () => {
+    expect(formSource).toContain("10 * 1024 * 1024");
+    expect(formSource).toContain('[".pdf", ".jpg", ".jpeg", ".png"]');
+  });
+
+  it("maps ZodIssue-array error responses onto the matching fields", () => {
+    expect(formSource).toContain("Array.isArray(body.error)");
+    expect(formSource).toContain("issue.path");
+    expect(formSource).toContain("setFieldErrors(next)");
+  });
+
+  it("shows the form-level error with role=alert", () => {
+    expect(formSource).toContain('role="alert"');
+    expect(formSource).toContain("{formError}");
+  });
+
+  it("disables the submit button and shows the submitting label while sending", () => {
+    expect(formSource).toContain("disabled={submitting}");
+    expect(formSource).toContain("PARTNER_APPLY.submittingLabel");
+  });
+
+  it("fails closed when the form token cannot be issued", () => {
+    expect(pageSource).toContain("issueFormToken()");
+    expect(pageSource).toContain("try {");
+    expect(pageSource).toContain("catch");
+    expect(pageSource).toContain("PARTNER_APPLY.unavailable");
+    expect(pageSource).toContain('role="alert"');
+  });
+
+  it("does not import the node-only partner modules from the client component", () => {
+    // The sources mention these modules in comments explaining why the
+    // literals are repeated; the guard targets actual imports only.
+    expect(formSource).not.toMatch(/from\s+["'][^"']*lib\/partners\/kyc-storage["']/);
+    expect(formSource).not.toMatch(/from\s+["'][^"']*lib\/partners\/abuse["']/);
+  });
+});
+
+describe("design and wording guards (source-level)", () => {
+  const hexColour = /#[0-9a-fA-F]{3,8}\b/;
+  const paletteUtility =
+    /\b(?:bg|text|border|ring|from|via|to)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d/;
+  const PAGE_SOURCES = ["app/partners/apply/page.tsx", "components/partners/ApplyForm.tsx"];
+
+  it("the apply page and form use neither hex colours nor palette utilities", () => {
+    for (const rel of PAGE_SOURCES) {
+      const source = readSource(rel);
+      expect(source, rel).not.toMatch(hexColour);
+      expect(source, rel).not.toMatch(paletteUtility);
+    }
+  });
+
+  it("both sources take their copy from the content file", () => {
+    for (const rel of PAGE_SOURCES) {
+      expect(readSource(rel), rel).toMatch(/from "@\/lib\/portal-content"/);
+    }
+  });
+
+  it("uses no banned wording (pricing, speed/automation, self-registration)", () => {
+    const html = renderApplyPage();
+
+    expect(html).not.toMatch(/\b(pricing?|costs?|fees?|cheap|discount)\b/i);
+    expect(html).not.toMatch(/\b(instant(ly)?|automate[d]?|automation|real[- ]time|fast(est)?)\b/i);
+    expect(html).not.toMatch(/\b(sign[- ]?up|register|create (an? )?account)\b/i);
+  });
+});
+
+describe("allow-list and entry links", () => {
+  it("the design guard allow-lists the public apply page outside the AppShell", () => {
+    expect(readSource("tests/ui/design-guard.test.ts")).toContain("app/partners/apply/page.tsx");
+  });
+
+  it("the landing hero and the sign-in page link to /partners/apply with the shared link label", () => {
+    for (const rel of ["components/landing/Hero.tsx", "app/login/page.tsx"]) {
+      const source = readSource(rel);
+      expect(source, rel).toContain('href="/partners/apply"');
+      expect(source, rel).toContain("PARTNER_APPLY.linkLabel");
+    }
+  });
+
+  it("the rendered hero carries the /partners/apply entry link", () => {
+    const html = renderToStaticMarkup(createElement(Hero));
+
+    expect(html).toContain('href="/partners/apply"');
+    expect(html).toContain(escapeHtml(PARTNER_APPLY.linkLabel));
+  });
+});
