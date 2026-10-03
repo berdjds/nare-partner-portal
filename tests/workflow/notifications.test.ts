@@ -34,6 +34,12 @@ beforeAll(async () => {
   sendEmail = (await import("@/lib/email")).sendEmail as any;
   sendWhatsAppMessage = (await import("@/lib/whatsapp")).sendWhatsAppMessage as any;
   fx = await seedFixtures(prisma);
+  // W3 (travel-nare): the travel account ships disabled; enable it so queued
+  // WHATSAPP deliveries reach the mocked sender. Disabled-account behavior is
+  // covered in tests/whatsapp/travel-send.test.ts.
+  const { ensureDefaultAccounts } = await import("@/lib/whatsapp-accounts");
+  await ensureDefaultAccounts();
+  await prisma.whatsAppAccount.update({ where: { key: "nare" }, data: { enabled: true } });
 });
 
 /** Submits a fresh request and returns its SUBMITTED deliveries. */

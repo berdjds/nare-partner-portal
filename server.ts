@@ -2,7 +2,7 @@ import "next/dist/server/node-environment-baseline";
 import { createServer } from "http";
 import next from "next";
 import { Server } from "socket.io";
-import { initializeWhatsApp, setSocketServer } from "./lib/whatsapp";
+import { initializeWhatsAppAccounts, setSocketServer } from "./lib/whatsapp";
 import { socketAllowRequest } from "./lib/socket-auth";
 import { startNotificationWorker, sweepOverdueValidations } from "./lib/travel/notifications";
 import { handleUploadsRequest, routeUploadsRequest } from "./lib/uploads";
@@ -78,9 +78,12 @@ app.prepare().then(async () => {
   // verifies. WACONTROL_NOTIFICATIONS_PAUSED=1 stops only the worker.
   const runtime = resolveServerRuntime();
 
+  // W3 (wa-multi): boots every ENABLED account (Marhaba plus any account
+  // the owner enabled); each has its own client and a failure in one
+  // never affects the others.
   if (runtime.whatsapp) {
     setTimeout(() => {
-      initializeWhatsApp().catch((err) => {
+      initializeWhatsAppAccounts().catch((err) => {
         console.error("[WhatsApp] initialization error:", err);
       });
     }, 2000);

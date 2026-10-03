@@ -702,4 +702,33 @@ describe("submit → document freeze", () => {
       brandColor: "#0d4f8b",
     });
   });
+
+  // W3 (travel-nare): when the travel WhatsApp account has a public number
+  // configured, the frozen contact phone is that number — not
+  // TravelSettings.companyPhone. Runs last: it mutates the shared nare row.
+  it("freezes the travel account's publicNumber as companyPhone when configured", async () => {
+    const { ensureDefaultAccounts } = await import("@/lib/whatsapp-accounts");
+    await ensureDefaultAccounts();
+    await prisma.whatsAppAccount.update({
+      where: { key: "nare" },
+      data: { publicNumber: "+374 98 765432" },
+    });
+    await prisma.travelSettings.upsert({
+      where: { id: "default" },
+      update: { companyName: "Nare Travel & Tours", companyPhone: "+374 10 530053" },
+      create: { id: "default", companyName: "Nare Travel & Tours", companyPhone: "+374 10 530053" },
+    });
+    const { request, version } = await draftRequest();
+
+    await saveContent(prisma, actorOf(fx.advisor), request.id, version.id, {
+      ...scenarioContent(fx.hotel.id, fx.hotel.name),
+    });
+    await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
+    await workflow.submit(actorOf(fx.advisor), request.id);
+
+    const snap = await prisma.calculationSnapshot.findUnique({ where: { versionId: version.id } });
+    const frozen = JSON.parse(snap!.displayJson!);
+    expect(frozen.branding.companyPhone).toBe("+374 98 765432");
+    expect(frozen.branding.companyName).toBe("Nare Travel & Tours");
+  });
 });

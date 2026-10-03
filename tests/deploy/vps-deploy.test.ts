@@ -1,16 +1,30 @@
 /**
- * Deploy-gate tests (W1, task deploy-gate) for scripts/vps-deploy.sh and
+ * Deploy-gate tests (W3b, task script-param) for scripts/vps-deploy.sh and
  * docker-entrypoint.sh.
  *
- * scripts/vps-deploy.sh drives the whole VPS release (freeze, verified
- * backup, trial A/B, cutover, rollback). These tests run the real script
- * against a throwaway APP_ROOT with the docker CLI replaced by a test double
- * on PATH (tests/deploy/docker-stub.sh) that records every invocation and
- * scripts failures per scenario. Each decision branch is covered: backup
- * failure, trial A failure, trial B yes/no, cutover failure with and without
- * rollback compatibility, mount/build aborts before the freeze, and the
- * success path. Every scenario also asserts that data is never restored
- * automatically.
+ * scripts/vps-deploy.sh drives the whole VPS release against the /opt/stack
+ * server layout (extract, build while serving, freeze, verified backup,
+ * trial A/B, cutover, public health check, rollback). These tests run the
+ * real script against a throwaway PORTAL_ROOT with the docker and curl CLIs
+ * replaced by test doubles on PATH (tests/deploy/docker-stub.sh and
+ * tests/deploy/curl-stub.sh) that record every invocation and script
+ * failures per scenario. Each decision branch is covered: backup failure,
+ * trial A failure, trial B yes/no, cutover failure with and without rollback
+ * compatibility, public health check failure, mount/build aborts before the
+ * freeze, the missing-compose-file refusal, compose-file immutability, the
+ * first deploy of a brand-new environment (no previous tag, no trial B, no
+ * rollback target on a cutover failure) versus a stopped container with an
+ * existing latest image (NOT a first deploy), the
+ * deploy-managed image override in both environments (a live compose pinning
+ * a dated image still runs the candidate; an image-id mismatch after cutover
+ * fails the deploy and rolls back), the W3i forced recreate (cutover and
+ * rollback pass --force-recreate --no-deps to only the app service; the
+ * recreate-aware stub keeps the old image id without the flags, and the W3f
+ * image-id safety net is proven against a compose that ignores the flags),
+ * the staging WHATSAPP_DISABLED=1 override
+ * (cutover and rollback), the per-env image tags (staging never builds or
+ * tags the shared portal:* production tags), and the success path. Every
+ * scenario also asserts that data is never restored automatically.
  */
 
 import { spawnSync } from "child_process";
@@ -22,6 +36,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "fs";
@@ -33,44 +48,59 @@ const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const DEPLOY_SCRIPT = path.join(REPO_ROOT, "scripts", "vps-deploy.sh");
 const ENTRYPOINT_SCRIPT = path.join(REPO_ROOT, "docker-entrypoint.sh");
 const DOCKER_STUB = path.join(REPO_ROOT, "tests", "deploy", "docker-stub.sh");
-const APP_CONTAINER = "wacontrol-app";
+const CURL_STUB = path.join(REPO_ROOT, "tests", "deploy", "curl-stub.sh");
+const APP_CONTAINER = "portal-app";
+const DATA_DIRS = ["data", "uploads", "auth"];
+// The server compose file is provisioning-owned; the tarball ships a
+// different one so any sync from the source into the server file is caught.
+const SERVER_COMPOSE_CONTENT = "services: {}\n# test fixture\n";
+const TARBALL_COMPOSE_CONTENT = "services: {}\n# candidate compose — must never be synced\n";
 
 interface RunResult {
   status: number | null;
   stdout: string;
   stderr: string;
   dockerLog: string;
+  curlLog: string;
   appRoot: string;
 }
 
 function makeSourceTarball(appRoot: string): string {
-  const srcDir = mkdtempSync(path.join(tmpdir(), "wacontrol-src-"));
-  writeFileSync(path.join(srcDir, "docker-compose.yml"), "services: {}\n# test fixture\n");
+  const srcDir = mkdtempSync(path.join(tmpdir(), "portal-src-"));
+  writeFileSync(path.join(srcDir, "docker-compose.yml"), TARBALL_COMPOSE_CONTENT);
   writeFileSync(path.join(srcDir, "candidate-marker.txt"), "candidate source");
-  const tarball = path.join(appRoot, "wacontrol-source.tar.gz");
+  const tarball = path.join(appRoot, "portal-source.tar.gz");
   const res = spawnSync("tar", ["-czf", tarball, "-C", srcDir, "."], { encoding: "utf8" });
   if (res.status !== 0) throw new Error(`fixture tar failed: ${res.stderr}`);
   return tarball;
 }
 
 function setupAppRoot(): string {
-  const appRoot = mkdtempSync(path.join(tmpdir(), "wacontrol-app-root-"));
-  for (const dir of ["wacontrol-data", "wacontrol-uploads", "wacontrol-auth"]) {
-    mkdirSync(path.join(appRoot, dir));
-    writeFileSync(path.join(appRoot, dir, "MARKER.txt"), `${dir} marker`);
+  // Mirrors the /opt/stack layout: the compose file at the root, the live
+  // data dirs under portal/.
+  const appRoot = mkdtempSync(path.join(tmpdir(), "portal-app-root-"));
+  for (const dir of DATA_DIRS) {
+    mkdirSync(path.join(appRoot, "portal", dir), { recursive: true });
+    writeFileSync(path.join(appRoot, "portal", dir, "MARKER.txt"), `${dir} marker`);
   }
-  writeFileSync(path.join(appRoot, "docker-compose.yml"), "services: {}\n# test fixture\n");
+  writeFileSync(path.join(appRoot, "docker-compose.yml"), SERVER_COMPOSE_CONTENT);
   return appRoot;
 }
 
 function runDeploy(appRoot: string, stubEnv: Record<string, string> = {}): RunResult {
-  const work = mkdtempSync(path.join(tmpdir(), "wacontrol-deploy-run-"));
+  const work = mkdtempSync(path.join(tmpdir(), "portal-deploy-run-"));
   const stubBin = path.join(work, "bin");
   mkdirSync(stubBin);
-  const dockerPath = path.join(stubBin, "docker");
-  cpSync(DOCKER_STUB, dockerPath);
-  chmodSync(dockerPath, 0o755);
+  for (const [stub, name] of [
+    [DOCKER_STUB, "docker"],
+    [CURL_STUB, "curl"],
+  ] as const) {
+    const stubPath = path.join(stubBin, name);
+    cpSync(stub, stubPath);
+    chmodSync(stubPath, 0o755);
+  }
   const logPath = path.join(work, "docker.log");
+  const curlLogPath = path.join(work, "curl.log");
   const stateDir = path.join(work, "state");
   mkdirSync(stateDir);
   const tarball = makeSourceTarball(appRoot);
@@ -81,12 +111,14 @@ function runDeploy(appRoot: string, stubEnv: Record<string, string> = {}): RunRe
     // value (vitest runs as "test") so the spawnSync env overload is satisfied.
     NODE_ENV: (process.env.NODE_ENV ?? "test") as "test",
     PATH: `${stubBin}:${process.env.PATH ?? ""}`,
-    WACONTROL_APP_ROOT: appRoot,
-    WACONTROL_SOURCE_TARBALL: tarball,
+    PORTAL_ROOT: appRoot,
+    PORTAL_PUBLIC_URL: "https://portal.test",
+    PORTAL_SOURCE_TARBALL: tarball,
+    PORTAL_HEALTH_RETRIES: "2",
+    PORTAL_HEALTH_INTERVAL_SECONDS: "0",
     STUB_LOG: logPath,
     STUB_STATE_DIR: stateDir,
-    WACONTROL_HEALTH_RETRIES: "2",
-    WACONTROL_HEALTH_INTERVAL_SECONDS: "0",
+    STUB_CURL_LOG: curlLogPath,
     ...stubEnv,
   };
   // Allow stub env values to reference the app root.
@@ -100,6 +132,7 @@ function runDeploy(appRoot: string, stubEnv: Record<string, string> = {}): RunRe
     stdout: res.stdout ?? "",
     stderr: res.stderr ?? "",
     dockerLog: existsSync(logPath) ? readFileSync(logPath, "utf8") : "",
+    curlLog: existsSync(curlLogPath) ? readFileSync(curlLogPath, "utf8") : "",
     appRoot,
   };
 }
@@ -130,13 +163,17 @@ function expectNoAutomaticRestore(ctx: RunResult) {
 }
 
 function expectDataMarkersIntact(appRoot: string) {
-  for (const dir of ["wacontrol-data", "wacontrol-uploads", "wacontrol-auth"]) {
-    expect(readFileSync(path.join(appRoot, dir, "MARKER.txt"), "utf8")).toBe(`${dir} marker`);
+  for (const dir of DATA_DIRS) {
+    expect(readFileSync(path.join(appRoot, "portal", dir, "MARKER.txt"), "utf8")).toBe(`${dir} marker`);
   }
 }
 
+function backupArchives(appRoot: string): string[] {
+  return readdirSync(path.join(appRoot, "backups")).filter((f) => f.endsWith(".tar.gz"));
+}
+
 describe("scripts/vps-deploy.sh", () => {
-  it("success: build while serving, freeze, verified backup, trial A yes, trial B yes, cutover", () => {
+  it("success: build while serving, freeze, verified backup, trial A yes, trial B yes, cutover, public health check", () => {
     const appRoot = setupAppRoot();
     const ctx = runDeploy(appRoot);
     expect(ctx.status).toBe(0);
@@ -151,35 +188,135 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("deploy finished successfully");
 
     assertInOrder(ctx.dockerLog, [
-      "build -t wacontrol:candidate",
-      "tag wacontrol:latest wacontrol:previous",
+      "build -t portal:candidate",
+      "tag portal:latest portal:previous",
       `stop ${APP_CONTAINER}`,
-      "-p wacontrol-trial-a",
-      "exec wacontrol-trial-a",
-      "exec wacontrol-trial-a npm run db:seed",
-      "exec wacontrol-trial-a npx tsx scripts/seed-travel-catalog.ts",
-      "rm -f wacontrol-trial-a",
-      "-p wacontrol-trial-b",
-      "tag wacontrol:candidate wacontrol:latest",
-      `compose -f ${path.join(appRoot, "docker-compose.yml")} up -d wacontrol_app`,
+      "-p portal-trial-a",
+      "exec portal-trial-a",
+      "exec portal-trial-a npm run db:seed",
+      "exec portal-trial-a npx tsx scripts/seed-travel-catalog.ts",
+      "rm -f portal-trial-a",
+      "-p portal-trial-b",
+      "tag portal:candidate portal:latest",
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d --force-recreate --no-deps portal`,
       `exec ${APP_CONTAINER}`,
     ]);
     expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(1);
     expect(ctx.dockerLog).toContain(`exec ${APP_CONTAINER} npm run db:seed`);
+    // The sequence ends with the public health check through the public URL.
+    expect(ctx.curlLog).toContain("https://portal.test/login");
+    expect(ctx.stdout).toContain("deploy finished successfully");
 
     // Verified backup with sha256 sidecar covering all three data dirs.
-    const backups = readdirSync(path.join(appRoot, "backups"));
-    const archives = backups.filter((f) => f.endsWith(".tar.gz"));
+    const archives = backupArchives(appRoot);
     expect(archives).toHaveLength(1);
-    expect(backups).toContain(`${archives[0]}.sha256`);
+    expect(archives[0]).toMatch(/^portal-production-.*\.tar\.gz$/);
+    expect(readdirSync(path.join(appRoot, "backups"))).toContain(`${archives[0]}.sha256`);
     const listing = spawnSync("tar", ["-tzf", path.join(appRoot, "backups", archives[0])], {
       encoding: "utf8",
     });
     expect(listing.status).toBe(0);
-    for (const dir of ["wacontrol-data", "wacontrol-uploads", "wacontrol-auth"]) {
+    for (const dir of DATA_DIRS) {
       expect(listing.stdout).toContain(`${dir}/MARKER.txt`);
     }
 
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("first deploy (no running app, no latest image): no previous tag, no trial B, backup and cutover proceed", () => {
+    const appRoot = setupAppRoot();
+    // A brand-new environment: no app container and no portal:latest image.
+    const ctx = runDeploy(appRoot, {
+      STUB_CONTAINER_MISSING: "1",
+      STUB_IMAGE_MISSING: "portal:latest",
+    });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("FIRST DEPLOY");
+    expect(out).toContain("first deploy: TRIAL B skipped");
+    expect(out).toContain("ROLLBACK_COMPATIBLE=no");
+    expect(out).toContain("TRIAL A passed");
+    expect(out).toContain("CUTOVER complete");
+    expect(out).toContain("deploy finished successfully");
+
+    // No previous tag is ever created and trial B never runs.
+    expect(ctx.dockerLog).not.toContain("portal:previous");
+    expect(ctx.dockerLog).not.toContain("-p portal-trial-b");
+    expect(ctx.dockerLog).toContain("-p portal-trial-a");
+    // The app was not running, so the freeze stops nothing.
+    expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(0);
+    // The cutover still tags the candidate as latest and starts it.
+    expect(ctx.dockerLog).toContain("tag portal:candidate portal:latest");
+    expect(ctx.dockerLog).toContain("up -d --force-recreate --no-deps portal");
+
+    // The verified backup of the (new) data dirs still happens.
+    expect(backupArchives(appRoot)).toHaveLength(1);
+    expect(ctx.curlLog).toContain("https://portal.test/login");
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("first deploy with a failing health check: exits 1 with no rollback attempt and no running candidate", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      STUB_CONTAINER_MISSING: "1",
+      STUB_IMAGE_MISSING: "portal:latest",
+      STUB_FAIL_EXEC_ON: "portal-app:login",
+    });
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("FIRST DEPLOY");
+    expect(out).toContain("CUTOVER FAILED");
+    expect(out).toContain("first deploy: nothing to roll back to; data left as the candidate wrote it");
+    // No rollback is possible and none is attempted.
+    expect(out).not.toContain("rollback OK");
+    expect(out).not.toContain("MANUAL RECOVERY PROCEDURE");
+    expect(ctx.dockerLog).not.toContain("rollback-compose.yml");
+    expect(ctx.dockerLog).not.toContain("portal:previous");
+    // The candidate is stopped — the only stop of the run, as the freeze had
+    // nothing to stop — so no candidate is left running.
+    expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(1);
+    // The pre-cutover backup of the data dirs was still taken.
+    expect(backupArchives(appRoot)).toHaveLength(1);
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("a deploy over the state a first deploy leaves behind (running app, latest exists) is not a first deploy", () => {
+    const appRoot = setupAppRoot();
+    // After a successful first deploy the environment has the app running on
+    // portal:latest — exactly the stub's default state — so the next deploy
+    // must tag previous and run trial B exactly as before.
+    const ctx = runDeploy(appRoot, { STUB_INSPECT_IMAGE: "portal:latest" });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).not.toContain("FIRST DEPLOY");
+    expect(out).toContain("ROLLBACK_COMPATIBLE=yes");
+    expect(ctx.dockerLog).toContain("tag portal:latest portal:previous");
+    expect(ctx.dockerLog).toContain("-p portal-trial-b");
+    expect(ctx.dockerLog).toContain("tag portal:candidate portal:latest");
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("a stopped container with an existing latest image is not a first deploy", () => {
+    const appRoot = setupAppRoot();
+    // The app container exists but is stopped, and portal:latest exists:
+    // previous is tagged from portal:latest and trial B runs — nothing about
+    // the first-deploy path applies.
+    const ctx = runDeploy(appRoot, { STUB_INSPECT_RUNNING: "false" });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).not.toContain("FIRST DEPLOY");
+    expect(out).toContain("tagged portal:latest as portal:previous");
+    expect(out).toContain("ROLLBACK_COMPATIBLE=yes");
+    expect(ctx.dockerLog).toContain("tag portal:latest portal:previous");
+    expect(ctx.dockerLog).toContain("-p portal-trial-b");
+    // The freeze had nothing to stop (the app was already stopped).
+    expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(0);
     expectNoAutomaticRestore(ctx);
   });
 
@@ -188,7 +325,7 @@ describe("scripts/vps-deploy.sh", () => {
     const ctx = runDeploy(appRoot, {
       STUB_APP_ID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
       STUB_APP_SHORT_ID: "abcdef123456",
-      STUB_APP_MOUNTS: "{APP_ROOT}/wacontrol-data",
+      STUB_APP_MOUNTS: "{APP_ROOT}/portal/data",
     });
     expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
     expect(ctx.dockerLog).toContain("ps -q --no-trunc");
@@ -200,7 +337,7 @@ describe("scripts/vps-deploy.sh", () => {
     // The entrypoint runs `prisma db push` and boots Next before port 3000
     // listens, so the first cutover probe fails; the bounded retry passes on
     // the second probe and the deploy must not roll back.
-    const ctx = runDeploy(appRoot, { STUB_FAIL_FIRST: "wacontrol-app:login:1" });
+    const ctx = runDeploy(appRoot, { STUB_FAIL_FIRST: "portal-app:login:1" });
     expect(ctx.status).toBe(0);
     const out = ctx.stdout + ctx.stderr;
 
@@ -208,7 +345,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("deploy finished successfully");
     expect(ctx.dockerLog).toContain(`exec ${APP_CONTAINER} npm run db:seed`);
     expect(ctx.dockerLog).not.toContain("rollback-compose.yml");
-    expect(ctx.dockerLog).not.toContain("tag wacontrol:previous wacontrol:latest");
+    expect(ctx.dockerLog).not.toContain("tag portal:previous portal:latest");
     expect(countLine(ctx.dockerLog, `stop ${APP_CONTAINER}`)).toBe(1); // freeze only
     expectNoAutomaticRestore(ctx);
   });
@@ -227,7 +364,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(ctx.dockerLog).toContain(`stop ${APP_CONTAINER}`);
     expect(ctx.dockerLog).toContain(`start ${APP_CONTAINER}`);
     expect(ctx.dockerLog).not.toContain("up -d app"); // no trial container started
-    expect(ctx.dockerLog).not.toContain("tag wacontrol:candidate wacontrol:latest");
+    expect(ctx.dockerLog).not.toContain("tag portal:candidate portal:latest");
     expect(statSync(path.join(appRoot, "backups")).isDirectory()).toBe(false);
     expectDataMarkersIntact(appRoot);
     expectNoAutomaticRestore(ctx);
@@ -235,25 +372,26 @@ describe("scripts/vps-deploy.sh", () => {
 
   it("trial A failure: drops the trial container and restarts the old container on untouched data", () => {
     const appRoot = setupAppRoot();
-    const ctx = runDeploy(appRoot, { STUB_FAIL_EXEC_ON: "wacontrol-trial-a:login" });
+    const ctx = runDeploy(appRoot, { STUB_FAIL_EXEC_ON: "portal-trial-a:login" });
     expect(ctx.status).toBe(1);
     const out = ctx.stdout + ctx.stderr;
 
     expect(out).toContain("TRIAL A failed");
     assertInOrder(ctx.dockerLog, [
       `stop ${APP_CONTAINER}`,
-      "-p wacontrol-trial-a",
-      "rm -f wacontrol-trial-a",
+      "-p portal-trial-a",
+      "rm -f portal-trial-a",
       `start ${APP_CONTAINER}`,
     ]);
-    expect(ctx.dockerLog).not.toContain("up -d wacontrol_app"); // no cutover
-    expect(ctx.dockerLog).not.toContain("tag wacontrol:candidate wacontrol:latest");
+    expect(ctx.dockerLog).not.toContain("up -d portal"); // no cutover
+    expect(ctx.dockerLog).not.toContain("up -d --force-recreate --no-deps portal");
+    expect(ctx.dockerLog).not.toContain("tag portal:candidate portal:latest");
     // The real data dirs were never mounted by any trial container.
     for (const line of lines(ctx.dockerLog)) {
       if (line.startsWith("compose ") || line.startsWith("run ")) {
-        expect(line).not.toContain("wacontrol-data");
-        expect(line).not.toContain("wacontrol-uploads");
-        expect(line).not.toContain("wacontrol-auth");
+        expect(line).not.toContain("/portal/data");
+        expect(line).not.toContain("/portal/uploads");
+        expect(line).not.toContain("/portal/auth");
       }
     }
     expectDataMarkersIntact(appRoot);
@@ -262,21 +400,23 @@ describe("scripts/vps-deploy.sh", () => {
 
   it("trial B failure: records ROLLBACK_COMPATIBLE=no but the deploy still succeeds", () => {
     const appRoot = setupAppRoot();
-    const ctx = runDeploy(appRoot, { STUB_FAIL_EXEC_ON: "wacontrol-trial-b:login" });
+    const ctx = runDeploy(appRoot, { STUB_FAIL_EXEC_ON: "portal-trial-b:login" });
     expect(ctx.status).toBe(0);
     const out = ctx.stdout + ctx.stderr;
 
     expect(out).toContain("ROLLBACK_COMPATIBLE=no");
     expect(out).toContain("CUTOVER complete");
     expect(out).toContain("deploy finished successfully");
-    expect(ctx.dockerLog).toContain("-p wacontrol-trial-b");
-    expect(ctx.dockerLog).toContain(`compose -f ${path.join(appRoot, "docker-compose.yml")} up -d wacontrol_app`);
+    expect(ctx.dockerLog).toContain("-p portal-trial-b");
+    expect(ctx.dockerLog).toContain(
+      `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d --force-recreate --no-deps portal`
+    );
     expectNoAutomaticRestore(ctx);
   });
 
   it("rolls back when the first cutover seed fails, even if the second would succeed", () => {
     const appRoot = setupAppRoot();
-    const ctx = runDeploy(appRoot, { STUB_FAIL_FIRST: "wacontrol-app:db:seed:1" });
+    const ctx = runDeploy(appRoot, { STUB_FAIL_FIRST: "portal-app:db:seed:1" });
     expect(ctx.status).toBe(1);
     expect(ctx.stdout + ctx.stderr).toContain("CUTOVER FAILED: bootstrap seeds failed after cutover");
     expect(ctx.stdout + ctx.stderr).toContain("rollback OK");
@@ -286,11 +426,11 @@ describe("scripts/vps-deploy.sh", () => {
 
   it("aborts trial A when the first bootstrap seed fails", () => {
     const appRoot = setupAppRoot();
-    const ctx = runDeploy(appRoot, { STUB_FAIL_EXEC_ON: "wacontrol-trial-a:db:seed" });
+    const ctx = runDeploy(appRoot, { STUB_FAIL_EXEC_ON: "portal-trial-a:db:seed" });
     expect(ctx.status).toBe(1);
     expect(ctx.stdout + ctx.stderr).toContain("TRIAL A failed");
-    expect(ctx.dockerLog).not.toContain("exec wacontrol-trial-a npx tsx scripts/seed-travel-catalog.ts");
-    expect(ctx.dockerLog).not.toContain("tag wacontrol:candidate wacontrol:latest");
+    expect(ctx.dockerLog).not.toContain("exec portal-trial-a npx tsx scripts/seed-travel-catalog.ts");
+    expect(ctx.dockerLog).not.toContain("tag portal:candidate portal:latest");
     expectNoAutomaticRestore(ctx);
   });
 
@@ -299,8 +439,8 @@ describe("scripts/vps-deploy.sh", () => {
     // The candidate fails every health-check retry; only after the rollback
     // does the restarted previous image pass a probe.
     const ctx = runDeploy(appRoot, {
-      STUB_FAIL_FIRST: "wacontrol-app:login:2",
-      WACONTROL_HEALTH_RETRIES: "2",
+      STUB_FAIL_FIRST: "portal-app:login:2",
+      PORTAL_HEALTH_RETRIES: "2",
     });
     expect(ctx.status).toBe(1);
     const out = ctx.stdout + ctx.stderr;
@@ -310,8 +450,8 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("rollback OK");
     const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
     expect(rollbackLines).toHaveLength(1);
-    expect(rollbackLines[0]).toContain("up -d wacontrol_app");
-    expect(ctx.dockerLog).toContain("tag wacontrol:previous wacontrol:latest");
+    expect(rollbackLines[0]).toContain("up -d --force-recreate --no-deps portal");
+    expect(ctx.dockerLog).toContain("tag portal:previous portal:latest");
     // Newly accepted data is kept — nothing is wiped or replaced.
     expectDataMarkersIntact(appRoot);
     expectNoAutomaticRestore(ctx);
@@ -320,7 +460,7 @@ describe("scripts/vps-deploy.sh", () => {
   it("cutover failure with ROLLBACK_COMPATIBLE=no: stops the candidate, prints the manual procedure, restores nothing", () => {
     const appRoot = setupAppRoot();
     const ctx = runDeploy(appRoot, {
-      STUB_FAIL_EXEC_ON: "wacontrol-trial-b:login wacontrol-app:login",
+      STUB_FAIL_EXEC_ON: "portal-trial-b:login portal-app:login",
     });
     expect(ctx.status).toBe(1);
     const out = ctx.stdout + ctx.stderr;
@@ -331,7 +471,7 @@ describe("scripts/vps-deploy.sh", () => {
     expect(out).toContain("fix forward");
     expect(out).toContain("restore-backup");
     // The pre-deploy backup is named in the procedure, not executed.
-    const backups = readdirSync(path.join(appRoot, "backups")).filter((f) => f.endsWith(".tar.gz"));
+    const backups = backupArchives(appRoot);
     expect(backups).toHaveLength(1);
     expect(out).toContain(backups[0]);
 
@@ -342,12 +482,280 @@ describe("scripts/vps-deploy.sh", () => {
     expectNoAutomaticRestore(ctx);
   });
 
+  it("public health check failure rolls back to previous on the current data", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, { STUB_CURL_FAIL: "1" });
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("CUTOVER FAILED");
+    expect(out).toContain("public health check failed");
+    expect(out).toContain("rollback OK");
+    expect(ctx.curlLog).toContain("https://portal.test/login");
+    const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
+    expect(rollbackLines).toHaveLength(1);
+    expect(rollbackLines[0]).toContain("up -d --force-recreate --no-deps portal");
+    expect(ctx.dockerLog).toContain("tag portal:previous portal:latest");
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("production cutover runs the candidate even when the live compose pins a dated image", () => {
+    const appRoot = setupAppRoot();
+    // Mirror the live /opt/stack/docker-compose.yml (2026-10-02): the app
+    // image is pinned to a dated tag, NOT ${PORTAL_IMAGE_TAG} or latest.
+    writeFileSync(
+      path.join(appRoot, "docker-compose.yml"),
+      "services:\n  portal:\n    image: portal:2026-09-30\n"
+    );
+    const ctx = runDeploy(appRoot, { STUB_INSPECT_IMAGE: "portal:2026-09-30" });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("cutover image verified");
+    expect(out).toContain("CUTOVER complete");
+    expect(out).toContain("deploy finished successfully");
+    // The pinned tag becomes the rollback target; latest moves to the candidate.
+    expect(ctx.dockerLog).toContain("tag portal:2026-09-30 portal:previous");
+    expect(ctx.dockerLog).toContain("tag portal:candidate portal:latest");
+    // The cutover merges the deploy-managed override that pins the app image,
+    // so `compose up` starts the candidate despite the pinned compose file.
+    const overridePath = path.join(appRoot, "portal-production.overrides.yml");
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${overridePath} up -d --force-recreate --no-deps portal`;
+    expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
+    const overrideContent = readFileSync(overridePath, "utf8");
+    expect(overrideContent).toContain("image: portal:latest");
+    expect(overrideContent).not.toContain("WHATSAPP_DISABLED"); // staging-only
+    // The pinned compose file itself is provisioning-owned and never modified.
+    expect(readFileSync(path.join(appRoot, "docker-compose.yml"), "utf8")).toContain("portal:2026-09-30");
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("the W3f image-id safety net still fires when compose does not recreate the container", () => {
+    const appRoot = setupAppRoot();
+    // compose ignored --force-recreate (the stub models a compose that keeps
+    // the existing container): the app container still runs the OLD image id
+    // even though `compose up` reported success. The post-cutover image-id
+    // verification must catch exactly this and roll back.
+    const ctx = runDeploy(appRoot, {
+      STUB_CONTAINER_IMAGE_ID: "sha256:old-pinned",
+      STUB_COMPOSE_IGNORE_RECREATE: "1",
+    });
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("CUTOVER FAILED");
+    expect(out).toContain("sha256:old-pinned");
+    expect(out).toContain("not candidate portal:candidate");
+    expect(out).toContain("ROLLBACK_COMPATIBLE=yes");
+    expect(out).toContain("rollback OK");
+    const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
+    expect(rollbackLines).toHaveLength(1);
+    expect(rollbackLines[0]).toContain("up -d --force-recreate --no-deps portal");
+    // The rollback start also merges the image override, with the rollback
+    // image override merged last so the previous image wins.
+    expect(rollbackLines[0]).toContain("portal-production.overrides.yml");
+    expect(rollbackLines[0].indexOf("portal-production.overrides.yml")).toBeLessThan(
+      rollbackLines[0].indexOf("rollback-compose.yml")
+    );
+    expect(ctx.dockerLog).toContain("tag portal:previous portal:latest");
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("switches the running image when the image reference is unchanged (W3i: --force-recreate)", () => {
+    // The second-deploy state from the staging rollback drill: the container
+    // already runs portal:latest — the SAME reference the cutover override
+    // pins — with an old image id, and the tag now points at the new
+    // candidate. The recreate-aware stub keeps the old image id unless
+    // `compose up` passes --force-recreate, so this deploy fails at the
+    // post-cutover image-id check if the flags are missing.
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot);
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    expect(ctx.stdout).toContain("cutover image verified");
+    expect(ctx.stdout).toContain("deploy finished successfully");
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("cutover and rollback recreate only the app service (W3i: --force-recreate --no-deps, caddy untouched)", () => {
+    const appRoot = setupAppRoot();
+    // A rollback scenario so both the cutover and the rollback start happen.
+    const ctx = runDeploy(appRoot, {
+      STUB_FAIL_FIRST: "portal-app:login:2",
+      PORTAL_HEALTH_RETRIES: "2",
+    });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("rollback OK");
+
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-production.overrides.yml")} up -d --force-recreate --no-deps portal`;
+    expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
+    const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
+    expect(rollbackLines).toHaveLength(1);
+    // Every compose up of the REAL app carries both flags and names only the
+    // app service (last argument); caddy appears in no compose invocation.
+    const upLines = lines(ctx.dockerLog).filter((line) => line.startsWith("compose ") && line.includes(" up "));
+    expect(upLines.length).toBeGreaterThan(0);
+    for (const line of upLines) {
+      expect(line).not.toContain("caddy");
+      if (line.includes("trial-compose.yml")) {
+        expect(line).toMatch(/up -d app$/); // trials: fresh throwaway containers
+      } else {
+        expect(line).toMatch(/up -d --force-recreate --no-deps portal$/);
+      }
+    }
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("refuses to deploy when the server compose file is missing", () => {
+    const appRoot = setupAppRoot();
+    rmSync(path.join(appRoot, "docker-compose.yml"));
+    const ctx = runDeploy(appRoot);
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("compose file not found");
+    expect(ctx.dockerLog).not.toContain("build -t");
+    expect(ctx.dockerLog).not.toContain(`stop ${APP_CONTAINER}`);
+  });
+
+  it("the server compose file is byte-identical after a successful deploy", () => {
+    const appRoot = setupAppRoot();
+    const composePath = path.join(appRoot, "docker-compose.yml");
+    const before = readFileSync(composePath, "utf8");
+    const ctx = runDeploy(appRoot);
+    expect(ctx.status).toBe(0);
+    expect(ctx.stdout).toContain("deploy finished successfully");
+
+    expect(readFileSync(composePath, "utf8")).toBe(before);
+    const bakFiles = readdirSync(appRoot).filter((f) => f.startsWith("docker-compose.yml.bak-"));
+    expect(bakFiles).toHaveLength(0);
+  });
+
+  it("the server compose file is byte-identical after a rolled-back deploy", () => {
+    const appRoot = setupAppRoot();
+    const composePath = path.join(appRoot, "docker-compose.yml");
+    const before = readFileSync(composePath, "utf8");
+    const ctx = runDeploy(appRoot, {
+      STUB_FAIL_FIRST: "portal-app:login:2",
+      PORTAL_HEALTH_RETRIES: "2",
+    });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("rollback OK");
+
+    expect(readFileSync(composePath, "utf8")).toBe(before);
+    const bakFiles = readdirSync(appRoot).filter((f) => f.startsWith("docker-compose.yml.bak-"));
+    expect(bakFiles).toHaveLength(0);
+  });
+
+  it("staging deploy uses portal-staging and never starts the app without WHATSAPP_DISABLED=1", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      PORTAL_ENV_NAME: "staging",
+      PORTAL_PUBLIC_URL: "https://staging.portal.test",
+      STUB_INSPECT_IMAGE: "portal-staging:latest",
+    });
+    expect(ctx.status).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("WHATSAPP_DISABLED=1");
+    expect(out).toContain("deploy finished successfully");
+    expect(countLine(ctx.dockerLog, "stop portal-staging")).toBe(1);
+    expect(ctx.dockerLog).not.toContain("stop portal-app");
+    // The cutover merges the provisioning compose file with the staging
+    // override that disables the WhatsApp client.
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${path.join(appRoot, "portal-staging.overrides.yml")} up -d --force-recreate --no-deps portal-staging`;
+    expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
+    const overrideContent = readFileSync(path.join(appRoot, "portal-staging.overrides.yml"), "utf8");
+    expect(overrideContent).toContain("WHATSAPP_DISABLED=1");
+    // The public health check goes to the staging URL.
+    expect(ctx.curlLog).toContain("https://staging.portal.test/login");
+    // Backup archives are named for the staging environment.
+    const archives = backupArchives(appRoot);
+    expect(archives).toHaveLength(1);
+    expect(archives[0]).toMatch(/^portal-staging-.*\.tar\.gz$/);
+    // EVERY start of the real app goes through the staging override.
+    const upLines = lines(ctx.dockerLog).filter((line) => line.includes("up -d --force-recreate --no-deps portal-staging"));
+    expect(upLines.length).toBeGreaterThan(0);
+    for (const line of upLines) {
+      expect(line).toContain("portal-staging.overrides.yml");
+    }
+    // Trial containers are unchanged: they still run in trial mode.
+    expect(ctx.dockerLog).toContain("-p portal-trial-a");
+    expect(ctx.dockerLog).toContain("-p portal-trial-b");
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("staging deploy never builds or tags the shared production image tags", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      PORTAL_ENV_NAME: "staging",
+      PORTAL_PUBLIC_URL: "https://staging.portal.test",
+      STUB_INSPECT_IMAGE: "portal-staging:latest",
+    });
+    expect(ctx.status).toBe(0);
+    expect(ctx.stdout).toContain("deploy finished successfully");
+
+    // Staging uses its own repository tags end to end ...
+    expect(ctx.dockerLog).toContain("build -t portal-staging:candidate");
+    expect(ctx.dockerLog).toContain("tag portal-staging:latest portal-staging:previous");
+    expect(ctx.dockerLog).toContain("tag portal-staging:candidate portal-staging:latest");
+    // ... and no docker build/tag ever touches the production tags: moving
+    // portal:latest from a staging deploy would pin a production rollback to
+    // the staging candidate and let a production `compose up` boot the
+    // ungated candidate.
+    for (const line of lines(ctx.dockerLog)) {
+      if (line.startsWith("build ") || line.startsWith("tag ") || line.startsWith("image inspect ")) {
+        expect(line).not.toMatch(/(^|\s)portal:(candidate|previous|latest)(\s|$)/);
+      }
+    }
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("staging rollback keeps WHATSAPP_DISABLED=1", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      PORTAL_ENV_NAME: "staging",
+      PORTAL_PUBLIC_URL: "https://staging.portal.test",
+      STUB_INSPECT_IMAGE: "portal-staging:latest",
+      STUB_FAIL_FIRST: "portal-staging:login:2",
+      PORTAL_HEALTH_RETRIES: "2",
+    });
+    expect(ctx.status).toBe(1);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("CUTOVER FAILED");
+    expect(out).toContain("rollback OK");
+    const rollbackLines = lines(ctx.dockerLog).filter((line) => line.includes("rollback-compose.yml"));
+    expect(rollbackLines).toHaveLength(1);
+    expect(rollbackLines[0]).toContain("up -d --force-recreate --no-deps portal-staging");
+    // The staging override is merged ahead of the rollback compose file, so
+    // the rolled-back container also runs with WHATSAPP_DISABLED=1.
+    const overrideIdx = rollbackLines[0].indexOf("portal-staging.overrides.yml");
+    const rollbackIdx = rollbackLines[0].indexOf("rollback-compose.yml");
+    expect(overrideIdx).toBeGreaterThanOrEqual(0);
+    expect(overrideIdx).toBeLessThan(rollbackIdx);
+    expect(ctx.dockerLog).toContain("tag portal-staging:previous portal-staging:latest");
+    // The rollback retag stays inside the staging repository: the production
+    // portal:latest / portal:previous tags are never moved by staging.
+    for (const line of lines(ctx.dockerLog)) {
+      if (line.startsWith("build ") || line.startsWith("tag ")) {
+        expect(line).not.toMatch(/(^|\s)portal:(candidate|previous|latest)(\s|$)/);
+      }
+    }
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
   it("aborts before the freeze when another container mounts a data dir", () => {
     const appRoot = setupAppRoot();
     const ctx = runDeploy(appRoot, {
       STUB_PS_IDS: "aaa111 bbb222",
       STUB_OTHER_ID: "bbb222",
-      STUB_OTHER_MOUNTS: "{APP_ROOT}/wacontrol-data",
+      STUB_OTHER_MOUNTS: "{APP_ROOT}/portal/data",
     });
     expect(ctx.status).toBe(1);
     expect(ctx.stdout + ctx.stderr).toContain("refusing to deploy");

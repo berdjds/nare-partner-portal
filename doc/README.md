@@ -19,7 +19,7 @@ WAControl connects to WhatsApp Web using Puppeteer and the `whatsapp-web.js` lib
 - [API Reference](./api-reference.md) — HTTP and Socket.io endpoints.
 - [Authentication](./authentication.md) — roles, sessions, and login flow.
 - [Components](./components.md) — React components and hooks.
-- [Deployment](./deployment.md) — production deployment notes.
+- [Deployment](./deployment.md) — portal.nare.am release path: provisioning, CI pipeline, staging, rollback/restore, backups and drills.
 - [Security](./security.md) — security considerations and best practices.
 - [Troubleshooting](./troubleshooting.md) — common issues and fixes.
 

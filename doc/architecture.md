@@ -32,6 +32,7 @@ WAControl/
 │       ├── users/
 │       ├── logs/
 │       ├── whatsapp/status/
+│       ├── whatsapp/accounts/
 │       └── travel/         # Travel module API routes
 ├── components/             # React components
 │   ├── ui/                 # shadcn/ui base components
@@ -42,7 +43,8 @@ WAControl/
 │   ├── auth.ts             # NextAuth configuration
 │   ├── prisma.ts           # Prisma singleton
 │   ├── utils.ts            # Tailwind class merging
-│   ├── whatsapp.ts         # WhatsApp client service
+│   ├── whatsapp.ts         # WhatsApp client service (per-account runtimes)
+│   ├── whatsapp-accounts.ts # WhatsApp account registry (marhaba, nare)
 │   └── travel/             # B2B travel module (engine, workflow, …)
 ├── hooks/                  # React hooks
 │   └── useSocket.ts        # Socket.io client hook
@@ -56,9 +58,9 @@ WAControl/
 
 ## Application Flow
 
-1. **Startup**: `server.ts` prepares the Next.js app, creates an HTTP server, attaches Socket.io, and initializes the WhatsApp client after a short delay.
+1. **Startup**: `server.ts` prepares the Next.js app, creates an HTTP server, attaches Socket.io, and — after a short delay — boots every ENABLED WhatsApp account via `initializeWhatsAppAccounts()` (Promise.allSettled, so one account's failure never affects the others).
 2. **Authentication**: Users sign in with email and password. NextAuth validates credentials against the `User` table and issues a JWT session.
-3. **WhatsApp Connection**: The admin scans a QR code. The `whatsapp-web.js` client authenticates and stores session data in `.wwebjs_auth/`.
+3. **WhatsApp Connection**: Each WhatsApp business account (W3: `marhaba`, `nare`) is paired by scanning its own QR code from the admin accounts panel. The `whatsapp-web.js` client authenticates and stores session data in `.wwebjs_auth/`.
 4. **Message Handling**: Incoming and outgoing messages are persisted to SQLite and broadcast via Socket.io.
 5. **Dashboard**: Active ADMIN/USER view chats and send messages; ADVISOR/VALIDATOR work in the travel module; admins manage users and connection state.
 
@@ -81,7 +83,7 @@ HTTP Server
 1. WhatsApp Web emits a `message_create` event.
 2. `lib/whatsapp.ts` receives the message, downloads media if present, and saves it to `public/uploads/`.
 3. The chat and message are upserted in Prisma.
-4. Socket.io emits `message` and `chat_update` to the authenticated `inbox` room (ADMIN/USER sockets) and the full `whatsapp_state` only to the `admins` room.
+4. Socket.io emits `message` and `chat_update` to that account's `inbox:<accountKey>` room (payloads carry `accountKey`) and the full `whatsapp_state` only to the `admins:<accountKey>` room.
 5. The dashboard UI updates the chat list and message thread.
 
 ## Data Flow for Outgoing Messages
@@ -90,6 +92,42 @@ HTTP Server
 2. The UI calls `POST /api/send`.
 3. The server validates the session, checks the WhatsApp client is ready, and calls `sendWhatsAppMessage`.
 4. `message_create` fires, and the message is persisted like any other message.
+
+## Multiple WhatsApp accounts (W3)
+
+Two WhatsApp business accounts run side by side, seeded idempotently by
+`ensureDefaultAccounts()` in `lib/whatsapp-accounts.ts`:
+
+- **marhaba** ("Marhaba Armenia", purpose `INBOX`) — the original account, enabled.
+  LocalAuth with NO `clientId`, so the legacy `.wwebjs_auth/session/` directory is
+  untouched.
+- **nare** ("Nare Travel and Tours", purpose `TRAVEL`) — ships DISABLED until the
+  owner enables and pairs it; LocalAuth `clientId` `nare` → `.wwebjs_auth/session-nare/`.
+
+Key points:
+
+- **Per-account runtime** (`lib/whatsapp.ts`): each account's client, state, QR and
+  lifecycle live in a `Map<string, AccountRuntime>` anchored on
+  `globalThis.__waControlState` (shared between the custom server and the Next.js API
+  bundles). A client is created only for an enabled account; retries, errors and
+  teardown are per-account and never touch the other. On `ready`, the linked number is
+  read from the session (`client.info.wid`) and stored as `WhatsAppAccount.verifiedNumber`.
+- **Composite identity**: chats are unique on `(accountId, remoteJid)` and messages
+  dedupe on `(accountId, whatsappMessageId)`, so the same customer can chat with both
+  businesses without mixing. Media of non-marhaba accounts is namespaced
+  `public/uploads/<accountKey>/`; marhaba keeps the legacy flat layout.
+- **Per-account socket rooms**: `inbox:<accountKey>` (messages, chat updates,
+  availability) and `admins:<accountKey>` (full state including the pairing QR);
+  every payload carries `accountKey`. See `lib/socket-auth.ts`.
+- **APIs**: `chats`, `messages`, `send` and `whatsapp/status` take an account key
+  (`?account=` / body `account`, default `marhaba` — existing callers are unchanged).
+  The admin API `/api/whatsapp/accounts` (GET list filtered to administrated accounts;
+  POST configure/connect/reconnect/disconnect) is gated by each account's own admin
+  permission (`whatsapp.admin` / `whatsapp.nare.admin`).
+- **Travel routing (R3)**: every travel-module WhatsApp send resolves its account from
+  `TravelSettings.whatsappAccountKey` (default `nare`) with NO fallback to marhaba —
+  disabled, unconfigured or not-ready accounts fail with named errors and the delivery
+  stays retryable against the same account.
 
 ## Travel module (B2B costing & quotations)
 
@@ -101,7 +139,8 @@ Added 2026-09-21. See `doc/travel/IMPLEMENTATION.md` for the full decision recor
   decimal.js), `workflow.ts` (quote state machine with hash-bound approvals), `resolve.ts`
   (DB → engine DTO), `codes.ts` (transactional package codes), `snapshots.ts` (canonical JSON +
   sha256), `notifications.ts` (transactional outbox; email via `lib/email.ts`/nodemailer,
-  WhatsApp via the existing client), `pdf/` (HTML→PDF via a dedicated puppeteer browser),
+  WhatsApp via the travel account's client — W3, `TravelSettings.whatsappAccountKey`,
+  default `nare`, no fallback to marhaba), `pdf/` (HTML→PDF via a dedicated puppeteer browser),
   `import.ts` (workbook evidence staging), `settings.ts`, plus `access.ts` (module RBAC),
   `templates.ts`, `whatsapp-docs.ts` (document delivery), `reorder.ts`, `redact.ts` and
   `trace-table.ts`.

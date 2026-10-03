@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
 export interface WhatsAppState {
+  // W3: every server-side emit is account-scoped; pre-W3 payloads (or a
+  // single-account server) may omit it and are treated as the default
+  // Marhaba account.
+  accountKey?: string;
   state?: string;
   qrSvg?: string | null;
   info?: string;
@@ -12,11 +16,27 @@ export interface WhatsAppState {
   connected?: boolean;
 }
 
+// The pre-W3 single account; payloads without an accountKey are Marhaba.
+export const DEFAULT_ACCOUNT_KEY = "marhaba";
+
+/**
+ * W3: which account state the UI should show. The socket is the live channel
+ * and wins once it has delivered a state for the account, but before the
+ * first event arrives the state returned by the HTTP status call is the only
+ * one the server has reported — show it instead of "initializing".
+ */
+export function resolveWhatsAppDisplayState(
+  socketState: WhatsAppState | null | undefined,
+  httpState: WhatsAppState | null | undefined
+): WhatsAppState | null {
+  return socketState ?? httpState ?? null;
+}
+
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [unauthorized, setUnauthorized] = useState(false);
-  const [whatsAppState, setWhatsAppState] = useState<WhatsAppState | null>(null);
+  const [whatsAppStates, setWhatsAppStates] = useState<Record<string, WhatsAppState>>({});
   const [lastEvent, setLastEvent] = useState<{ type: string; payload: any } | null>(null);
 
   useEffect(() => {
@@ -41,7 +61,10 @@ export function useSocket() {
         socket.disconnect();
       }
     });
-    socket.on("whatsapp_state", (data) => setWhatsAppState(data));
+    socket.on("whatsapp_state", (data: WhatsAppState) => {
+      const key = data?.accountKey || DEFAULT_ACCOUNT_KEY;
+      setWhatsAppStates((prev) => ({ ...prev, [key]: { ...data, accountKey: key } }));
+    });
     socket.on("message", (data) => setLastEvent({ type: "message", payload: data }));
     socket.on("chat_update", (data) => setLastEvent({ type: "chat_update", payload: data }));
 
@@ -57,5 +80,9 @@ export function useSocket() {
     socketRef.current?.disconnect();
   }, []);
 
-  return { socket: socketRef.current, connected, unauthorized, whatsAppState, lastEvent, disconnectSocket };
+  // Backward-compatible single-account view: the Marhaba entry of the
+  // per-account map (pre-W3 consumers read `whatsAppState` directly).
+  const whatsAppState = whatsAppStates[DEFAULT_ACCOUNT_KEY] ?? null;
+
+  return { socket: socketRef.current, connected, unauthorized, whatsAppState, whatsAppStates, lastEvent, disconnectSocket };
 }

@@ -1,0 +1,68 @@
+# Reference copy of the live production layout on the owner's server
+# (/opt/stack/docker-compose.yml, portal.nare.am; live facts verified
+# 2026-10-02, secrets masked). Kept in the repo so the provisioning script
+# and the staging project stay in sync with production. This file is
+# documentation of the live layout — neither the provisioning script nor the
+# deploy gate ever rewrites the live compose file. Secrets stay on the
+# server and appear here only as ${VAR} placeholders.
+#
+# /opt/stack/.env contract: the live compose passes no file to the container.
+# The `environment:` list below interpolates from the .env file that docker
+# compose auto-reads next to the compose file, and that file holds ONLY the
+# PORTAL_* names: PORTAL_NEXTAUTH_SECRET, PORTAL_ADMIN_EMAIL,
+# PORTAL_ADMIN_PASSWORD and the PORTAL_SMTP_* names (SMTP values may stay
+# empty, hence the `:-` defaults).
+#
+# The app image is pinned to a DATED tag — this pin is not what a deploy
+# runs. The deploy gate always starts the app through its own override file
+# (portal-production.overrides.yml, written next to the live compose file)
+# that pins the image to portal:latest — the candidate it just tagged — and
+# after cutover it verifies that the running container's image ID equals the
+# candidate's, rolling back automatically otherwise. Moving this pin is a
+# manual live-server change, never a pipeline step.
+services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - portal_net
+
+  portal:
+    build: ./portal/src
+    image: portal:2026-09-30
+    container_name: portal-app
+    environment:
+      - NEXTAUTH_SECRET=${PORTAL_NEXTAUTH_SECRET}
+      - ADMIN_EMAIL=${PORTAL_ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${PORTAL_ADMIN_PASSWORD}
+      - SMTP_HOST=${PORTAL_SMTP_HOST:-}
+      - SMTP_PORT=${PORTAL_SMTP_PORT:-}
+      - SMTP_USER=${PORTAL_SMTP_USER:-}
+      - SMTP_PASS=${PORTAL_SMTP_PASS:-}
+      - SMTP_FROM=${PORTAL_SMTP_FROM:-}
+      - DATABASE_URL=file:/app/data/dev.db
+      - NEXTAUTH_URL=https://portal.nare.am
+    volumes:
+      - ./portal/data:/app/data
+      - ./portal/uploads:/app/public/uploads
+      - ./portal/auth:/app/.wwebjs_auth
+    networks:
+      - portal_net
+
+networks:
+  # Compose project default network; its real name (<project>_portal_net) is
+  # discovered at provisioning time, never hard-coded.
+  portal_net:
+
+volumes:
+  caddy_data:
+  caddy_config:

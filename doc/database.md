@@ -30,7 +30,8 @@ Represents a WhatsApp conversation.
 | Field | Type | Description |
 |-------|------|-------------|
 | id | String (CUID) | Primary key |
-| remoteJid | String (unique) | WhatsApp remote JID (e.g., `123456789@c.us`) |
+| accountId | String | WhatsAppAccount.id owning the chat (default `marhaba`; no FK — see WhatsAppAccount) |
+| remoteJid | String | WhatsApp remote JID (e.g., `123456789@c.us`) |
 | name | String? | Display name |
 | profilePicUrl | String? | Profile picture URL |
 | lastMessageAt | DateTime | Last activity timestamp |
@@ -40,6 +41,9 @@ Represents a WhatsApp conversation.
 **Relations**
 - `messages`: messages belonging to the chat.
 
+**Indexes**
+- `@@unique([accountId, remoteJid])` — chat identity is account + remoteJid, so the same customer can chat with both business accounts without mixing.
+
 ### Message
 
 Stores individual WhatsApp messages.
@@ -47,9 +51,10 @@ Stores individual WhatsApp messages.
 | Field | Type | Description |
 |-------|------|-------------|
 | id | String (CUID) | Primary key |
+| accountId | String | WhatsAppAccount.id owning the message (default `marhaba`; no FK — see WhatsAppAccount) |
 | chatId | String | Foreign key to Chat |
 | remoteJid | String | Sender/recipient JID |
-| whatsappMessageId | String? (unique) | Original WhatsApp message ID |
+| whatsappMessageId | String? | Original WhatsApp message ID |
 | fromMe | Boolean | Whether the message was sent from the dashboard |
 | body | String? | Message text |
 | type | String | `text`, `image`, `voice`, `document`, `video`, `sticker`, `media`, or `unknown` |
@@ -67,6 +72,7 @@ Stores individual WhatsApp messages.
 - `sentBy`: local sender (optional).
 
 **Indexes**
+- `@@unique([accountId, whatsappMessageId])` — dedupe is per account; the same WhatsApp message id can exist once per business account (SQLite treats NULLs as distinct, so rows without an id are unaffected).
 - `@@index([chatId, timestamp])`
 
 ### Log
@@ -100,6 +106,35 @@ Tracks the WhatsApp connection state.
 | createdAt | DateTime | Record creation time |
 | updatedAt | DateTime | Last update time |
 
+### WhatsAppAccount
+
+One row per WhatsApp business account (W3): `marhaba` (the existing inbox
+account) and `nare` (the travel account, shipped disabled). The bootstrap
+(`ensureDefaultAccounts()` in `lib/whatsapp-accounts.ts`, called from
+`prisma/seed.ts`) creates the enabled Marhaba row and the disabled Nare row;
+it is idempotent and never modifies existing rows.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | String | Primary key, fixed: `marhaba` or `nare` |
+| key | String (unique) | Account key, same values as `id` |
+| displayName | String | Display name |
+| enabled | Boolean | Whether the account is active (default `false`) |
+| sessionClientId | String? | LocalAuth clientId; null = legacy default `.wwebjs_auth/session` directory |
+| publicNumber | String? | Owner-published number shown on client documents |
+| verifiedNumber | String? | Number read from the linked session once ready |
+| purpose | String | `INBOX` or `TRAVEL` (default `INBOX`) |
+| createdAt | DateTime | Record creation time |
+| updatedAt | DateTime | Last update time |
+
+The `accountId` columns on Chat, Message and NotificationDelivery are plain
+strings **without** a Prisma relation/foreign key to WhatsAppAccount, on
+purpose: this keeps `prisma db push` on a populated database a pure additive
+ADD COLUMN with a default (no table rebuild, no FK check against account rows
+that only exist after the bootstrap seed runs). All pre-existing rows are
+backfilled to `accountId = 'marhaba'` by the column default, so the push needs
+no `--accept-data-loss`.
+
 ## Prisma Client
 
 The Prisma client is exported as a singleton from `lib/prisma.ts` to prevent multiple instances during hot reload in development.
@@ -115,14 +150,17 @@ Agency, PackageCodeCounter (transactional package-code sequences), TravelRequest
 HotelProduct, VehicleType, ServiceProduct, RateVersion (verification lifecycle
 NEEDS_REVIEW → VERIFIED → ARCHIVED), FXRateVersion, PricingPolicyVersion, CalculationSnapshot
 (immutable inputs/results + sha256 hash), ValidationAssignment, ReviewDecision, WorkflowEvent,
-NotificationDelivery (outbox, unique dedupKey), QuoteDocument (hash-recorded PDFs on disk),
+NotificationDelivery (outbox, unique dedupKey; gained `accountId` — the WhatsApp
+account that owns/sent the delivery, default `marhaba`, no FK — see WhatsAppAccount), QuoteDocument (hash-recorded PDFs on disk),
 ImportBatch/ImportRow (workbook staging), BatchRun, PackageTemplate/TemplateVersion
 (TemplateVersion gained `scenariosJson` — default scenario definitions instantiated into new
 requests — in v0.11.0),
 TravelSettings (singleton; gained `validatorGroupJid`, the WhatsApp group for quotation
 document delivery, in v0.10.0 — deprecated/ignored since v0.11.0 in favor of
 `validatorUserIds`, the virtual validator user group; also gained `infantMaxAge`, the
-traveler-classification ceiling, in v0.11.0). `User` gained a nullable `phone` (WhatsApp
+traveler-classification ceiling, in v0.11.0; gained `whatsappAccountKey` in W3, the
+WhatsApp account key all travel-module sends must use, default `nare` — there is no
+silent fallback to another account). `User` gained a nullable `phone` (WhatsApp
 notification destination) and role values ADVISOR/VALIDATOR. Money and FX values are decimal strings; JSON
 payloads are String columns. See `prisma/schema.prisma` comments and `lib/travel/contracts.ts`.
 

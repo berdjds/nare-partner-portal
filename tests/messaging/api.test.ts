@@ -83,14 +83,14 @@ beforeEach(() => {
 
 describe("GET /api/chats", () => {
   it("returns 401 without a session", async () => {
-    const res = await chatsGET();
+    const res = await chatsGET(new NextRequest("http://localhost:3000/api/chats"));
     expect(res.status).toBe(401);
     expect((await res.json()).error).toBe("Unauthorized");
   });
 
   it("returns the stored chats with their last message to a logged-in user", async () => {
     login();
-    const res = await chatsGET();
+    const res = await chatsGET(new NextRequest("http://localhost:3000/api/chats"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);

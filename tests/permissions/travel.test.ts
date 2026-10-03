@@ -134,6 +134,12 @@ beforeAll(async () => {
   prisma = await getPrisma();
   workflow = await import("@/lib/travel/workflow");
   fx = await seedFixtures(prisma);
+  // W3 (travel-nare): the travel account ships disabled; enable it so CLIENT
+  // document sends reach the mocked sender. Disabled-account behavior is
+  // covered in tests/whatsapp/travel-send.test.ts.
+  const { ensureDefaultAccounts } = await import("@/lib/whatsapp-accounts");
+  await ensureDefaultAccounts();
+  await prisma.whatsAppAccount.update({ where: { key: "nare" }, data: { enabled: true } });
 
   requestsRoute = await import("@/app/api/travel/requests/route");
   documentsRoute = await import("@/app/api/travel/documents/[id]/route");

@@ -1,0 +1,77 @@
+# Staging compose project (portal-staging) — installed VERBATIM by
+# provisioning to /opt/stack/staging/docker-compose.yml.
+#
+# Staging is a second, fully isolated compose project with its own data dirs
+# (/opt/stack/staging/portal/{data,uploads,auth}), its own image
+# (portal-staging:latest) and its own public URL
+# (https://staging.portal.nare.am), so experiments never touch production
+# data. Caddy (from the production project) terminates TLS for the staging
+# site too and reaches this container over the PRODUCTION project's
+# compose-managed network: its real name is project-prefixed (e.g.
+# stack_portal_net) and is discovered from the portal-app container by
+# deploy/provision-server.sh, which records it as PORTAL_NETWORK in
+# /opt/stack/staging/.env.staging. Staging joins that network here as an
+# external network so the live caddy container can reverse-proxy
+# staging.portal.nare.am to portal-staging:3000.
+#
+# Staging NEVER starts the WhatsApp Web client: WHATSAPP_DISABLED defaults to
+# 1 here AND the deploy gate adds its own override file on every staging
+# deploy — belt and braces, because a staging instance attaching to the live
+# WhatsApp session would fight production for the same account (WhatsApp Web
+# allows only one active web session; the loser gets logged out).
+#
+# E-mail from the travel module goes to a sink, not real customers, via the
+# SMTP settings in .env.staging (e.g. a Mailhog/Mailpit container).
+#
+# Compose reads its interpolation values from /opt/stack/staging/.env, which
+# provisioning symlinks to .env.staging — the symlink keeps the secret file
+# name stable for operators while compose finds it under its default name.
+
+services:
+  # The service name MUST stay `portal-staging`, never `portal`: compose
+  # registers the service name as a DNS alias on every network the service
+  # joins, and this project joins the PRODUCTION network (below), where the
+  # production project already resolves `portal` to its own app. A shared
+  # alias would let the live caddy route production traffic to staging.
+  portal-staging:
+    image: portal-staging:latest
+    container_name: portal-staging
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - DATABASE_URL=file:/app/data/dev.db
+      - NEXTAUTH_URL=https://staging.portal.nare.am
+      - NEXTAUTH_SECRET=${PORTAL_NEXTAUTH_SECRET:?PORTAL_NEXTAUTH_SECRET must be set in /opt/stack/staging/.env}
+      - ADMIN_EMAIL=${PORTAL_ADMIN_EMAIL:?PORTAL_ADMIN_EMAIL must be set in /opt/stack/staging/.env}
+      - ADMIN_PASSWORD=${PORTAL_ADMIN_PASSWORD:?PORTAL_ADMIN_PASSWORD must be set in /opt/stack/staging/.env}
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - WHATSAPP_DISABLED=${WHATSAPP_DISABLED:-1}
+      # Mail sink settings (see header): unset values keep the app bootable
+      # while flagging notification deliveries FAILED.
+      - SMTP_HOST=${PORTAL_SMTP_HOST:-}
+      - SMTP_PORT=${PORTAL_SMTP_PORT:-}
+      - SMTP_USER=${PORTAL_SMTP_USER:-}
+      - SMTP_PASS=${PORTAL_SMTP_PASS:-}
+      - SMTP_FROM=${PORTAL_SMTP_FROM:-}
+    volumes:
+      - ./portal/data:/app/data
+      - ./portal/uploads:/app/public/uploads
+      - ./portal/auth:/app/.wwebjs_auth
+    # No published host port: caddy proxies to portal-staging:3000 over the
+    # production network named by PORTAL_NETWORK.
+    expose:
+      - "3000"
+    networks:
+      - portal
+
+networks:
+  portal:
+    # The PRODUCTION project's (/opt/stack) compose-managed network. Its real
+    # name is project-prefixed and recorded as PORTAL_NETWORK in
+    # /opt/stack/staging/.env.staging by deploy/provision-server.sh. Staging
+    # only joins it, so `docker compose down` here can never tear down the
+    # network that production's caddy and app depend on.
+    external: true
+    name: ${PORTAL_NETWORK:?PORTAL_NETWORK must name the production network (run deploy/provision-server.sh first or set it in /opt/stack/staging/.env.staging)}

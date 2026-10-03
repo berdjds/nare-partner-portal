@@ -45,6 +45,10 @@ const EXPECTED_KEYS: PermissionKey[] = [
   "whatsapp.inbox.view",
   "whatsapp.inbox.send",
   "whatsapp.admin",
+  // W3 (wa-multi): the Nare account's own inbox triple, admin-only by default.
+  "whatsapp.nare.view",
+  "whatsapp.nare.send",
+  "whatsapp.nare.admin",
   "travel.access",
   "travel.create",
   "travel.review",

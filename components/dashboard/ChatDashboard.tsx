@@ -11,8 +11,16 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useSocket } from "@/hooks/useSocket";
+import { useSocket, DEFAULT_ACCOUNT_KEY } from "@/hooks/useSocket";
 import { useToast } from "@/components/ui/toast";
+import AccountSwitcher, { pickDefaultAccountKey } from "@/components/dashboard/AccountSwitcher";
+
+export interface DashboardAccount {
+  key: string;
+  displayName: string;
+  canSend: boolean;
+  canAdmin: boolean;
+}
 
 interface Chat {
   id: string;
@@ -44,17 +52,15 @@ interface Message {
 
 export default function ChatDashboard({
   isAdminRole,
-  canSend,
-  canAdminWhatsApp,
+  accounts,
 }: {
   /** ADMIN database role — controls the Admin panel nav button (the /admin page itself is role-gated). */
   isAdminRole: boolean;
-  /** whatsapp.inbox.send — controls the composer, attachment and new-message controls. */
-  canSend: boolean;
-  /** whatsapp.admin — controls the raw connection-state display (full whatsapp_state payload). */
-  canAdminWhatsApp: boolean;
+  /** W3: accounts the user may view, with their per-account send/admin permissions. */
+  accounts: DashboardAccount[];
 }) {
-  const { connected, unauthorized, whatsAppState, lastEvent, disconnectSocket } = useSocket();
+  const { connected, unauthorized, whatsAppStates, lastEvent, disconnectSocket } = useSocket();
+  const [selectedAccount, setSelectedAccount] = useState(() => pickDefaultAccountKey(accounts));
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -85,19 +91,25 @@ export default function ChatDashboard({
     return "Number hidden by WhatsApp";
   }
 
+  // W3: send/admin controls follow the selected account's permissions.
+  const selected = accounts.find((a) => a.key === selectedAccount) ?? accounts[0];
+  const canSend = selected?.canSend ?? false;
+  const canAdminWhatsApp = selected?.canAdmin ?? false;
+
   async function fetchChats() {
     try {
-      const res = await axios.get("/api/chats");
+      const res = await axios.get(`/api/chats?account=${selectedAccount}`);
       setChats(res.data);
     } catch {
       toast("Failed to load chats", "error");
     }
   }
 
-  // W2 permission policy: whatsapp.admin holders read the raw connection
-  // state from their full whatsapp_state payload; other inbox users receive
-  // only { connected }.
-  const waAvailable = canAdminWhatsApp ? whatsAppState?.state === "ready" : whatsAppState?.connected === true;
+  // W3: whatsapp_state payloads are account-scoped; a missing accountKey is
+  // Marhaba (pre-W3 server). Admin permission holders read the raw state,
+  // other inbox users receive only { connected }.
+  const accountState = whatsAppStates[selectedAccount] ?? null;
+  const waAvailable = canAdminWhatsApp ? accountState?.state === "ready" : accountState?.connected === true;
 
   async function handleStartNewChat(e?: React.FormEvent) {
     e?.preventDefault();
@@ -108,7 +120,7 @@ export default function ChatDashboard({
 
     setLoading(true);
     try {
-      await axios.post("/api/send", { remoteJid, body: newMessage, type: "text" });
+      await axios.post("/api/send", { remoteJid, body: newMessage, type: "text", account: selectedAccount });
       toast("Message sent", "success");
       setNewChatOpen(false);
       setNewNumber("");
@@ -123,16 +135,20 @@ export default function ChatDashboard({
 
   async function fetchMessages(chat: Chat) {
     try {
-      const res = await axios.get(`/api/messages?chatId=${chat.id}`);
+      const res = await axios.get(`/api/messages?chatId=${chat.id}&account=${selectedAccount}`);
       setMessages(res.data);
     } catch {
       toast("Failed to load messages", "error");
     }
   }
 
+  // W3: switching accounts drops the open conversation (ids are
+  // account-scoped) and loads the new account's chat list.
   useEffect(() => {
+    setSelectedChat(null);
+    setMessages([]);
     fetchChats();
-  }, []);
+  }, [selectedAccount]);
 
   useEffect(() => {
     if (selectedChat) {
@@ -141,7 +157,11 @@ export default function ChatDashboard({
   }, [selectedChat?.id]);
 
   useEffect(() => {
-    if (lastEvent?.type === "message") {
+    // message/chat_update payloads carry accountKey; payloads without it are
+    // Marhaba. Events from other accounts must not leak into this view.
+    const eventAccount = lastEvent?.payload?.accountKey || DEFAULT_ACCOUNT_KEY;
+    if (!lastEvent || eventAccount !== selectedAccount) return;
+    if (lastEvent.type === "message") {
       const msg = lastEvent.payload as Message;
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
@@ -155,10 +175,10 @@ export default function ChatDashboard({
         return next.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
       });
     }
-    if (lastEvent?.type === "chat_update") {
+    if (lastEvent.type === "chat_update") {
       fetchChats();
     }
-  }, [lastEvent]);
+  }, [lastEvent, selectedAccount]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -196,6 +216,7 @@ export default function ChatDashboard({
         mediaBase64,
         mediaMimeType,
         mediaFilename,
+        account: selectedAccount,
       });
 
       setInput("");
@@ -265,16 +286,17 @@ export default function ChatDashboard({
               <span className="hidden sm:inline">New message</span>
             </Button>
           )}
+          <AccountSwitcher accounts={accounts} selected={selectedAccount} onSelect={setSelectedAccount} />
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <Badge className="hidden sm:inline-flex" variant={connected ? "default" : "destructive"}>
             {unauthorized ? "Session expired" : connected ? "Socket connected" : "Socket offline"}
           </Badge>
-          {/* whatsapp.admin holders see the raw connection state; other inbox
-              users see availability only as connected/not connected. */}
+          {/* Per-account admin holders see the raw connection state; other
+              inbox users see availability only as connected/not connected. */}
           <Badge variant={waAvailable ? "default" : "outline"}>
             {canAdminWhatsApp
-              ? whatsAppState?.state || "initializing"
+              ? accountState?.state || "initializing"
               : waAvailable
                 ? "Connected"
                 : "Not connected"}
@@ -380,8 +402,8 @@ export default function ChatDashboard({
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* The composer is hidden without whatsapp.inbox.send — the
-                  server already rejects the send API with 403. */}
+              {/* The composer is hidden without the selected account's send
+                  permission — the server already rejects the send API with 403. */}
               {canSend && (
                 <form onSubmit={handleSend} className="border-t p-3">
                   {selectedFile && (
@@ -431,7 +453,7 @@ export default function ChatDashboard({
               {!waAvailable && (
                 <p className="mt-2 text-sm">
                   {canAdminWhatsApp
-                    ? `WhatsApp state: ${whatsAppState?.state || "initializing"}`
+                    ? `WhatsApp state: ${accountState?.state || "initializing"}`
                     : "WhatsApp not connected"}
                 </p>
               )}

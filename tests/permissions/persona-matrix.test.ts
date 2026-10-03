@@ -41,7 +41,7 @@ import { ensureSchema, getPrisma } from "../travel-db/helpers";
 import { actorOf, createRequestInput, seedFixtures, type Fixtures } from "../workflow/fixtures";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { handleUploadsRequest, routeUploadsRequest } from "@/lib/uploads";
-import { ADMINS_ROOM, INBOX_ROOM, attachSocketAuth, socketAllowRequest } from "@/lib/socket-auth";
+import { ADMINS_ROOM, INBOX_ROOM, adminsRoom, attachSocketAuth, inboxRoom, socketAllowRequest } from "@/lib/socket-auth";
 
 const SECRET = "persona-matrix-test-secret-min-32-chars!";
 process.env.NEXTAUTH_SECRET = SECRET;
@@ -446,13 +446,13 @@ describe("GET /api/chats (whatsapp.inbox.view)", () => {
   it("200 with content for waOnly & admin; 403 for travelOnly & noInternal", async () => {
     for (const who of [waOnly, admin]) {
       login(who);
-      const res = await chatsGET();
+      const res = await chatsGET(req("http://localhost:3000/api/chats"));
       expect(res.status).toBe(200);
       expect((await res.json()).some((c: any) => c.id === chat.id)).toBe(true);
     }
     for (const who of [travelOnly, noInternal]) {
       login(who);
-      const res = await chatsGET();
+      const res = await chatsGET(req("http://localhost:3000/api/chats"));
       expect(res.status).toBe(403);
       expect((await res.json()).error).toBe("Forbidden");
     }
@@ -502,7 +502,7 @@ describe("POST /api/send (whatsapp.inbox.send)", () => {
 describe("GET /api/whatsapp/status (whatsapp.admin vs whatsapp.inbox.view)", () => {
   it("admin gets the full state incl. QR; waOnly gets exactly { connected }; travelOnly & noInternal 403", async () => {
     login(admin);
-    const full = await statusGET();
+    const full = await statusGET(req("http://localhost:3000/api/whatsapp/status"));
     expect(full.status).toBe(200);
     expect(await full.json()).toEqual({
       state: "ready",
@@ -513,13 +513,13 @@ describe("GET /api/whatsapp/status (whatsapp.admin vs whatsapp.inbox.view)", () 
     });
 
     login(waOnly);
-    const availability = await statusGET();
+    const availability = await statusGET(req("http://localhost:3000/api/whatsapp/status"));
     expect(availability.status).toBe(200);
     expect(await availability.json()).toEqual({ connected: true });
 
     for (const who of [travelOnly, noInternal]) {
       login(who);
-      expect((await statusGET()).status).toBe(403);
+      expect((await statusGET(req("http://localhost:3000/api/whatsapp/status"))).status).toBe(403);
     }
   });
 });
@@ -534,7 +534,7 @@ describe("GET /api/permissions (admin.users)", () => {
     const res = await permissionsGET();
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.keys).toHaveLength(13);
+    expect(body.keys).toHaveLength(16);
     // The migration confirmation Log row is never touched in this file.
     expect(body.internalLocked).toBe(true);
     expect(body.users.some((u: any) => u.id === waOnly.id)).toBe(true);
@@ -671,7 +671,7 @@ describe("socket /api/socket (origin + session + effective-permission rooms)", (
 
     expect(await connectOutcome(socket)).toBe("connected");
     await vi.waitFor(() => expect(statePayloads.length).toBe(1));
-    expect(statePayloads[0]).toEqual({ connected: false });
+    expect(statePayloads[0]).toEqual({ accountKey: "marhaba", connected: false });
 
     const srv = serverSocketFor(socketServer.sio, waOnly.id);
     expect(srv).toBeDefined();
@@ -687,13 +687,18 @@ describe("socket /api/socket (origin + session + effective-permission rooms)", (
     socket.on("whatsapp_state", (p) => statePayloads.push(p));
 
     expect(await connectOutcome(socket)).toBe("connected");
-    await vi.waitFor(() => expect(statePayloads.length).toBe(1));
-    expect(statePayloads[0]).toEqual(socketHooks.getWhatsAppState());
-    expect(statePayloads[0].qrSvg).toBe("<svg>pm-socket-qr</svg>");
+    // W3: the ADMIN preset holds both accounts' keys, so the initial state is
+    // emitted per account — availability first, then the full state, for
+    // marhaba and nare alike.
+    await vi.waitFor(() => expect(statePayloads.length).toBe(4));
+    expect(statePayloads[1]).toEqual({ accountKey: "marhaba", ...socketHooks.getWhatsAppState() });
+    expect(statePayloads[1].qrSvg).toBe("<svg>pm-socket-qr</svg>");
 
     const srv = serverSocketFor(socketServer.sio, admin.id);
     expect(srv).toBeDefined();
-    expect(Array.from(srv!.rooms).sort()).toEqual([ADMINS_ROOM, INBOX_ROOM, srv!.id].sort());
+    expect(Array.from(srv!.rooms).sort()).toEqual(
+      [ADMINS_ROOM, INBOX_ROOM, adminsRoom("nare"), inboxRoom("nare"), srv!.id].sort(),
+    );
 
     socket.disconnect();
     await waitForSocketCount(socketServer.sio, 0);

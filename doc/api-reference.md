@@ -39,7 +39,10 @@ its next request, and open sockets disconnect on the next 60s revalidation pass.
 
 Returns all chats ordered by most recent message.
 
-**Access**: Active session with the `whatsapp.inbox.view` permission (W2). Anonymous and deactivated users get 401; active users without the permission get 403.
+**Access**: Active session with the target account's view permission (W3: `whatsapp.inbox.view` for `marhaba`, `whatsapp.nare.view` for `nare`). Anonymous and deactivated users get 401; active users without the permission get 403.
+
+**Query parameters**:
+- `account` — WhatsApp account key (W3); defaults to `marhaba`. Unknown keys get 400. Chats are per account: the same contact can appear once per account without mixing.
 
 **Response**:
 
@@ -71,11 +74,12 @@ Returns all chats ordered by most recent message.
 
 Returns messages for a chat.
 
-**Access**: Active session with the `whatsapp.inbox.view` permission (W2). Anonymous and deactivated users get 401; active users without the permission get 403.
+**Access**: Active session with the target account's view permission (W3: `whatsapp.inbox.view` for `marhaba`, `whatsapp.nare.view` for `nare`). Anonymous and deactivated users get 401; active users without the permission get 403.
 
 **Query parameters**:
 - `chatId` — Chat ID (preferred)
 - `remoteJid` — WhatsApp JID (fallback)
+- `account` — WhatsApp account key (W3); defaults to `marhaba`. Unknown keys get 400. Messages are read per account.
 
 At least one parameter is required.
 
@@ -109,12 +113,13 @@ At least one parameter is required.
 
 Sends a WhatsApp message. Can be used to start a new chat with an unsaved number.
 
-**Access**: Active session with the `whatsapp.inbox.send` permission (W2) — view and send are separate keys. Anonymous and deactivated users get 401; active users without the permission get 403.
+**Access**: Active session with the target account's send permission (W3: `whatsapp.inbox.send` for `marhaba`, `whatsapp.nare.send` for `nare`) — view and send are separate keys. Anonymous and deactivated users get 401; active users without the permission get 403.
 
 **Request body**:
 
 ```json
 {
+  "account": "marhaba",
   "remoteJid": "123456789@c.us",
   "body": "Hello",
   "type": "text",
@@ -124,7 +129,7 @@ Sends a WhatsApp message. Can be used to start a new chat with an unsaved number
 }
 ```
 
-For text messages to a new number, only `remoteJid`, `body`, and `type` are required. Use the full JID format (`<number>@c.us`) or just the number with country code and the server will format it.
+`account` is optional and defaults to `marhaba` (unknown keys get 400); the send goes through that one account only. For text messages to a new number, only `remoteJid`, `body`, and `type` are required. Use the full JID format (`<number>@c.us`) or just the number with country code and the server will format it.
 
 **Response**:
 
@@ -138,11 +143,14 @@ Error responses include status `401` (unauthorized), `403` (travel-only roles), 
 
 #### GET /api/whatsapp/status
 
-Returns the current WhatsApp connection state.
+Returns the current WhatsApp connection state of one account.
 
-**Access**: ADMIN (full details) or USER (`connected` only), both from the current database role. Anonymous and deactivated users get 401; ADVISOR/VALIDATOR get 403.
+**Access**: the target account's admin permission (`whatsapp.admin` for `marhaba`, `whatsapp.nare.admin` for `nare`) for full details, or its view permission (`whatsapp.inbox.view` / `whatsapp.nare.view`) for `connected` only — resolved from the current database row. Anonymous and deactivated users get 401; active users with neither key get 403.
 
-**Response (ADMIN)**:
+**Query parameters**:
+- `account` — WhatsApp account key (W3); defaults to `marhaba`. Unknown keys get 400.
+
+**Response (account admin)**:
 
 ```json
 {
@@ -154,9 +162,9 @@ Returns the current WhatsApp connection state.
 }
 ```
 
-`qrSvg` carries the pairing QR code while unpaired — ADMIN only.
+`qrSvg` carries the pairing QR code while unpaired — account admins only.
 
-**Response (USER)**:
+**Response (account viewer)**:
 
 ```json
 { "connected": true }
@@ -166,21 +174,71 @@ Availability strictly as connected/not connected; no state text, info, QR, versi
 
 #### POST /api/whatsapp/status
 
-Performs an admin action on the WhatsApp session.
+Performs an admin action on one account's WhatsApp session.
 
-**Access**: Admin only (current database role; everyone else gets 401).
+**Access**: the target account's admin permission (current database row; everyone else gets 401).
 
 **Request body**:
 
 ```json
-{ "action": "logout" }
+{ "action": "logout", "account": "marhaba" }
 ```
 
 or
 
 ```json
-{ "action": "reconnect" }
+{ "action": "reconnect", "account": "marhaba" }
 ```
+
+`account` is optional and defaults to `marhaba` (unknown keys get 400). For per-account management (configure, connect/pair, disconnect) see the accounts endpoint below.
+
+### WhatsApp Accounts
+
+#### GET /api/whatsapp/accounts
+
+Lists the WhatsApp business accounts the caller may administer (W3: `marhaba` and `nare`), each with its live state.
+
+**Access**: any account's admin permission; callers without any get 401. The list is filtered per account — a caller holding only `whatsapp.nare.admin` sees only the `nare` entry.
+
+**Response**:
+
+```json
+[
+  {
+    "key": "marhaba",
+    "displayName": "Marhaba Armenia",
+    "enabled": true,
+    "purpose": "INBOX",
+    "publicNumber": null,
+    "verifiedNumber": null,
+    "state": { "state": "ready", "qrSvg": null, "info": "...", "version": "...", "startedAt": "..." }
+  }
+]
+```
+
+#### POST /api/whatsapp/accounts
+
+Configures or controls a single account. Every call is audited (`WA_ACCOUNT_CONFIGURE` / `WA_ACCOUNT_CONNECT` / `WA_ACCOUNT_RECONNECT` / `WA_ACCOUNT_DISCONNECT`) and never touches any other account.
+
+**Access**: the target account's admin permission (everyone else gets 401); unknown account keys get 400.
+
+**Request body (configure)**:
+
+```json
+{ "action": "configure", "account": "nare", "displayName": "Nare Travel and Tours", "publicNumber": "37491000002", "enabled": true }
+```
+
+All of `displayName` / `publicNumber` (nullable) / `enabled` are optional. Disabling an account stops its client (the on-disk session is preserved, so re-enabling + connect resumes without a new pairing).
+
+**Request body (connect / reconnect / disconnect)**:
+
+```json
+{ "action": "connect", "account": "nare" }
+```
+
+`connect` starts the client and generates the pairing QR (delivered over Socket.io to that account's `admins:<key>` room only); `reconnect` restarts it; `disconnect` logs it out.
+
+**Response**: `{ "ok": true, ...state }` (configure also returns the updated `account`).
 
 ### Media
 
@@ -192,11 +250,15 @@ Streams an uploaded message media file (stored under `public/uploads/`).
 `/uploads/*` before Next.js's static handler. The pathname is percent-decoded, slash-collapsed
 and normalized before matching, so encoded spellings (`/%75ploads/…`, `/uploads%2F…`) are gated
 too; GET/HEAD only, other methods get `405`. Requires a valid, unexpired NextAuth session
-cookie plus an active database user holding the `whatsapp.inbox.view` permission (W2).
+cookie plus an active database user holding the media's account view permission (W3): files
+under `/uploads/<accountKey>/` (e.g. `/uploads/nare/<file>`) belong to that account
+(`whatsapp.nare.view`); flat paths are marhaba's legacy layout (`whatsapp.inbox.view`). The
+account is derived from the same decoded, normalized path that is streamed, so the permission
+decision and the served file always agree (`/uploads/nare/../<file>` is a marhaba file).
 Responses carry the file's mime type and `Cache-Control: private, no-store`.
 
 **Errors**: `400` (undecodable URL), `401` (no, invalid, expired or revoked session),
-`403` (active user without the `whatsapp.inbox.view` permission), `404` (traversal or
+`403` (active user without the account's view permission), `404` (traversal or
 missing file), `405` (non-GET/HEAD method).
 Existing and missing files are indistinguishable to unauthorized callers.
 

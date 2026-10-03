@@ -1,13 +1,48 @@
 name: CI/CD
 
+# Release pipeline for portal.nare.am (W3b, task ci-pipeline).
+#
+# Pull requests and pushes run the test job only. A push to main then runs
+# the release chain — deploy staging -> smoke staging -> deploy production ->
+# smoke production — serialized by the concurrency group below (one deploy at
+# a time). The pipeline never gets a shell on the server: the source tarball
+# is streamed over ssh stdin to the dispatcher's `upload` command (scp/sftp
+# cannot pass the forced command — the dispatcher would reject their
+# SSH_ORIGINAL_COMMAND as unknown), and every server-side action is a call to
+# the forced-command dispatcher installed by the owner's one-time provisioning
+# (/usr/local/sbin/portal-deploy-entry):
+#   upload <name.tar.gz>     writes the streamed tarball to the upload dir
+#   deploy <env> <tarball>   env = staging|production
+#   smoke <env>              env = staging|production
+#   backup | restore <archive> | drill-rollback | drill-restore (staging only)
+#
+# Manual staging actions: Actions -> CI/CD -> Run workflow, pick the action.
+# `deploy-staging` deploys the dispatched ref to staging only and smoke-tests
+# it, so the release path can be rehearsed from any branch before merging
+# (W3g). Drills can only target staging; the dispatcher enforces that again
+# on the server. Production jobs never run for workflow_dispatch.
+#
+# Required secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY,
+# DEPLOY_KNOWN_HOSTS (the server's pinned host key, provisioned out of band).
+# Required variables: PORTAL_URL, STAGING_URL.
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      action:
+        description: Staging action to run (deploy rehearsal or drill)
+        required: true
+        type: choice
+        options:
+          - drill-rollback
+          - drill-restore
+          - deploy-staging
 
-# Serialize deployments: never run two VPS deploys concurrently.
+# Serialize deployments: never run two server deploys concurrently.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.ref) || 'deploy-main' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -15,6 +50,9 @@ concurrency:
 jobs:
   test:
     name: Typecheck, test, build
+    # Drills (workflow_dispatch) are operational actions; they don't re-run
+    # the suite, and no deploy job may run without a green test job.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       # CI does not need a browser binary: the PDF smoke test skips cleanly
@@ -39,14 +77,16 @@ jobs:
         run: npx vitest run
       - run: npm run build
 
-  deploy:
-    name: Deploy to VPS
+  deploy-staging:
+    name: Deploy to staging
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      VPS_HOST: ${{ secrets.VPS_HOST }}
-      VPS_USER: ${{ secrets.VPS_USER }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
     steps:
       - uses: actions/checkout@v4
 
@@ -66,40 +106,230 @@ jobs:
             --exclude='data/documents' \
             --exclude='*.tar.gz' \
             --exclude='*.db-journal' \
-            -czf "$RUNNER_TEMP/wacontrol-source.tar.gz" .
-          du -h "$RUNNER_TEMP/wacontrol-source.tar.gz"
+            -czf "$RUNNER_TEMP/portal-source.tar.gz" .
+          du -h "$RUNNER_TEMP/portal-source.tar.gz"
 
-      - name: Install SSH key
+      - name: Install SSH key and pinned host key
+        # Secrets reach the shell only through env vars and are written to
+        # files with printf — never echoed to the log. The host key comes
+        # from the pinned DEPLOY_KNOWN_HOSTS secret rather than scanning the
+        # host at deploy time and trusting whatever answers.
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${VPS_HOST}" >> ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
-      - name: Upload source
-        run: scp -i ~/.ssh/deploy_key "$RUNNER_TEMP/wacontrol-source.tar.gz" "${VPS_USER}@${VPS_HOST}:/tmp/wacontrol-source.tar.gz"
+      - name: Upload source to the deploy user's incoming directory
+        # scp/sftp cannot pass the forced command (the dispatcher rejects
+        # their SSH_ORIGINAL_COMMAND as unknown), so the tarball is streamed
+        # over stdin to `upload`, which writes it as a bare validated name in
+        # the deploy user's upload dir (its home) — the same place `deploy`
+        # resolves the bare tarball name against.
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "upload portal-source.tar.gz" < "$RUNNER_TEMP/portal-source.tar.gz"
 
-      - name: Run deploy gate on VPS
-        # scripts/vps-deploy.sh ships inside the source tarball, so the VPS
-        # always runs the deploy gate that matches the candidate: build while
-        # the app serves, tag previous, assert exclusive data mounts, write
-        # freeze, verified backup, trial A (candidate on a data copy), trial B
-        # (rollback compatibility), cutover, then rollback or the manual
-        # recovery procedure on post-cutover failure. The script is piped to
-        # bash over ssh stdin; every `docker ... exec` inside it is guarded
-        # with `< /dev/null` so nothing swallows the remaining script.
+      - name: Deploy staging via the forced-command interface
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy staging portal-source.tar.gz"
+
+  smoke-staging:
+    name: Smoke test staging
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SSH key and pinned host key
         run: |
-          ssh -i ~/.ssh/deploy_key "${VPS_USER}@${VPS_HOST}" \
-            'WACONTROL_SOURCE_TARBALL=/tmp/wacontrol-source.tar.gz bash -s' \
-            < scripts/vps-deploy.sh
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
-      - name: Health check
+      - name: Smoke staging on the server
+        # The forced command runs the provisioned portal-smoke copy against
+        # the server's pinned staging URL.
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "smoke staging"
+
+      - name: Smoke staging from CI
+        # The repository copy of the smoke script runs from the runner
+        # against the public staging URL — this validates the whole public
+        # path (DNS, Caddy, TLS), not only the server's own vantage.
+        run: bash scripts/smoke-test.sh "$STAGING_URL"
+
+  deploy-staging-manual:
+    name: Deploy branch to staging (manual)
+    # W3g rehearsal path: deploys the dispatched ref to staging only, so the
+    # release path can be exercised from any branch before merging to main.
+    # Manual runs skip the test job — the branch's tests are the PR's
+    # responsibility. The steps below mirror deploy-staging + smoke-staging
+    # exactly (same tarball, same forced commands, same secrets) so the
+    # manual path and the main-push path cannot drift; the workflow tests
+    # pin that. This job never touches production and never runs for push
+    # or pull_request events.
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'deploy-staging'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+    steps:
+      # workflow_dispatch checks out the ref chosen in the dispatch form,
+      # so a plain checkout lands on the branch being rehearsed.
+      - uses: actions/checkout@v4
+
+      - name: Package source
         run: |
-          for i in $(seq 1 12); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" https://wa.hayk.ae/login || true)
-            echo "attempt $i: HTTP $code"
-            if [ "$code" = "200" ]; then exit 0; fi
-            sleep 10
-          done
-          echo "Site did not return 200 on /login"
-          exit 1
+          # Write outside the checkout: archiving "." while creating the
+          # tarball inside it makes GNU tar fail with "file changed as we
+          # read it".
+          tar \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='.git' \
+            --exclude='.wwebjs_auth' \
+            --exclude='.wwebjs_cache' \
+            --exclude='public/uploads' \
+            --exclude='prisma/dev.db' \
+            --exclude='data/documents' \
+            --exclude='*.tar.gz' \
+            --exclude='*.db-journal' \
+            -czf "$RUNNER_TEMP/portal-source.tar.gz" .
+          du -h "$RUNNER_TEMP/portal-source.tar.gz"
+
+      - name: Install SSH key and pinned host key
+        # Secrets reach the shell only through env vars and are written to
+        # files with printf — never echoed to the log. The host key comes
+        # from the pinned DEPLOY_KNOWN_HOSTS secret rather than scanning the
+        # host at deploy time and trusting whatever answers.
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload source to the deploy user's incoming directory
+        # Same stdin-streamed upload as the push path: scp/sftp cannot pass
+        # the forced command.
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "upload portal-source.tar.gz" < "$RUNNER_TEMP/portal-source.tar.gz"
+
+      - name: Deploy staging via the forced-command interface
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy staging portal-source.tar.gz"
+
+      - name: Smoke staging on the server
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "smoke staging"
+
+      - name: Smoke staging from CI
+        run: bash scripts/smoke-test.sh "$STAGING_URL"
+
+  deploy-production:
+    name: Deploy to production
+    # Staging smoke must pass before anything touches production.
+    needs: smoke-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package source
+        # Same commit as the validated staging deploy; the concurrency group
+        # guarantees no other run interleaves.
+        run: |
+          tar \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='.git' \
+            --exclude='.wwebjs_auth' \
+            --exclude='.wwebjs_cache' \
+            --exclude='public/uploads' \
+            --exclude='prisma/dev.db' \
+            --exclude='data/documents' \
+            --exclude='*.tar.gz' \
+            --exclude='*.db-journal' \
+            -czf "$RUNNER_TEMP/portal-source.tar.gz" .
+          du -h "$RUNNER_TEMP/portal-source.tar.gz"
+
+      - name: Install SSH key and pinned host key
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload source to the deploy user's incoming directory
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "upload portal-source.tar.gz" < "$RUNNER_TEMP/portal-source.tar.gz"
+
+      - name: Deploy production via the forced-command interface
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy production portal-source.tar.gz"
+
+  smoke-production:
+    name: Smoke test production
+    needs: deploy-production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      PORTAL_URL: ${{ vars.PORTAL_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SSH key and pinned host key
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Smoke production on the server
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "smoke production"
+
+      - name: Smoke production from CI
+        run: bash scripts/smoke-test.sh "$PORTAL_URL"
+
+  drill:
+    name: Staging drill (manual)
+    # Manual drill runs only; `action` is a choice input, so no other value
+    # can reach the ssh command line. The deploy-staging choice is handled
+    # by the deploy-staging-manual job above, not here.
+    if: github.event_name == 'workflow_dispatch' && startsWith(inputs.action, 'drill-')
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DRILL_ACTION: ${{ inputs.action }}
+    steps:
+      - name: Install SSH key and pinned host key
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Run the drill via the forced-command interface
+        # Both drills operate on staging only; the dispatcher enforces that
+        # again server-side. Production is never a drill target.
+        run: ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" "$DRILL_ACTION"

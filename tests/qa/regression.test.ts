@@ -7,6 +7,7 @@
  */
 
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 import type { PrismaClient } from "@prisma/client";
 import { ensureSchema, getPrisma } from "../travel-db/helpers";
 
@@ -56,11 +57,11 @@ beforeAll(async () => {
 describe("GET /api/chats", () => {
   it("returns chats with the latest message for any session, 401 when anonymous", async () => {
     session(null);
-    expect((await chatsGET()).status).toBe(401);
+    expect((await chatsGET(new NextRequest("http://localhost:3000/api/chats"))).status).toBe(401);
 
     const user = await prisma.user.findUnique({ where: { email: "reg-user@test.io" } });
     session({ id: user!.id, role: "USER", email: user!.email });
-    const res = await chatsGET();
+    const res = await chatsGET(new NextRequest("http://localhost:3000/api/chats"));
     expect(res.status).toBe(200);
     const chats = await res.json();
     expect(chats).toHaveLength(1);

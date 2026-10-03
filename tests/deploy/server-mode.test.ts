@@ -4,9 +4,12 @@
  *
  * Trial mode (WACONTROL_MODE=trial) must start no WhatsApp client and no
  * background job; WACONTROL_NOTIFICATIONS_PAUSED=1 must start no notification
- * worker. resolveServerRuntime() is the single source of truth for those
- * decisions; the server.ts wiring checks below pin each gated call site to
- * its runtime flag so the gate cannot be bypassed accidentally.
+ * worker. Staging (W3b) runs in normal mode but with WHATSAPP_DISABLED=1,
+ * which gates ONLY the WhatsApp client — the notification worker and the
+ * overdue sweep stay up so staging e-mail can flow. resolveServerRuntime()
+ * is the single source of truth for those decisions; the server.ts wiring
+ * checks below pin each gated call site to its runtime flag so the gate
+ * cannot be bypassed accidentally.
  */
 
 import { readFileSync } from "fs";
@@ -54,6 +57,43 @@ describe("resolveServerRuntime", () => {
     expect(resolveServerRuntime({ NODE_ENV: "test", WACONTROL_MODE: "trial " }).whatsapp).toBe(true);
     expect(resolveServerRuntime({ NODE_ENV: "test", WACONTROL_NOTIFICATIONS_PAUSED: "true" }).notificationWorker).toBe(true);
     expect(resolveServerRuntime({ NODE_ENV: "test", WACONTROL_NOTIFICATIONS_PAUSED: "0" }).notificationWorker).toBe(true);
+  });
+});
+
+describe("resolveServerRuntime WHATSAPP_DISABLED gate (staging, W3b)", () => {
+  it("WHATSAPP_DISABLED=1 in normal mode gates only the WhatsApp client", () => {
+    const rt = resolveServerRuntime({ NODE_ENV: "test", WHATSAPP_DISABLED: "1" });
+    expect(rt.mode).toBe("normal");
+    expect(rt.whatsapp).toBe(false);
+    expect(rt.notificationWorker).toBe(true);
+    expect(rt.overdueSweep).toBe(true);
+    expect(rt.notificationsPaused).toBe(false);
+  });
+
+  it("only the exact value '1' disables the WhatsApp client", () => {
+    expect(resolveServerRuntime({ NODE_ENV: "test", WHATSAPP_DISABLED: "0" }).whatsapp).toBe(true);
+    expect(resolveServerRuntime({ NODE_ENV: "test", WHATSAPP_DISABLED: "true" }).whatsapp).toBe(true);
+    expect(resolveServerRuntime({ NODE_ENV: "test", WHATSAPP_DISABLED: " 1" }).whatsapp).toBe(true);
+  });
+
+  it("combines with the paused gate: no WhatsApp client and no notification worker", () => {
+    const rt = resolveServerRuntime({
+      NODE_ENV: "test",
+      WHATSAPP_DISABLED: "1",
+      WACONTROL_NOTIFICATIONS_PAUSED: "1",
+    });
+    expect(rt.mode).toBe("normal");
+    expect(rt.whatsapp).toBe(false);
+    expect(rt.notificationWorker).toBe(false);
+    expect(rt.overdueSweep).toBe(true);
+  });
+
+  it("trial still wins over WHATSAPP_DISABLED: every background writer stays off", () => {
+    const rt = resolveServerRuntime({ NODE_ENV: "test", WACONTROL_MODE: "trial", WHATSAPP_DISABLED: "1" });
+    expect(rt.mode).toBe("trial");
+    expect(rt.whatsapp).toBe(false);
+    expect(rt.notificationWorker).toBe(false);
+    expect(rt.overdueSweep).toBe(false);
   });
 });
 

@@ -129,20 +129,20 @@ beforeEach(() => {
 describe("GET /api/chats", () => {
   it("401 anonymous and inactive; 403 ADVISOR/VALIDATOR; 200 USER and ADMIN", async () => {
     login(null);
-    expect((await chatsGET()).status).toBe(401);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(401);
     login(inactive);
-    expect((await chatsGET()).status).toBe(401);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(401);
 
     for (const who of [advisor, validator]) {
       login(who);
-      const res = await chatsGET();
+      const res = await chatsGET(req("http://localhost:3000/api/chats"));
       expect(res.status).toBe(403);
       expect((await res.json()).error).toBe("Forbidden");
     }
 
     for (const who of [user, admin]) {
       login(who);
-      const res = await chatsGET();
+      const res = await chatsGET(req("http://localhost:3000/api/chats"));
       expect(res.status).toBe(200);
       expect((await res.json()).some((c: any) => c.id === chat.id)).toBe(true);
     }
@@ -209,31 +209,31 @@ describe("POST /api/send", () => {
 describe("GET /api/whatsapp/status", () => {
   it("401 anonymous and inactive", async () => {
     login(null);
-    expect((await statusGET()).status).toBe(401);
+    expect((await statusGET(req("http://localhost:3000/api/whatsapp/status"))).status).toBe(401);
     login(inactive);
-    expect((await statusGET()).status).toBe(401);
+    expect((await statusGET(req("http://localhost:3000/api/whatsapp/status"))).status).toBe(401);
   });
 
   it("403 for ADVISOR and VALIDATOR", async () => {
     for (const who of [advisor, validator]) {
       login(who);
-      expect((await statusGET()).status).toBe(403);
+      expect((await statusGET(req("http://localhost:3000/api/whatsapp/status"))).status).toBe(403);
     }
   });
 
   it("USER receives only { connected } — no state, info, QR, version or startedAt", async () => {
     login(user);
-    const res = await statusGET();
+    const res = await statusGET(req("http://localhost:3000/api/whatsapp/status"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ connected: true });
 
     waState.current = { ...waState.current, state: "qr" };
-    expect(await (await statusGET()).json()).toEqual({ connected: false });
+    expect(await (await statusGET(req("http://localhost:3000/api/whatsapp/status"))).json()).toEqual({ connected: false });
   });
 
   it("ADMIN receives the full details incl. QR, version and startedAt", async () => {
     login(admin);
-    const res = await statusGET();
+    const res = await statusGET(req("http://localhost:3000/api/whatsapp/status"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       state: "ready",
@@ -309,29 +309,29 @@ describe("page /dashboard (inbox roles only)", () => {
 describe("role change / deactivation takes effect on the next request (same unexpired session)", () => {
   it("chats: USER → 200; DB role flipped to ADVISOR → 403; deactivated → 401", async () => {
     login(user); // the JWT-claimed role stays "USER" throughout
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
 
     await prisma.user.update({ where: { id: user.id }, data: { role: "ADVISOR" } });
     login(user, "USER"); // simulate a stale JWT still claiming USER
-    const denied = await chatsGET();
+    const denied = await chatsGET(req("http://localhost:3000/api/chats"));
     expect(denied.status).toBe(403);
 
     await prisma.user.update({ where: { id: user.id }, data: { active: false } });
-    expect((await chatsGET()).status).toBe(401);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(401);
 
     // Restore for other suites in this file.
     await prisma.user.update({ where: { id: user.id }, data: { role: "USER", active: true } });
     login(user);
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
   });
 
   it("status: a stale JWT claiming USER cannot read admin details after a role change", async () => {
     login(user); // DB role USER, JWT role USER
-    expect(await (await statusGET()).json()).toEqual({ connected: true });
+    expect(await (await statusGET(req("http://localhost:3000/api/whatsapp/status"))).json()).toEqual({ connected: true });
 
     await prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
     login(user, "USER"); // same unexpired token, still claiming USER
-    const res = await statusGET();
+    const res = await statusGET(req("http://localhost:3000/api/whatsapp/status"));
     expect(res.status).toBe(200);
     expect((await res.json()).qrSvg).toBe("<svg>pairing-qr</svg>"); // now allowed: DB says ADMIN
 
@@ -346,7 +346,7 @@ describe("session version revocation takes effect on the next request (W1b)", ()
       data: { email: "acc-bumped@test.io", name: "Bumped", password: "x", role: "USER" },
     });
     login(bumped, undefined, 0);
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
     expect(await redirectTarget(() => HomePage())).toBe("/dashboard");
 
     // Revoke all issued sessions: bump User.sessionVersion atomically (the
@@ -354,18 +354,18 @@ describe("session version revocation takes effect on the next request (W1b)", ()
     await prisma.user.update({ where: { id: bumped.id }, data: { sessionVersion: { increment: 1 } } });
 
     login(bumped, undefined, 0); // the stale token still claims the old sv
-    expect((await chatsGET()).status).toBe(401);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(401);
     expect(await redirectTarget(() => HomePage())).toBe("/login");
 
     // A pre-W1b token without any sv claim counts as 0 — a real version, not
     // a bypass — so the bump revokes it like any other stale token.
     login(bumped);
-    expect((await chatsGET()).status).toBe(401);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(401);
     expect(await redirectTarget(() => HomePage())).toBe("/login");
 
     // Re-login at the current version restores access.
     login(bumped, undefined, 1);
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
     expect(await redirectTarget(() => HomePage())).toBe("/dashboard");
   });
 });
@@ -420,20 +420,20 @@ describe("W2 permission overrides (perm-inbox)", () => {
 
   it("WhatsApp-only user (USER preset): view+send allowed, admin surfaces denied", async () => {
     login(user);
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
     expect((await sendPOST(sendReq())).status).toBe(200);
     expect(sendWhatsAppMessageMock.fn).toHaveBeenCalled();
 
     // whatsapp.admin is not in the USER preset: only { connected }, no actions.
-    expect(await (await statusGET()).json()).toEqual({ connected: true });
+    expect(await (await statusGET(req("http://localhost:3000/api/whatsapp/status"))).json()).toEqual({ connected: true });
     expect((await statusPOST(statusActionReq())).status).toBe(401);
   });
 
   it("view-but-no-send user: reads the inbox, cannot send", async () => {
     login(viewOnly);
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
     expect((await messagesGET(messagesReq())).status).toBe(200);
-    expect(await (await statusGET()).json()).toEqual({ connected: true });
+    expect(await (await statusGET(req("http://localhost:3000/api/whatsapp/status"))).json()).toEqual({ connected: true });
 
     // The deny wins over the USER preset; the route must stop before touching
     // WhatsApp or writing the audit entry.
@@ -444,31 +444,31 @@ describe("W2 permission overrides (perm-inbox)", () => {
 
   it("user denied inbox view: every inbox surface denies, send included", async () => {
     login(noInbox);
-    expect((await chatsGET()).status).toBe(403);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(403);
     expect((await messagesGET(messagesReq())).status).toBe(403);
     expect((await sendPOST(sendReq())).status).toBe(403);
     expect(sendWhatsAppMessageMock.fn).not.toHaveBeenCalled();
-    expect((await statusGET()).status).toBe(403);
+    expect((await statusGET(req("http://localhost:3000/api/whatsapp/status"))).status).toBe(403);
     expect((await statusPOST(statusActionReq())).status).toBe(401);
     expect(await redirectTarget(() => DashboardPage())).toBe("/travel");
   });
 
   it("travel-only user (ADVISOR preset): no inbox access", async () => {
     login(advisor);
-    expect((await chatsGET()).status).toBe(403);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(403);
     expect((await messagesGET(messagesReq())).status).toBe(403);
     expect((await sendPOST(sendReq())).status).toBe(403);
     expect(sendWhatsAppMessageMock.fn).not.toHaveBeenCalled();
-    expect((await statusGET()).status).toBe(403);
+    expect((await statusGET(req("http://localhost:3000/api/whatsapp/status"))).status).toBe(403);
     expect((await statusPOST(statusActionReq())).status).toBe(401);
     expect(await redirectTarget(() => DashboardPage())).toBe("/travel");
   });
 
   it("travel-only user granted whatsapp.inbox.view: reads but cannot send", async () => {
     login(travelGranted);
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
     expect((await messagesGET(messagesReq())).status).toBe(200);
-    expect(await (await statusGET()).json()).toEqual({ connected: true });
+    expect(await (await statusGET(req("http://localhost:3000/api/whatsapp/status"))).json()).toEqual({ connected: true });
     expect((await sendPOST(sendReq())).status).toBe(403);
     expect(sendWhatsAppMessageMock.fn).not.toHaveBeenCalled();
     expect(await redirectTarget(() => DashboardPage())).toBeNull();
@@ -476,26 +476,26 @@ describe("W2 permission overrides (perm-inbox)", () => {
 
   it("anonymous: every inbox surface answers 401", async () => {
     login(null);
-    expect((await chatsGET()).status).toBe(401);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(401);
     expect((await messagesGET(messagesReq())).status).toBe(401);
     expect((await sendPOST(sendReq())).status).toBe(401);
-    expect((await statusGET()).status).toBe(401);
+    expect((await statusGET(req("http://localhost:3000/api/whatsapp/status"))).status).toBe(401);
     expect((await statusPOST(statusActionReq())).status).toBe(401);
   });
 
   it("admin denied whatsapp.admin: loses details and actions, keeps inbox", async () => {
     login(adminDemoted);
-    const res = await statusGET();
+    const res = await statusGET(req("http://localhost:3000/api/whatsapp/status"));
     expect(res.status).toBe(200);
     // The deny wins even against the ADMIN preset: downgraded to { connected }.
     expect(await res.json()).toEqual({ connected: true });
     expect((await statusPOST(statusActionReq())).status).toBe(401);
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
   });
 
   it("USER granted whatsapp.admin: full status and actions", async () => {
     login(userPromoted);
-    const res = await statusGET();
+    const res = await statusGET(req("http://localhost:3000/api/whatsapp/status"));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.qrSvg).toBe("<svg>pairing-qr</svg>");
@@ -511,14 +511,14 @@ describe("W2 permission overrides (perm-inbox)", () => {
       data: { email: "acc-w2-flip@test.io", name: "Flip", password: "x", role: "USER" },
     });
     login(flipped);
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
 
     // Overrides are resolved from the DB per request — no session refresh needed.
     await prisma.userPermission.create({ data: { userId: flipped.id, key: "whatsapp.inbox.view", allowed: false } });
     login(flipped); // same unexpired session claims
-    expect((await chatsGET()).status).toBe(403);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(403);
 
     await prisma.userPermission.deleteMany({ where: { userId: flipped.id } });
-    expect((await chatsGET()).status).toBe(200);
+    expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(200);
   });
 });
