@@ -101,12 +101,12 @@ export const MAILTO_SUBJECTS: MailtoSubjects = {
   partnerAccess: "Nare partner portal — access request",
 } as const;
 
-export interface ForgotPasswordContent {
+export interface ForgotAccessContent {
   readonly text: string;
   readonly mailto: string;
 }
 
-export const FORGOT_PASSWORD: ForgotPasswordContent = {
+export const FORGOT_ACCESS: ForgotAccessContent = {
   text: "Forgot your password? Contact your Nare account manager",
   mailto: CONTACT.email,
 } as const;

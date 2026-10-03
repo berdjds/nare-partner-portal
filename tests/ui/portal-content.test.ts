@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   BENEFITS,
   CONTACT,
-  FORGOT_PASSWORD,
+  FORGOT_ACCESS,
   HERO,
   HOW_IT_WORKS_STEPS,
   INDEXABLE,
@@ -82,11 +82,11 @@ describe("portal content: contact details", () => {
   });
 
   it("provides forgot-password text pointing at the contact email", () => {
-    expect(FORGOT_PASSWORD.text).toBe(
+    expect(FORGOT_ACCESS.text).toBe(
       "Forgot your password? Contact your Nare account manager",
     );
-    expect(FORGOT_PASSWORD.mailto).toBe("info@nare.am");
-    expect(FORGOT_PASSWORD.mailto).toBe(CONTACT.email);
+    expect(FORGOT_ACCESS.mailto).toBe("info@nare.am");
+    expect(FORGOT_ACCESS.mailto).toBe(CONTACT.email);
   });
 });
 
@@ -119,7 +119,7 @@ describe("portal content: wording guards", () => {
     ...BENEFITS,
     LOGIN_PANEL.headline,
     ...LOGIN_PANEL.bullets,
-    FORGOT_PASSWORD.text,
+    FORGOT_ACCESS.text,
   ].join("\n");
 
   it("contains no pricing words", () => {
