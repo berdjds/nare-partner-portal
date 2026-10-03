@@ -19,7 +19,7 @@
 WAControl/
 ├── app/                    # Next.js App Router pages and API routes
 │   ├── (pages)
-│   │   ├── page.tsx        # Root redirect
+│   │   ├── page.tsx        # Public landing page (signed-out) + role redirect (signed-in)
 │   │   ├── login/          # Login page
 │   │   ├── admin/          # Admin dashboard
 │   │   ├── dashboard/      # Chat dashboard

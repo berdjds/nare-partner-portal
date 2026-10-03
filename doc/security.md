@@ -173,7 +173,9 @@ under-privileged).
 `/travel`; the dashboard requires the view permission of at least one WhatsApp account
 (W3: `whatsapp.inbox.view` for marhaba, `whatsapp.nare.view` for nare — without any →
 `/travel`, unknown/inactive sessions → `/login`) and shows an account switcher limited to
-the accounts the user may view. ADMIN continues to `/admin`, USER to `/dashboard`. The
+the accounts the user may view. ADMIN continues to `/admin`, USER to `/dashboard`.
+Signed-out visitors of `/` (no session, or an unknown/inactive/revoked user row) get the
+public landing page (W5a) instead of a `/login` redirect. The
 dashboard hides the composer, attachment and new-message controls when the selected
 account's send permission is missing; the admin page's accounts tab shows only the accounts
 the caller may administer (the `/api/whatsapp/accounts` API answers 401 when there are
