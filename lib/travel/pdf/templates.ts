@@ -21,6 +21,7 @@ import type {
   TravelerSetup,
 } from "@/lib/travel/contracts";
 import { buildTraceRows } from "../trace-table";
+import { DEFAULT_BRAND_COLOR } from "../branding";
 import type { QuotationPdfInput } from "./types";
 import { formatDisplayDate, formatDisplayDateRange } from "../engine/dates";
 import { displayMoneyCeil, groupMoney } from "../engine/money";
@@ -190,7 +191,6 @@ const BASE_CSS = `
 
 /** Brand colors arrive from settings/snapshots — only a strict #rrggbb is ever
  *  interpolated into CSS; anything else falls back to the default navy. */
-const DEFAULT_BRAND_COLOR = "#16305b";
 const BRAND_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 function brandColor(input: QuotationPdfInput): string {

@@ -14,6 +14,18 @@ export const badgeStatusStyles = {
   info: "border-sky-200 bg-sky-50 text-sky-700",
 } as const;
 
+// Text-only companions for inline status messages (error text, unsaved-changes
+// hints) that are not badges: same hues as the map above, so status colour
+// keeps its single home here instead of leaking raw palette classes into
+// feature components.
+export const badgeStatusTextStyles = {
+  neutral: "text-zinc-600",
+  warning: "text-amber-700",
+  success: "text-emerald-700",
+  danger: "text-red-700",
+  info: "text-sky-700",
+} as const;
+
 const badgeVariants = cva(
   "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {

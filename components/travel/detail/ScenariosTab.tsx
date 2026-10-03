@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeStatusTextStyles } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import { COST_CATEGORIES, PRICING_BASES } from "@/lib/travel/contracts";
 import { nightsBetween, splitStayIntervals, formatDisplayDate, formatDisplayDateRange } from "@/lib/travel/engine/dates";
 import DateField from "../DateField";
@@ -505,10 +506,10 @@ export default function ScenariosTab({ ctx }: { ctx: DetailContext }) {
                 summary after every save.
                 {editable ? "" : " Read-only for this version status."}
                 {editable && dirty && (
-                  <span className="block text-amber-700">Unsaved changes — save to update the prices above.</span>
+                  <span className={cn("block", badgeStatusTextStyles.warning)}>Unsaved changes — save to update the prices above.</span>
                 )}
                 {editable && hasInvalidStayDates && (
-                  <span className="block text-red-600">
+                  <span className={cn("block", badgeStatusTextStyles.danger)}>
                     Check-out must be after check-in on every stay — fix the dates before saving.
                   </span>
                 )}
@@ -750,7 +751,7 @@ export default function ScenariosTab({ ctx }: { ctx: DetailContext }) {
                   ))}
                 </ul>
               ) : (
-                <p className="text-red-600">{splitPreview}</p>
+                <p className={badgeStatusTextStyles.danger}>{splitPreview}</p>
               )}
             </div>
           )}
@@ -890,7 +891,7 @@ function StayEditor({
         )}
       </div>
       {editable && invalidDates && (
-        <p className="mt-2 text-xs text-red-600">Check-out must be after check-in.</p>
+        <p className={cn("mt-2 text-xs", badgeStatusTextStyles.danger)}>Check-out must be after check-in.</p>
       )}
       {editable && !stay.hotelProductId && (
         <div className="mt-2 grid gap-2 sm:grid-cols-2">

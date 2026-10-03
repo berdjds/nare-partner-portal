@@ -8,6 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { badgeStatusTextStyles } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { DEFAULT_BRAND_COLOR } from "@/lib/travel/branding";
 import { PageHeader } from "./TravelShell";
 import { apiError, formatDateTime } from "./utils";
 import type { PolicyView, TravelSettingsView, TravelUser } from "./types";
@@ -238,7 +241,7 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                             {u.phone ? (
                               <span className="text-muted-foreground"> · +{u.phone}</span>
                             ) : (
-                              <span className="font-medium text-amber-600">
+                              <span className={cn("font-medium", badgeStatusTextStyles.warning)}>
                                 {" "}· no phone — set it in Admin → Users
                               </span>
                             )}
@@ -248,7 +251,7 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                     })}
                   </div>
                   {validatorIds.some((id) => !assignableUsers.find((u) => u.id === id)?.phone) && (
-                    <p className="mt-1 text-xs font-medium text-amber-600">
+                    <p className={cn("mt-1 text-xs font-medium", badgeStatusTextStyles.warning)}>
                       Some selected members have no WhatsApp phone — they will be skipped for WhatsApp delivery.
                     </p>
                   )}
@@ -316,12 +319,12 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                     <input
                       type="color"
                       className="h-9 w-12 cursor-pointer rounded border"
-                      value={branding.brandColor || "#16305b"}
+                      value={branding.brandColor || DEFAULT_BRAND_COLOR}
                       onChange={(e) => setBranding({ ...branding, brandColor: e.target.value })}
                     />
                     <Input
                       className="w-28 font-mono"
-                      placeholder="#16305b"
+                      placeholder={DEFAULT_BRAND_COLOR}
                       value={branding.brandColor}
                       onChange={(e) => setBranding({ ...branding, brandColor: e.target.value })}
                     />
@@ -337,7 +340,7 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                     )}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Hex #rrggbb; defaults to navy #16305b on the PDF when unset.
+                    Hex #rrggbb; defaults to navy {DEFAULT_BRAND_COLOR} on the PDF when unset.
                   </p>
                 </div>
                 <Button type="submit" disabled={savingBranding}>

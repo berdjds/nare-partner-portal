@@ -13,7 +13,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { badgeStatusTextStyles } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import { QUOTE_STATUSES } from "@/lib/travel/contracts";
 import { formatDisplayDateRange, nightsBetween } from "@/lib/travel/engine/dates";
 import { PageHeader } from "./TravelShell";
@@ -376,7 +378,7 @@ export default function RequestsList({ role, userId, permissions }: RequestsList
                   <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
                 </div>
               </div>
-              {invalidDates && <p className="mt-2 text-xs text-red-600">End date must be after the start date.</p>}
+              {invalidDates && <p className={cn("mt-2 text-xs", badgeStatusTextStyles.danger)}>End date must be after the start date.</p>}
             </div>
             <Separator />
             <div>

@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { badgeStatusTextStyles } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -816,7 +817,7 @@ function ServiceDialog({
               <Label>
                 Capacity{" "}
                 {form.basis === "CAPACITY_BLOCK" ? (
-                  <span className="text-red-600">(required — people per group)</span>
+                  <span className={badgeStatusTextStyles.danger}>(required — people per group)</span>
                 ) : (
                   "(optional)"
                 )}
