@@ -15,6 +15,8 @@
     --popover-foreground: 240 10% 3.9%;
     --primary: 152 45% 26%;
     --primary-foreground: 140 30% 97%;
+    /* Nare brand blue (W4 token set; W5a landing hero gradient stop). */
+    --brand: 203 89% 53%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
     --muted: 240 4.8% 95.9%;

@@ -2,7 +2,8 @@
  * Interim access policy route tests (W1, msg-access): anonymous / USER /
  * ADVISOR / VALIDATOR / inactive / ADMIN against the inbox APIs
  * (/api/chats, /api/messages, /api/send), GET+POST /api/whatsapp/status and
- * the / + /dashboard page redirects. Sessions and the WhatsApp service are
+ * the / + /dashboard pages (/ redirects signed-in users by role and renders
+ * the public landing page to signed-out visitors — W5a). Sessions and the WhatsApp service are
  * mocked; routes run against the seeded throwaway DB, so the database-backed
  * gates (lib/access-policy.ts) are exercised end to end — including that a
  * role change or deactivation takes effect on the next request with the same
@@ -265,12 +266,12 @@ describe("POST /api/whatsapp/status", () => {
   });
 });
 
-describe("page / (role-based redirect)", () => {
-  it("anonymous → /login; inactive → /login", async () => {
+describe("page / (landing for signed-out, role redirects for signed-in)", () => {
+  it("anonymous and inactive get the public landing page (no redirect)", async () => {
     login(null);
-    expect(await redirectTarget(() => HomePage())).toBe("/login");
+    expect(await redirectTarget(() => HomePage())).toBeNull();
     login(inactive);
-    expect(await redirectTarget(() => HomePage())).toBe("/login");
+    expect(await redirectTarget(() => HomePage())).toBeNull();
   });
 
   it("ADMIN → /admin; USER → /dashboard; ADVISOR/VALIDATOR → /travel", async () => {
@@ -340,7 +341,7 @@ describe("role change / deactivation takes effect on the next request (same unex
 });
 
 describe("session version revocation takes effect on the next request (W1b)", () => {
-  it("a stale sv loses the inbox (401 on /api/chats, /login on /) until the session carries the current sv", async () => {
+  it("a stale sv loses the inbox (401 on /api/chats, the signed-out landing on /) until the session carries the current sv", async () => {
     // Dedicated user: the shared fixtures above are reused by other suites.
     const bumped = await prisma.user.create({
       data: { email: "acc-bumped@test.io", name: "Bumped", password: "x", role: "USER" },
@@ -355,13 +356,13 @@ describe("session version revocation takes effect on the next request (W1b)", ()
 
     login(bumped, undefined, 0); // the stale token still claims the old sv
     expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(401);
-    expect(await redirectTarget(() => HomePage())).toBe("/login");
+    expect(await redirectTarget(() => HomePage())).toBeNull(); // revoked = signed out: landing, not a redirect
 
     // A pre-W1b token without any sv claim counts as 0 — a real version, not
     // a bypass — so the bump revokes it like any other stale token.
     login(bumped);
     expect((await chatsGET(req("http://localhost:3000/api/chats"))).status).toBe(401);
-    expect(await redirectTarget(() => HomePage())).toBe("/login");
+    expect(await redirectTarget(() => HomePage())).toBeNull();
 
     // Re-login at the current version restores access.
     login(bumped, undefined, 1);
