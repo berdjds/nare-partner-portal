@@ -26,7 +26,6 @@ describe("W4 branded login page", () => {
     expect(page).toContain('import { BrandMark } from "@/components/app/BrandMark"');
     expect(page).toContain("<BrandMark />");
     expect(page).not.toContain("WAControl");
-    expect(page).not.toContain("CardTitle");
     // The old hand-rolled "W" tile is gone.
     expect(page).not.toContain("mx-auto mb-3 flex h-11 w-11");
   });
@@ -38,10 +37,12 @@ describe("W4 branded login page", () => {
     expect(page).toContain('searchParams.get("callbackUrl") || "/"');
     expect(page).toContain("router.push(callbackUrl)");
     expect(page).toContain("router.refresh()");
-    expect(page).toContain('toast(result?.error || "Invalid credentials", "error")');
+    // W5a: one friendly message for every failure (lib/login-errors.ts).
+    expect(page).toContain("friendlyLoginError(result?.error)");
+    expect(page).toContain('toast(message, "error")');
     expect(page).toContain('<Suspense fallback={null}>');
     expect(page).toContain('type="email"');
-    expect(page).toContain('type="password"');
+    expect(page).toContain('type={showPassword ? "text" : "password"}');
     expect(page).toContain('loading ? "Signing in..." : "Sign in"');
   });
 

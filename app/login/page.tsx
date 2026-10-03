@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { friendlyLoginError } from "@/lib/login-errors";
+import { BrandMark } from "@/components/app/BrandMark";
 import { FORGOT_ACCESS, LOGIN_PANEL, PRODUCT_NAME } from "@/lib/portal-content";
 
 function LoginForm() {
@@ -80,6 +81,9 @@ function LoginForm() {
         <span className="mb-6 text-lg font-bold uppercase tracking-[0.2em] text-primary lg:hidden">
           {PRODUCT_NAME}
         </span>
+        <div className="mb-6">
+          <BrandMark />
+        </div>
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             <CardTitle className="text-xl">Sign in</CardTitle>

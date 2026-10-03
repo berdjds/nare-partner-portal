@@ -211,8 +211,9 @@ describe("design and wording guards (source-level)", () => {
     expect(source).toContain("bg-gradient-to-br");
     expect(source).toContain("from-primary");
     expect(source).toContain("to-brand");
-    expect(source).not.toContain("/brand/");
-    expect(renderLogin()).not.toContain("/brand/");
+    // The Nare icon comes from the shared BrandMark (W4 asset on main).
+    expect(source).toContain("<BrandMark />");
+    expect(renderLogin()).toContain("/brand/nare-icon.webp");
   });
 
   it("takes its copy from the content file and the error mapper", () => {
