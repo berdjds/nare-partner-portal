@@ -20,6 +20,7 @@ WAControl connects to WhatsApp Web using Puppeteer and the `whatsapp-web.js` lib
 - [Authentication](./authentication.md) — roles, sessions, and login flow.
 - [Components](./components.md) — React components and hooks.
 - [Design System](./design-system.md) — brand tokens, shared app shell, navigation model, and colour rules.
+- [Partners](./partners.md) — B2B partner enrollment (W5b): online application with trade licence, private KYC documents, staff review and approval.
 - [Deployment](./deployment.md) — portal.nare.am release path: provisioning, CI pipeline, staging, rollback/restore, backups and drills.
 - [Security](./security.md) — security considerations and best practices.
 - [Troubleshooting](./troubleshooting.md) — common issues and fixes.
