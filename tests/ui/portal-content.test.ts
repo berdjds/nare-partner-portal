@@ -71,7 +71,7 @@ describe("portal content: benefits and login panel", () => {
 
 describe("portal content: contact details", () => {
   it("uses the exact contact email and both phone numbers", () => {
-    expect(CONTACT.email).toBe("info@nare.am");
+    expect(CONTACT.email).toBe("reservation@nare.am");
     expect(CONTACT.phones).toContain("+374 10 545046");
     expect(CONTACT.phones).toContain("+374 91 005046");
   });
@@ -85,7 +85,7 @@ describe("portal content: contact details", () => {
     expect(FORGOT_ACCESS.text).toBe(
       "Forgot your password? Contact your Nare account manager",
     );
-    expect(FORGOT_ACCESS.mailto).toBe("info@nare.am");
+    expect(FORGOT_ACCESS.mailto).toBe("reservation@nare.am");
     expect(FORGOT_ACCESS.mailto).toBe(CONTACT.email);
   });
 });

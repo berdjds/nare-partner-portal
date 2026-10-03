@@ -87,7 +87,7 @@ export interface ContactInfo {
 // Address and phone numbers taken from the public nare.am site —
 // owner to confirm before launch.
 export const CONTACT: ContactInfo = {
-  email: "info@nare.am",
+  email: "reservation@nare.am",
   phones: ["+374 10 545046", "+374 91 005046"],
 } as const;
 

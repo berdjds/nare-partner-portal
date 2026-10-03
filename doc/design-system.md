@@ -18,7 +18,7 @@ constants — pages and components never hard-code strings:
 - `HERO`, `HOW_IT_WORKS_STEPS`, `BENEFITS` — landing page headline, sub-line,
   CTA label, the three "how it works" steps, and the benefit list.
 - `LOGIN_PANEL` — headline and bullets for the login brand panel.
-- `CONTACT` — contact block (`info@nare.am`, `+374 10 545046`,
+- `CONTACT` — contact block (`reservation@nare.am`, `+374 10 545046`,
   `+374 91 005046`), taken from the public nare.am site and flagged in a code
   comment as "owner to confirm" before launch.
 - `MAILTO_SUBJECTS`, `FORGOT_ACCESS` — mailto subjects and the
