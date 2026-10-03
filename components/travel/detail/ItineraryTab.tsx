@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { CalendarDays, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeStatusTextStyles } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import { addDays, daysBetween, formatDisplayDate, formatDisplayDateRange } from "@/lib/travel/engine/dates";
 import { normalizeDayServices, type DayServiceItem, type ScenarioResultLine } from "@/lib/travel/contracts";
 import DateField from "@/components/travel/DateField";
@@ -541,7 +542,7 @@ export default function ItineraryTab({ ctx }: { ctx: DetailContext }) {
                         d.date >= ctx.detail.endDate ? (
                           <p className="mt-1 text-xs text-muted-foreground">Departure day — no overnight needed</p>
                         ) : (
-                          <p className="mt-1 text-xs text-amber-600">No stay covers this date</p>
+                          <p className={cn("mt-1 text-xs", badgeStatusTextStyles.warning)}>No stay covers this date</p>
                         )
                       )}
                     </div>

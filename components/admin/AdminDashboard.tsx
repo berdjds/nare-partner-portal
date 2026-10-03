@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,7 +46,7 @@ interface WhatsAppAccountRow {
 }
 
 export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { canAdminWhatsApp: boolean; currentUserId: string }) {
-  const { connected, unauthorized, whatsAppStates, disconnectSocket } = useSocket();
+  const { connected, unauthorized, whatsAppStates } = useSocket();
   const { toast } = useToast();
 
   const [users, setUsers] = useState<User[]>([]);
@@ -194,16 +193,6 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
     }
   }
 
-  async function handleSignOutEverywhere() {
-    try {
-      await axios.post("/api/auth/sign-out-everywhere");
-    } catch {
-      // Best effort: the local sign-out below still ends this session.
-    }
-    disconnectSocket();
-    signOut({ callbackUrl: "/login" });
-  }
-
   async function handleAccountAction(accountKey: string, action: "connect" | "reconnect" | "disconnect") {
     setBusyAccount(accountKey);
     try {
@@ -246,47 +235,18 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
   }));
 
   return (
-    <div className="min-h-screen bg-muted/40 p-4">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Admin Panel</h1>
-          <p className="text-sm text-muted-foreground">Manage WhatsApp connection, users, and logs.</p>
-          {buildInfo?.version && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Build: <Badge variant="outline">v{buildInfo.version}</Badge>{" "}
-              {buildInfo.startedAt && (
-                <span>· server up since {new Date(buildInfo.startedAt).toLocaleString()}</span>
-              )}
-            </p>
+    <div>
+      {/* The page header (title, navigation, sign out) lives in the shared
+          AppShell + PageHeader; only the client-side build indicator stays
+          here, just above the tabs. */}
+      {buildInfo?.version && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          Build: <Badge variant="outline">v{buildInfo.version}</Badge>{" "}
+          {buildInfo.startedAt && (
+            <span>· server up since {new Date(buildInfo.startedAt).toLocaleString()}</span>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
-            Dashboard
-          </Button>
-          <Button variant="outline" onClick={() => (window.location.href = "/calculator")}>
-            Calculator
-          </Button>
-          <Button variant="outline" onClick={() => (window.location.href = "/travel")}>
-            Travel
-          </Button>
-          <Button variant="outline" onClick={() => (window.location.href = "/admin/permissions")}>
-            Permissions report
-          </Button>
-          <Button variant="outline" onClick={handleSignOutEverywhere}>
-            Sign out everywhere
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              disconnectSocket();
-              signOut({ callbackUrl: "/login" });
-            }}
-          >
-            Sign out
-          </Button>
-        </div>
-      </header>
+        </p>
+      )}
 
       <Tabs defaultValue="accounts" className="space-y-4">
         <TabsList>

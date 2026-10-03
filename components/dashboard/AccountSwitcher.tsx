@@ -23,7 +23,7 @@ export interface AccountSwitcherProps {
 }
 
 /**
- * W3: per-account switcher for the chat dashboard header.
+ * W3: per-account switcher for the chat dashboard's slim toolbar (W4).
  * Presentational on purpose (no hooks, no portals) so tests can render it
  * with react-dom/server. With a single visible account there is nothing to
  * switch, so it renders null.

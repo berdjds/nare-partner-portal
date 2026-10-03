@@ -3,8 +3,17 @@
 import * as React from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { badgeStatusStyles } from "@/components/ui/badge";
 
 type ToastType = "success" | "error" | "info";
+
+// Toast status tints come from the badge status map so raw status palette
+// classes exist in exactly one place (components/ui/badge.tsx).
+const toastStatusStyles: Record<ToastType, string> = {
+  success: badgeStatusStyles.success,
+  error: badgeStatusStyles.danger,
+  info: badgeStatusStyles.info,
+};
 
 interface Toast {
   id: string;
@@ -44,9 +53,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             key={t.id}
             className={cn(
               "flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg",
-              t.type === "success" && "border-emerald-200 bg-emerald-50 text-emerald-900",
-              t.type === "error" && "border-red-200 bg-red-50 text-red-900",
-              t.type === "info" && "border-sky-200 bg-sky-50 text-sky-900"
+              toastStatusStyles[t.type]
             )}
           >
             <span className="text-sm font-medium">{t.message}</span>

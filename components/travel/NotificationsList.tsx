@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeStatusTextStyles } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
@@ -130,7 +131,7 @@ export default function NotificationsList({ role }: NotificationsListProps) {
                     <span className="line-clamp-2 text-xs">{d.body}</span>
                   </TableCell>
                   <TableCell className="max-w-xs">
-                    <span className="line-clamp-2 text-xs text-red-700">{d.lastError ?? ""}</span>
+                    <span className={cn("line-clamp-2 text-xs", badgeStatusTextStyles.danger)}>{d.lastError ?? ""}</span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-xs">{formatDateTime(d.createdAt)}</TableCell>
                   {isAdmin && (

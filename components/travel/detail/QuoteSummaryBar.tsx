@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { badgeStatusTextStyles } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { StateBadge, money } from "../utils";
 import type { DetailContext } from "./RequestDetail";
 
@@ -56,12 +58,12 @@ export default function QuoteSummaryBar({ ctx }: { ctx: DetailContext }) {
                       </span>
                     )}
                     {blockers > 0 && (
-                      <span className="text-red-600">
+                      <span className={badgeStatusTextStyles.danger}>
                         {blockers} blocker{blockers === 1 ? "" : "s"}
                       </span>
                     )}
                     {warnings > 0 && (
-                      <span className="text-amber-700">
+                      <span className={badgeStatusTextStyles.warning}>
                         {warnings} warning{warnings === 1 ? "" : "s"}
                       </span>
                     )}
@@ -76,7 +78,7 @@ export default function QuoteSummaryBar({ ctx }: { ctx: DetailContext }) {
           })
         )}
         {ctx.quoteError && (
-          <div className="flex items-center gap-2 pt-1 text-xs text-red-600">
+          <div className={cn("flex items-center gap-2 pt-1 text-xs", badgeStatusTextStyles.danger)}>
             <span>{ctx.quoteError} — showing the last known prices.</span>
             <Button variant="outline" size="sm" onClick={ctx.recalculateQuote}>
               Retry

@@ -5,8 +5,9 @@ import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
-  title: "WAControl - WhatsApp Manager",
-  description: "Read, send, and manage WhatsApp messages from the web.",
+  title: "Nare Travel and Tours — Portal",
+  description:
+    "One Nare Travel and Tours portal: travel requests, quotes, catalog, and the WhatsApp inbox in a single shared shell.",
 };
 
 export const viewport: Viewport = {

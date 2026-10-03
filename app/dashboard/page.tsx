@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getActiveUser } from "@/lib/access-policy";
 import { accountPermissions, hasPermission } from "@/lib/permissions";
 import { ensureDefaultAccounts, listAccounts } from "@/lib/whatsapp-accounts";
+import AppShell from "@/components/app/AppShell";
 import ChatDashboard, { type DashboardAccount } from "@/components/dashboard/ChatDashboard";
 
 export default async function DashboardPage() {
@@ -33,10 +34,13 @@ export default async function DashboardPage() {
   });
   if (accounts.length === 0) redirect("/travel");
 
+  // W4: the chat dashboard renders inside the shared shell (variant "full" —
+  // no max-width container, height fills the viewport below the mobile bar).
+  // Navigation and sign-out live in the shell, so the old admin-role prop
+  // (which only fed the Admin nav button) is gone.
   return (
-    <ChatDashboard
-      isAdminRole={user.role === "ADMIN"}
-      accounts={accounts}
-    />
+    <AppShell variant="full">
+      <ChatDashboard accounts={accounts} />
+    </AppShell>
   );
 }

@@ -4,6 +4,7 @@ import { readFile } from "fs/promises";
 import { join } from "path";
 import { authOptions } from "@/lib/auth";
 import { getActiveUser } from "@/lib/access-policy";
+import AppShell from "@/components/app/AppShell";
 import CalculatorFrame from "@/components/calculator/CalculatorFrame";
 
 export default async function CalculatorPage() {
@@ -19,5 +20,11 @@ export default async function CalculatorPage() {
   );
   const html = await readFile(filePath, "utf-8");
 
-  return <CalculatorFrame html={html} />;
+  // W4: the calculator renders inside the shared shell (variant "full" — the
+  // iframe fills the whole content width). Navigation lives in the shell.
+  return (
+    <AppShell variant="full">
+      <CalculatorFrame html={html} />
+    </AppShell>
+  );
 }

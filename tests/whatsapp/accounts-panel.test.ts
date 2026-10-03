@@ -92,7 +92,29 @@ describe("AccountsPanel", () => {
     expect(count(html, "Scan this QR code with WhatsApp")).toBe(1);
     expect(count(html, "Waiting for WhatsApp state...")).toBe(1);
     expect(html).toContain(">ready<");
-    expect(html).toContain(">qr<");
+    // The disabled nare account shows "Disabled" instead of its raw state.
+    expect(html).toContain(">Disabled<");
+    expect(html).not.toContain(">qr<");
+  });
+
+  it("shows 'Disabled' instead of the raw state for disabled accounts", () => {
+    const disabledInit = makeAccount({
+      key: "nare",
+      enabled: false,
+      // A disabled account never starts a client, so its lazy runtime would
+      // otherwise sit on "initializing" forever.
+      state: { state: "initializing", accountKey: "nare", info: "Initializing WhatsApp client..." },
+    });
+    const html = renderPanel({ accounts: [disabledInit] });
+    expect(html).toContain(">Disabled<");
+    expect(html).not.toContain(">initializing<");
+
+    // An enabled account with the same state still shows it verbatim.
+    const enabledInit = renderPanel({
+      accounts: [makeAccount({ key: "marhaba", enabled: true, state: { state: "initializing", accountKey: "marhaba" } })],
+    });
+    expect(enabledInit).toContain(">initializing<");
+    expect(enabledInit).not.toContain(">Disabled<");
   });
 
   it("shows the browser link state separately from the per-account WhatsApp state", () => {
