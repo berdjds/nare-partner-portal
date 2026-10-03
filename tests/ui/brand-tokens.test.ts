@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import path from "path";
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -132,8 +132,9 @@ describe("W4 brand tokens", () => {
     const brandMark = readRepoFile("components/app/BrandMark.tsx");
     expect(brandMark).toContain("Nare Travel and Tours");
     expect(brandMark).toContain("Portal");
-    expect(brandMark).toContain("bg-sidebar-primary");
-    expect(brandMark).toContain("text-sidebar-primary-foreground");
     expect(brandMark).toContain("text-sidebar-foreground");
+    // The mark is the real Nare icon from the brand repository.
+    expect(brandMark).toContain("/brand/nare-icon.webp");
+    expect(existsSync(path.join(REPO_ROOT, "public", "brand", "nare-icon.webp"))).toBe(true);
   });
 });

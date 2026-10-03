@@ -56,7 +56,7 @@ describe("W4 branded login page", () => {
     const mark = readRepoFile("components/app/BrandMark.tsx");
     expect(mark).toContain("Nare Travel and Tours");
     expect(mark).toContain("Portal");
-    expect(mark).toContain("bg-sidebar-primary");
+    expect(mark).toContain("/brand/nare-icon.webp");
     expect(mark).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });
