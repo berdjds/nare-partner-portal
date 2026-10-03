@@ -32,7 +32,7 @@ Server component that verifies the `ADMIN` role and renders `AdminDashboard`.
 
 ### `app/dashboard/page.tsx`
 
-Server component that verifies authentication and renders `ChatDashboard`, passing `isAdminRole` and the W3 `accounts` list — every WhatsApp account whose per-account view permission the user holds (`whatsapp.inbox.view` for marhaba, `whatsapp.nare.view` for nare), each with its `canSend`/`canAdmin` flags. Users who may view no account are redirected to `/travel`.
+Server component that verifies authentication and renders `ChatDashboard` inside the shared `AppShell` (W4, variant `full` — no max-width container, so the two-pane chat layout fills the viewport below the mobile bar). It passes the W3 `accounts` list — every WhatsApp account whose per-account view permission the user holds (`whatsapp.inbox.view` for marhaba, `whatsapp.nare.view` for nare), each with its `canSend`/`canAdmin` flags. Users who may view no account are redirected to `/travel`. Navigation and sign-out live in the shell; the old `isAdminRole` prop is gone.
 
 ## Feature Components
 
@@ -51,6 +51,8 @@ Main chat interface for:
 - Viewing message history.
 - Sending text and media messages.
 - Marking chats as read.
+
+W4: the dashboard renders inside the shared app shell (`components/app/AppShell.tsx`, variant `full`). Its old header (brand mark, Admin/Calculator/Travel navigation buttons, sign-out controls) is replaced by a slim toolbar holding only the account switcher, the New message action, and the socket/WhatsApp state badges; navigation and sign-out live in the shell sidebar.
 
 ## Hooks
 
@@ -80,8 +82,9 @@ const { socket, connected, unauthorized, whatsAppState, whatsAppStates, lastEven
   shows "initializing" when the server has reported a state.
 - `lastEvent` — Last `message` or `chat_update` event payload (account-scoped
   via `payload.accountKey`).
-- `disconnectSocket` — Disconnects the socket; the dashboards call it on
-  sign-out so the session cookie is not used after logout.
+- `disconnectSocket` — Disconnects the socket. Since W4 the sign-out controls
+  live in the shared app shell sidebar, which ends the session by navigating
+  away; the chat dashboard no longer calls it.
 
 The hook connects to `/api/socket` and listens for:
 - `connect` / `disconnect` / `connect_error`
@@ -106,8 +109,8 @@ detail workspace (itinerary, scenarios with split-stay preview, review actions, 
 history), review queue, templates, catalog/settings administration and notification delivery
 status. They follow the existing conventions (axios + useToast + Card/Tabs/Dialog, light
 theme). The client quotation PDF is generated server-side (`lib/travel/pdf/`); the UI only
-links to the authorized download route. Nav buttons to `/travel` were added to both existing
-dashboards.
+links to the authorized download route. Navigation between modules (dashboard, travel, calculator,
+admin) lives in the shared W4 app shell sidebar, not in per-page header buttons.
 
 Notable pieces: `CatalogAdmin.tsx` has create/edit dialogs for hotels and service products plus
 per-product rate editors (new rates start NEEDS_REVIEW); `ItineraryTab.tsx` generates

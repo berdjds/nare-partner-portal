@@ -7,11 +7,15 @@
  * account are redirected to /travel; anonymous, inactive or unknown sessions
  * go to /login.
  *
+ * Since W4 (chat shell) the page wraps ChatDashboard in the shared AppShell
+ * (variant "full"), so the returned element is the AppShell element and the
+ * ChatDashboard element — whose props are inspected directly — is nested at
+ * el.props.children. Neither element is ever rendered.
+ *
  * Only getServerSession is mocked; the page, the access policy, the
  * permission resolution and the default-account registry run against a
  * throwaway SQLite database (ensureDefaultAccounts() inside the page creates
- * the marhaba/nare rows). The ChatDashboard element is never rendered — its
- * props are inspected directly.
+ * the marhaba/nare rows).
  */
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -130,27 +134,29 @@ describe("DashboardPage W3 account gating", () => {
   it("gives a plain USER only the marhaba account", async () => {
     login(plainUser);
     const el: any = await DashboardPage();
-    expect(el.props.isAdminRole).toBe(false);
-    expect(el.props.accounts).toEqual([MARHABA_ENTRY]);
+    expect(el.props.variant).toBe("full");
+    expect(el.props.children.props.accounts).toEqual([MARHABA_ENTRY]);
   });
 
   it("gives a USER with whatsapp.nare.view both accounts, nare read-only", async () => {
     login(nareViewer);
     const el: any = await DashboardPage();
-    expect(el.props.accounts).toEqual([MARHABA_ENTRY, NARE_ENTRY]);
+    expect(el.props.variant).toBe("full");
+    expect(el.props.children.props.accounts).toEqual([MARHABA_ENTRY, NARE_ENTRY]);
   });
 
   it("lets a USER with whatsapp.nare.send send from nare without administering it", async () => {
     login(nareSender);
     const el: any = await DashboardPage();
-    expect(el.props.accounts).toEqual([MARHABA_ENTRY, { ...NARE_ENTRY, canSend: true }]);
+    expect(el.props.variant).toBe("full");
+    expect(el.props.children.props.accounts).toEqual([MARHABA_ENTRY, { ...NARE_ENTRY, canSend: true }]);
   });
 
   it("renders for an ADVISOR granted whatsapp.nare.view, listing only nare", async () => {
     login(nareAdvisor);
     const el: any = await DashboardPage();
-    expect(el.props.isAdminRole).toBe(false);
-    expect(el.props.accounts).toEqual([NARE_ENTRY]);
+    expect(el.props.variant).toBe("full");
+    expect(el.props.children.props.accounts).toEqual([NARE_ENTRY]);
   });
 
   it("redirects an ADVISOR without any whatsapp grants to /travel", async () => {
@@ -161,8 +167,8 @@ describe("DashboardPage W3 account gating", () => {
   it("gives an ADMIN both accounts with send and admin rights", async () => {
     login(admin);
     const el: any = await DashboardPage();
-    expect(el.props.isAdminRole).toBe(true);
-    expect(el.props.accounts).toEqual([
+    expect(el.props.variant).toBe("full");
+    expect(el.props.children.props.accounts).toEqual([
       { ...MARHABA_ENTRY, canAdmin: true },
       { ...NARE_ENTRY, canSend: true, canAdmin: true },
     ]);

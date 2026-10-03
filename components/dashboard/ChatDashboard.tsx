@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { Send, Paperclip, Phone, RefreshCw, LogOut, MessageSquarePlus, ArrowLeft, Calculator, Plane } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { Send, Paperclip, Phone, RefreshCw, MessageSquarePlus, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,15 +50,12 @@ interface Message {
 }
 
 export default function ChatDashboard({
-  isAdminRole,
   accounts,
 }: {
-  /** ADMIN database role — controls the Admin panel nav button (the /admin page itself is role-gated). */
-  isAdminRole: boolean;
   /** W3: accounts the user may view, with their per-account send/admin permissions. */
   accounts: DashboardAccount[];
 }) {
-  const { connected, unauthorized, whatsAppStates, lastEvent, disconnectSocket } = useSocket();
+  const { connected, unauthorized, whatsAppStates, lastEvent } = useSocket();
   const [selectedAccount, setSelectedAccount] = useState(() => pickDefaultAccountKey(accounts));
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
@@ -259,36 +255,25 @@ export default function ChatDashboard({
   }
 
   return (
-    <div className="flex h-screen h-dvh flex-col bg-background">
-      {/* Header */}
-      <header className="flex items-center justify-between gap-2 border-b px-3 py-2 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-green-700 text-xs font-bold text-white shadow-sm">
-            WA
-          </div>
-          <h1 className="hidden font-semibold min-[400px]:inline">WAControl</h1>
-          {isAdminRole && (
-            <Button variant="outline" size="sm" onClick={() => (window.location.href = "/admin")}>
-              Admin
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => (window.location.href = "/calculator")}>
-            <Calculator className="h-4 w-4 sm:mr-1" />
-            <span className="hidden sm:inline">Calculator</span>
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => (window.location.href = "/travel")}>
-            <Plane className="h-4 w-4 sm:mr-1" />
-            <span className="hidden sm:inline">Travel</span>
-          </Button>
+    // W4: inside the shared shell (app/dashboard/page.tsx wraps this in
+    // AppShell variant "full"). On mobile the shell's 3.5rem top bar sits
+    // above, so the dashboard fills the remaining viewport; on lg the sidebar
+    // is fixed and the full viewport height is available.
+    <div className="flex h-[calc(100vh-3.5rem)] h-[calc(100dvh-3.5rem)] flex-col bg-background lg:h-screen lg:h-dvh">
+      {/* Slim toolbar: navigation (Admin/Calculator/Travel) and the sign-out
+          controls moved into the shared app shell; only the account-scoped
+          actions and the live socket/WhatsApp status badges stay here. */}
+      <header className="flex items-center justify-between gap-2 border-b px-3 py-2">
+        <div className="flex items-center gap-2">
+          <AccountSwitcher accounts={accounts} selected={selectedAccount} onSelect={setSelectedAccount} />
           {canSend && (
             <Button variant="outline" size="sm" onClick={() => setNewChatOpen(true)}>
               <MessageSquarePlus className="h-4 w-4 sm:mr-1" />
               <span className="hidden sm:inline">New message</span>
             </Button>
           )}
-          <AccountSwitcher accounts={accounts} selected={selectedAccount} onSelect={setSelectedAccount} />
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2">
           <Badge className="hidden sm:inline-flex" variant={connected ? "default" : "destructive"}>
             {unauthorized ? "Session expired" : connected ? "Socket connected" : "Socket offline"}
           </Badge>
@@ -301,33 +286,6 @@ export default function ChatDashboard({
                 ? "Connected"
                 : "Not connected"}
           </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs text-muted-foreground"
-            title="Revoke every session on all devices, then sign out"
-            onClick={async () => {
-              try {
-                await axios.post("/api/auth/sign-out-everywhere");
-              } catch {
-                // Best effort: the local sign-out below still ends this session.
-              }
-              disconnectSocket();
-              signOut({ callbackUrl: "/login" });
-            }}
-          >
-            Sign out everywhere
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              disconnectSocket();
-              signOut({ callbackUrl: "/login" });
-            }}
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
         </div>
       </header>
 
