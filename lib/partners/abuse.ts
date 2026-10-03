@@ -29,7 +29,7 @@ export const FORM_TOKEN_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 export const MAX_PER_IP_PER_HOUR = 3;
 export const MAX_PER_DAY_GLOBAL = 50;
 
-const TOKEN_PURPOSE = "partner-apply-form";
+const FORM_PURPOSE = "partner-apply-form";
 const IP_HASH_PURPOSE = "partner-apply-ip";
 
 /**
@@ -48,7 +48,7 @@ function abuseSecret(): string | null {
 function signTimestamp(issuedAt: number): string | null {
   const secret = abuseSecret();
   if (!secret) return null;
-  return createHmac("sha256", secret).update(`${TOKEN_PURPOSE}:${issuedAt}`).digest("hex");
+  return createHmac("sha256", secret).update(`${FORM_PURPOSE}:${issuedAt}`).digest("hex");
 }
 
 /**

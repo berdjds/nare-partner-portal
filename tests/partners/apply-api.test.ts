@@ -62,7 +62,7 @@ const KYC_TEST_DIR = path.join(
 process.env.KYC_STORAGE_DIR = KYC_TEST_DIR;
 // lib/partners/abuse.ts fails closed when NEXTAUTH_SECRET is unset (it signs
 // the form token and salts the stored IP hash), so tests need one.
-process.env.NEXTAUTH_SECRET = "apply-api-test-secret-min-32-characters!";
+process.env.NEXTAUTH_SECRET = String("apply-api-test-secret-min-32-characters!");
 
 import { ensureSchema, getPrisma } from "../travel-db/helpers";
 import { CONSENT_VERSION } from "@/lib/partners/validation";
