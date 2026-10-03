@@ -10,7 +10,7 @@
  * artifacts (the suite runs in node, no DOM).
  *
  * Note on the hex check: globals.css carries the hex values in explanatory
- * comments (e.g. "Nare red #AE1F23"), so the no-hex assertion runs on the
+ * comments (e.g. "203 89% 53%"), so the no-hex assertion runs on the
  * file with block comments stripped — what matters is that no declaration
  * value or utility contains a hex literal.
  */
@@ -47,31 +47,33 @@ describe("W4 brand tokens", () => {
 
   it("globals.css declares every brand token with its exact value", () => {
     const expected: Record<string, string> = {
-      "--primary": "358 70% 40%", // Nare red #AE1F23
-      "--ring": "358 70% 40%",
-      "--foreground": "204 5% 19%", // charcoal #2D3032
-      "--accent": "328 33% 93%", // plum tint
-      "--accent-foreground": "328 40% 25%", // plum #592641
-      "--secondary": "0 0% 93%", // #EEEEEE
+      "--brand": "203 89% 53%", // exact Nare brand blue (mark and accents)
+      "--warm": "27 96% 61%", // Nare brand orange
+      "--primary": "203 89% 40%", // deepened brand blue, AA with white text
+      "--ring": "203 89% 40%",
+      "--foreground": "0 0% 10%",
+      "--accent": "203 87% 95%", // light brand-blue tint
+      "--accent-foreground": "203 89% 28%",
+      "--secondary": "0 0% 93%",
       "--muted": "0 0% 93%",
-      "--input": "0 0% 78%", // #C6C6C6
-      "--destructive": "0 84% 60%", // bright alert red
+      "--input": "0 0% 78%",
+      "--destructive": "0 84% 60%", // alert red, distinct from the brand blue
       "--destructive-foreground": "0 0% 98%",
       "--sidebar-background": "0 0% 100%",
-      "--sidebar-foreground": "204 5% 19%",
-      "--sidebar-primary": "358 70% 40%",
-      "--sidebar-primary-foreground": "0 0% 98%",
-      "--sidebar-accent": "358 60% 95%",
-      "--sidebar-accent-foreground": "358 60% 32%",
+      "--sidebar-foreground": "0 0% 10%",
+      "--sidebar-primary": "203 89% 40%",
+      "--sidebar-primary-foreground": "0 0% 100%",
+      "--sidebar-accent": "203 87% 95%",
+      "--sidebar-accent-foreground": "203 89% 28%",
       "--sidebar-border": "0 0% 93%",
-      "--sidebar-ring": "358 70% 40%",
+      "--sidebar-ring": "203 89% 40%",
     };
     for (const [token, value] of Object.entries(expected)) {
       expect(tokenValue(globalsCss, token)).toBe(value);
     }
   });
 
-  it("--destructive is a distinct value from --primary (alert red vs brand red)", () => {
+  it("--destructive is a distinct value from --primary (alert red vs brand blue)", () => {
     expect(tokenValue(globalsCss, "--destructive")).not.toBe(tokenValue(globalsCss, "--primary"));
   });
 

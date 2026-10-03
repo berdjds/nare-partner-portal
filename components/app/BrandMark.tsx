@@ -9,9 +9,8 @@ import Link from "next/link";
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-2.5 px-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">
-        N
-      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/nare-icon.webp" alt="" width={32} height={32} className="h-8 w-8 rounded-lg object-contain" />
       {compact ? (
         <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Nare Travel and Tours</span>
       ) : (

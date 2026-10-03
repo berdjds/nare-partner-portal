@@ -101,9 +101,9 @@ describe("W4 calculator shell", () => {
 
   it("calculator HTML uses the Nare brand tokens and drops the old blue palette", () => {
     const html = readRepoFile(CALC_HTML);
-    expect(html).toContain("--primary: #AE1F23;");
-    expect(html).toContain("--primary-dark: #8B191C;");
-    expect(html).toContain("--accent: #592641;");
+    expect(html).toContain("--primary: #0B7BC1;");
+    expect(html).toContain("--primary-dark: #085C91;");
+    expect(html).toContain("--accent: #085C91;");
     expect(html).toContain("--text: #2D3032;");
     for (const gone of ["#315efb", "#2449c7", "#f7b500", "#172033", "#fffbea", "#667085", "#dfe5ee"]) {
       expect(html).not.toContain(gone);

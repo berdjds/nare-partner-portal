@@ -221,10 +221,10 @@ describe("W4 design guards", () => {
     it("flags raw palette classes and hex literals in a fixture string", () => {
       const dirty = [
         `<div className="bg-red-500 text-slate-100 ring-blue-300">`,
-        `<span style={{ color: "#AE1F23" }} />`,
+        `<span style={{ color: "#1CA0F2" }} />`,
       ].join("\n");
       const tokens = findColorViolations(dirty).map((v) => v.token);
-      expect(tokens).toEqual(["bg-red-500", "text-slate-100", "ring-blue-300", "#AE1F23"]);
+      expect(tokens).toEqual(["bg-red-500", "text-slate-100", "ring-blue-300", "#1CA0F2"]);
     });
 
     it("accepts token classes in a fixture string", () => {

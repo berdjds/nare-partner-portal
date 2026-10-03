@@ -10,14 +10,16 @@ The product is shown as **Nare Travel and Tours** with the subtitle **Portal**
 (see `components/app/BrandMark.tsx`). The root metadata title is
 `Nare Travel and Tours — Portal` (`app/layout.tsx`).
 
-Brand palette (from nare.am):
+Brand palette (from the Nare Travel and Tours website repository):
 
 | Role | Colour | Token |
 | --- | --- | --- |
-| Primary / active | Nare red `#AE1F23` | `--primary: 358 70% 40%` |
-| Accent hue | Plum `#592641` | `--accent-foreground: 328 40% 25%` |
-| Text | Charcoal `#2D3032` | `--foreground: 204 5% 19%` |
-| Light neutrals | `#EEEEEE` / `#C6C6C6` | `--secondary`, `--muted` / `--input` |
+| Brand blue (marks, decoration) | `hsl(203 89% 53%)` | `--brand` |
+| Primary / active (buttons, links) | Deepened brand blue `hsl(203 89% 40%)` — AA contrast with white text | `--primary`, `--ring`, `--sidebar-primary` |
+| Warm highlight (rare) | Nare orange `hsl(27 96% 61%)` | `--warm` |
+| Accent tint | Light blue `hsl(203 87% 95%)` / text `203 89% 28%` | `--accent`, `--accent-foreground` |
+| Text | Near-black `hsl(0 0% 10%)` | `--foreground` |
+| Neutrals | `hsl(0 0% 93%)` / `hsl(0 0% 78%)` | `--secondary`, `--muted` / `--input` |
 
 ## Tokens and where they live
 
@@ -43,10 +45,10 @@ Token groups:
 
 ### Colour rules
 
-- **Primary** (Nare red) is reserved for primary actions and the active
+- **Primary** (deepened Nare blue) is reserved for primary actions and the active
   navigation state. Keep it rare; do not use it for decoration.
 - **Destructive** keeps its own brighter red (`--destructive: 0 84% 60%`),
-  visibly distinct from the deeper brand red, and is only used with an icon
+  visibly distinct from the brand blue, and is only used with an icon
   and a confirmation.
 - **Status colours** (success / warning / info / danger / neutral) exist only
   for badges, pills and toasts. They live in the status maps exported from
@@ -65,7 +67,7 @@ Token groups:
   the settings panel import it instead of repeating the hex.
 - The embedded calculator
   (`doc/temp/Hello_Armenia_Package_Calculator_2026_v3.html`) carries its own
-  `--primary: #AE1F23; --primary-dark: #8B191C; --accent: #592641;
+  `--primary: #0B7BC1; --primary-dark: #085C91; --accent: #085C91;
   --text: #2D3032; --success: #16865c; --danger: #cc3d3d;` variables in its
   `<style>` block. Only colours may change there — never its single `<script>`
   block or the calculations (`tests/ui/calculator-shell.test.ts` pins the
