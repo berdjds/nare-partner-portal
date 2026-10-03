@@ -290,9 +290,21 @@ tools (`portal-restore`, `portal-backup`, ...) are the root-owned
 `deploy/provision-server.sh` from `scripts/*.sh`; the CI pipeline goes
 through the forced-command dispatcher and can call but never replace them.
 So when a release changes any of those `scripts/*.sh`, the release procedure
-includes an explicit extra step: re-run `deploy/provision-server.sh` (as
-root) to install the new tools, in addition to the normal push-to-main
-pipeline.
+includes an explicit extra step in addition to the normal push-to-main
+pipeline:
+
+1. **Re-provision the tools.** After updating the checkout the tools are
+   installed from (`git pull`), re-run provisioning as root:
+
+   ```bash
+   sudo bash deploy/provision-server.sh --pubkey-file <path-to-deploy-key.pub>
+   ```
+
+   The cmp-based install rewrites only the changed tools and reports
+   `[unchanged]` for the rest (see "One-time provisioning"). Until this step
+   runs, the pipeline keeps invoking the *old* root-owned copies, so a
+   release whose fix lives in a deploy script has not actually reached the
+   server.
 
 **First deploy of a new environment.** When the app container is not running
 **and** `...:latest` does not exist yet, the gate logs `FIRST DEPLOY` at the
