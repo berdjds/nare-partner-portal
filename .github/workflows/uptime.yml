@@ -18,6 +18,11 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      test_alert:
+        description: Send a test push notification (proves the NTFY_TOPIC secret works)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -51,6 +56,7 @@ jobs:
           CHECK_STATUS: ${{ steps.check.outputs.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
+          TEST_ALERT: ${{ github.event.inputs.test_alert }}
         run: |
           set +e
           # Conclusion of the previous completed run of this workflow (empty on the first run).
@@ -64,6 +70,10 @@ jobs:
               '{topic:$t,title:$ti,message:$m,priority:$p,tags:[$tag]}' \
               | curl -sS --max-time 15 -H 'Content-Type: application/json' -d @- https://ntfy.sh >/dev/null
           }
+          if [ "$TEST_ALERT" = "true" ]; then
+            push "🧪 Uptime monitor test" "The NTFY_TOPIC secret works. Checks passed: $(grep -c '^PASS' result.txt). $RUN_URL" 3 test_tube
+            exit 0
+          fi
           failed="$(grep -E '^FAIL' result.txt | head -4)"
           if [ "$CHECK_STATUS" != "0" ]; then
             if [ "$prev" != "failure" ]; then
