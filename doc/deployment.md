@@ -655,3 +655,9 @@ that account is disabled or its client is not ready, the send fails with a
 coded, actionable error naming the account and is retried later on the **same**
 account — there is never a silent fallback to Marhaba. The account is part of
 the notification dedup key, so retries cannot duplicate a delivery.
+
+## Production uptime monitor
+
+`.github/workflows/uptime.yml` runs `scripts/uptime-check.sh` against `PORTAL_URL` every 10 minutes (GitHub may delay scheduled runs by a few minutes). It is read-only: anonymous GET requests only. Checks: the landing page, the sign-in page and its JavaScript assets, the application page with its per-request form token (catches a page prerendered at build time), the legal pages, the anonymous API gate (401) and the TLS certificate (at least 14 days left); each request is retried twice.
+
+Alerts go to the owner's phone through ntfy on a change of state (failing, a reminder about every two hours, recovered); passing runs are silent. The workflow needs the repository secret `NTFY_TOPIC` (the topic name); without it the run still turns red and GitHub's own failure emails still apply. Run it by hand from Actions → Uptime monitor → Run workflow, or locally: `bash scripts/uptime-check.sh https://portal.nare.am`.

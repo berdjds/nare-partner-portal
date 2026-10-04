@@ -1,0 +1,80 @@
+name: Uptime monitor
+
+# Production uptime check for portal.nare.am, every 10 minutes (GitHub may delay
+# scheduled runs by a few minutes under load). Read-only anonymous requests
+# only; it never deploys and never touches the server. See
+# scripts/uptime-check.sh for the checks.
+#
+# Alerts: a push notification to the owner's phone through ntfy when the check
+# starts failing, a reminder about every two hours while it keeps failing, and
+# one "recovered" message when it passes again. Passing runs are silent. The
+# run itself also turns red, so GitHub's own failure emails still work.
+#
+# Required variable:  PORTAL_URL (already set for the release pipeline).
+# Optional secret:    NTFY_TOPIC (the ntfy topic name). Without it the monitor
+#                     still runs and fails visibly, it just cannot push.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: uptime-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check portal.nare.am
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PORTAL_URL: ${{ vars.PORTAL_URL }}
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the checks
+        id: check
+        run: |
+          set +e
+          bash scripts/uptime-check.sh "$PORTAL_URL" | tee result.txt
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Notify on a change of state
+        env:
+          CHECK_STATUS: ${{ steps.check.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set +e
+          # Conclusion of the previous completed run of this workflow (empty on the first run).
+          prev="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/uptime.yml/runs?status=completed&per_page=1" --jq '.workflow_runs[0].conclusion // empty' 2>/dev/null)"
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::warning::NTFY_TOPIC secret is not set; no push notification can be sent"
+            exit 0
+          fi
+          push() { # title, message, priority, tag
+            jq -n --arg t "$NTFY_TOPIC" --arg ti "$1" --arg m "$2" --argjson p "$3" --arg tag "$4" \
+              '{topic:$t,title:$ti,message:$m,priority:$p,tags:[$tag]}' \
+              | curl -sS --max-time 15 -H 'Content-Type: application/json' -d @- https://ntfy.sh >/dev/null
+          }
+          failed="$(grep -E '^FAIL' result.txt | head -4)"
+          if [ "$CHECK_STATUS" != "0" ]; then
+            if [ "$prev" != "failure" ]; then
+              push "🔴 portal.nare.am is failing" "$(printf '%s\n%s' "$failed" "$RUN_URL")" 5 rotating_light
+            elif [ $((RUN_NUMBER % 12)) -eq 0 ]; then
+              push "🔴 portal.nare.am still failing" "$(printf '%s\n%s' "$failed" "$RUN_URL")" 4 rotating_light
+            fi
+          elif [ "$prev" = "failure" ]; then
+            push "🟢 portal.nare.am recovered" "All checks pass again. $RUN_URL" 3 white_check_mark
+          fi
+
+      - name: Fail the run when a check failed
+        if: steps.check.outputs.status != '0'
+        run: exit 1
