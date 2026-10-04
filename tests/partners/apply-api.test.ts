@@ -519,6 +519,38 @@ describe("POST /api/partners/applications — submission limits", () => {
   });
 });
 
+describe("POST /api/partners/applications — gates before body parsing", () => {
+  it("answers 429 before parsing the body when the IP already used its quota", async () => {
+    const limitedIp = "203.0.113.55";
+    const ipHash = hashClientIp(limitedIp);
+    for (let i = 0; i < MAX_PER_IP_PER_HOUR; i += 1) {
+      await seedApplication({ reference: `PA-2026-91${10 + i}`, ipHash });
+    }
+    // A body that would otherwise be a 400 (no token, not even multipart):
+    // the quota gate must answer first, without parsing it.
+    const res = await POST(
+      new NextRequest("http://localhost:3000/api/partners/applications", {
+        method: "POST",
+        body: "not a form",
+        headers: { "x-forwarded-for": limitedIp, "content-type": "text/plain" },
+      }),
+    );
+    expect(res.status).toBe(429);
+  });
+
+  it("refuses a declared body larger than the cap with 413 before reading it", async () => {
+    const res = await POST(
+      new NextRequest("http://localhost:3000/api/partners/applications", {
+        method: "POST",
+        body: "x",
+        headers: { "x-forwarded-for": nextIp(), "content-length": String(40 * 1024 * 1024) },
+      }),
+    );
+    expect(res.status).toBe(413);
+    expectGenericErrorBody(await res.json());
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Transaction rollback
 // ---------------------------------------------------------------------------

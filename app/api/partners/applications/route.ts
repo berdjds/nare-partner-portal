@@ -80,7 +80,42 @@ function isReferenceConflict(error: unknown): boolean {
   return fields.some((field) => String(field).includes("reference"));
 }
 
+/**
+ * Largest request body accepted (3 files of KYC_MAX_FILE_BYTES plus 1 MB of
+ * form fields and multipart framing). A declared Content-Length above it is
+ * refused BEFORE the body is parsed, so an oversized upload never gets
+ * buffered in memory. Browsers always send Content-Length for form posts; a
+ * proxy-level body cap is the defence in depth for chunked bodies.
+ */
+const MAX_REQUEST_BYTES = 3 * KYC_MAX_FILE_BYTES + 1024 * 1024;
+
 export async function POST(req: NextRequest) {
+  // Cheap gates that run BEFORE the multipart body is parsed (parsing buffers
+  // the whole upload in memory): declared size cap, then the per-IP and daily
+  // submission limits. A client that already used its quota is answered 429
+  // without any body parsing or file handling.
+  const declaredLength = Number(req.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
+    console.log(`${LOG_PREFIX} rejected: declared body of ${declaredLength} bytes exceeds the cap`);
+    return NextResponse.json({ error: GENERIC_SUBMISSION_ERROR }, { status: 413 });
+  }
+  const clientIp = clientIpFromHeaders(req.headers);
+  let ipHash: string;
+  try {
+    ipHash = hashClientIp(clientIp);
+  } catch {
+    // No signing secret configured: fail closed with the same generic answer
+    // as every other pre-validation rejection (the form token check would
+    // refuse the request anyway).
+    console.log(`${LOG_PREFIX} rejected: client hashing unavailable`);
+    return NextResponse.json({ error: GENERIC_SUBMISSION_ERROR }, { status: 400 });
+  }
+  const limit = await checkSubmissionLimits(prisma, ipHash);
+  if (limit !== null) {
+    console.log(`${LOG_PREFIX} rejected: ${limit} submission limit reached`);
+    return NextResponse.json({ error: RATE_LIMIT_ERROR }, { status: 429 });
+  }
+
   let form: FormData;
   try {
     form = await req.formData();
@@ -124,15 +159,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: GENERIC_FILE_ERROR }, { status: 400 });
     }
     uploads.push({ kind, name: value.name, size: value.size, data: Buffer.from(await value.arrayBuffer()) });
-  }
-
-  const clientIp = clientIpFromHeaders(req.headers);
-  const ipHash = hashClientIp(clientIp);
-
-  const limit = await checkSubmissionLimits(prisma, ipHash);
-  if (limit !== null) {
-    console.log(`${LOG_PREFIX} rejected: ${limit} submission limit reached`);
-    return NextResponse.json({ error: RATE_LIMIT_ERROR }, { status: 429 });
   }
 
   // Create the application and its documents in one transaction. The files
