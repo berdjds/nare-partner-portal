@@ -542,6 +542,14 @@ describe("wizard source guards", () => {
     expect(wizardSource).toContain("formatFileSize(");
   });
 
+  it("treats Enter on an earlier stage as Next and shows the stage of a server-rejected field", () => {
+    // Enter inside a hidden-stage field submits natively: it must advance, not submit.
+    expect(wizardSource).toMatch(/if \(stageIndex < STAGES\.length - 1\) \{\s*handleNext\(\);\s*return;/);
+    // Server field errors move the applicant to the stage that holds the field.
+    expect(wizardSource).toContain("STAGES.findIndex(");
+    expect(wizardSource).toContain("field in next");
+  });
+
   it("uses no banned wording (pricing, speed/automation, self-registration)", () => {
     const html = renderWizard();
 

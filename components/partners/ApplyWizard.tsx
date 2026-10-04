@@ -219,6 +219,13 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
     event.preventDefault();
     setFormError(null);
 
+    // Enter inside a field on an earlier stage submits the form natively;
+    // treat it as "Next" so no stage is skipped and errors stay visible.
+    if (stageIndex < STAGES.length - 1) {
+      handleNext();
+      return;
+    }
+
     const reviewErrors = validateStage("review", values, files);
     if (Object.keys(reviewErrors).length > 0) {
       setFieldErrors(reviewErrors);
@@ -271,7 +278,17 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
           if (key && !(key in next)) next[key] = String(issue?.message ?? "Invalid value");
         }
         setFieldErrors(next);
-        if (Object.keys(next).length === 0) setFormError(GENERIC_SUBMIT_ERROR);
+        if (Object.keys(next).length === 0) {
+          setFormError(GENERIC_SUBMIT_ERROR);
+        } else {
+          // Show the stage that holds the first rejected field.
+          const target = STAGES.findIndex(
+            (stage) =>
+              stage.fields.some((field) => field in next) ||
+              (stage.key === "licence" && FILE_FIELD_NAMES.some((name) => name in next)),
+          );
+          if (target >= 0) goToStage(target);
+        }
         return;
       }
 
