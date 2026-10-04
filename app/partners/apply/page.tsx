@@ -18,6 +18,13 @@ import { CONTACT, PAGE_TITLES, PARTNER_APPLY, PRODUCT_NAME, robotsDirective } fr
 import { issueFormToken } from "@/lib/partners/abuse";
 import { ApplyForm } from "@/components/partners/ApplyForm";
 
+// The form token is minted per request from the runtime signing secret and the
+// current time. Without this the page is prerendered at BUILD time (nothing in
+// it is dynamic): the secret does not exist during the image build, so the
+// "not available" notice would be baked in, and a successful mint would be a
+// stale frozen timestamp that expires after two hours.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: PAGE_TITLES.partnerApply,
   // Same owner decision as the landing page (INDEXABLE in lib/portal-content.ts).

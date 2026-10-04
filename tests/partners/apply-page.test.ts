@@ -376,3 +376,11 @@ describe("allow-list and entry links", () => {
     expect(html).toContain(escapeHtml(PARTNER_APPLY.linkLabel));
   });
 });
+
+describe("per-request rendering", () => {
+  it("is forced dynamic so the form token is minted at request time, not at build time", () => {
+    // Prerendering at build would bake in the fail-closed notice (no signing
+    // secret during the image build) or a frozen, soon-expired token.
+    expect(readSource("app/partners/apply/page.tsx")).toContain('export const dynamic = "force-dynamic"');
+  });
+});
