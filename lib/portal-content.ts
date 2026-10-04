@@ -93,6 +93,9 @@ export const CONTACT: ContactInfo = {
   phones: ["+374 10 545046", "+374 91 005046"],
 } as const;
 
+/** Office address confirmed by the owner (2026-10-03). */
+export const OFFICE_ADDRESS = "91 Teryan St, Tparan Business Center, Yerevan, Armenia";
+
 export interface MailtoSubjects {
   readonly contact: string;
   readonly partnerAccess: string;
