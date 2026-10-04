@@ -1,8 +1,9 @@
 # Partner Enrollment (B2B)
 
-This document describes the W5b partner enrollment flow (REQ-2026-0004 phase 1):
-how new B2B companies apply online with their trade licence, how their KYC
-documents are stored, and how Nare staff review, approve or reject
+This document describes the partner enrollment flow: the W5b backend
+(REQ-2026-0004 phase 1) plus the W5f application experience (REQ-2026-0007).
+It covers how new B2B companies apply online with their trade licence, how
+their KYC documents are stored, and how Nare staff review, approve or reject
 applications. Approval creates an `Agency` record for the travel module.
 
 Out of scope for this phase: partner portal accounts or logins, request
@@ -11,11 +12,13 @@ checks, malware scanning and e-signatures (see "What W5c and W5d add" below).
 
 ## Data flow
 
-1. **Apply (public, no login).** The applicant fills in the form at
-   `/partners/apply` (linked as "Become a partner" from the landing page hero
-   and the sign-in page). The page is deliberately outside the authenticated
-   app shell, branded like the landing page, and marked `noindex, nofollow`.
-   All copy comes from `lib/portal-content.ts` (`PARTNER_APPLY`).
+1. **Apply (public, no login).** The applicant fills in the staged
+   application at `/partners/apply` (linked as "Become a partner" from the
+   landing page hero, the shared public header and the sign-in page). The
+   page is deliberately outside the authenticated app shell, branded like the
+   landing page, and marked `noindex, nofollow`. All copy comes from
+   `lib/portal-content.ts` (`PARTNER_APPLY`). See "The staged application
+   (W5f)" below for the wizard, the location choices and the consent links.
 2. **Submit.** The form posts `multipart/form-data` to
    `POST /api/partners/applications` (`app/api/partners/applications/route.ts`).
    The server validates every field, checks the abuse gates (see below),
@@ -56,6 +59,106 @@ checks, malware scanning and e-signatures (see "What W5c and W5d add" below).
 
 Approving never creates user accounts, WhatsApp groups or notifications —
 those arrive in later phases.
+
+## The staged application (W5f)
+
+Since W5f the apply page renders `components/partners/ApplyWizard.tsx`
+(client) instead of the original single-page form. The page itself
+(`app/partners/apply/page.tsx`, `force-dynamic`) is unchanged in role: it
+mints the signed form token with `issueFormToken()` from
+`lib/partners/abuse.ts` during server-side render and passes it to the
+wizard; when the token cannot be minted (`NEXTAUTH_SECRET` unset) it fails
+closed with an "unavailable" notice and no form. The page uses the shared
+public chrome (`PublicHeader`/`PublicFooter`, see below).
+
+The wizard walks the applicant through four stages — **Company**, **Trade
+licence** (including the licence file, the optional signatory ID and the
+optional extra document), **Contacts** and **Review**:
+
+- A non-interactive stepper marks the current stage with
+  `aria-current="step"`, prefixes completed stages with "✓" and shows a
+  "Step n of 4" line; the pills wrap on narrow screens. Navigation is only
+  via Back/Next (plus the per-section Edit actions on the review stage).
+- "Next" validates the current stage before moving on, per field, with the
+  same messages the API returns — the wizard imports
+  `applicationFieldsSchema` and `CONSENT_VERSION` directly from
+  `lib/partners/validation.ts` (that module has no server-only imports, so
+  client and API literally share the rules; there is no mirrored copy). The
+  genuinely node-only pieces — the honeypot field name and the 10 MB /
+  `.pdf,.jpg,.jpeg,.png` upload rules — stay mirrored as literals in
+  `components/partners/ApplyForm.tsx` and are pinned against the server
+  modules by tests. Invalid fields get `aria-invalid` and
+  `aria-describedby`; focus moves to the stage heading on every stage change
+  and a polite `aria-live` region announces the step and validation
+  failures.
+- All four stage sections stay mounted (inactive ones are `hidden`), so one
+  ordinary `FormData` post carries every entry plus the hidden honeypot,
+  `formToken` and `consentVersion` fields. Chosen `File` objects live in
+  component state while moving between stages — a file input cannot be
+  repopulated, so a chosen file is shown as a name + size row with a
+  **Replace** action.
+- The **Review** stage lists every entry read-only in per-section summary
+  cards (empty values shown as "Not provided", files as name + size), each
+  with an Edit action that jumps back to that stage. Below the cards come
+  the two required consents (`consentKyc`, `consentChannels`); each consent
+  label links to the Terms of Use (`/terms`) and the Privacy Notice
+  (`/privacy`), opened in a new tab with `rel="noopener"`. Submit follows.
+- Submission, the success view (reference, `role="status"`) and error
+  handling are unchanged from W5b: the same multipart fields and files, the
+  same generic error mapping. Nothing is persisted to `localStorage` or
+  `sessionStorage` and no personal data goes into the URL.
+
+### Location choices
+
+`lib/partners/locations.ts` (client-safe static data, no imports) provides
+the country and city choices:
+
+- `COUNTRIES` — two optgroups rendered in a native `<select>` (accessible
+  and mobile-friendly): **Main markets** (the 28 source markets — Armenia,
+  Georgia, United Arab Emirates, Saudi Arabia, Qatar, Kuwait, Bahrain, Oman,
+  Iran, Iraq, Jordan, Lebanon, Egypt, Turkey, Russia, Kazakhstan, Uzbekistan,
+  Azerbaijan, India, Pakistan, United Kingdom, Germany, France, Italy,
+  Spain, United States, Canada, China) followed by **All countries** (the
+  complete alphabetical list of sovereign countries and the main
+  territories, sorted with `Intl.Collator`). The main markets intentionally
+  repeat inside the full list.
+- `CITY_SUGGESTIONS` — 6–12 main cities for each of the 28 main markets
+  only, looked up with `getCitySuggestions(country)`. The city input is a
+  text field with a `<datalist>` of those suggestions; free typing is always
+  allowed and the API contract is unchanged — the suggestions are
+  convenience only, not a closed vocabulary.
+
+## Public navigation and legal pages (W5f)
+
+All public pages — the landing page, the application page, the sign-in page
+and the two legal pages — share the same chrome, with token-only colours:
+
+- `components/public/PublicHeader.tsx` (client) — the Nare wordmark linking
+  home, and the links Home, Become a partner (`/partners/apply`) and Sign in
+  (`/login`). The active page is passed in as an `active` prop and marked
+  with `aria-current="page"`. On small screens a menu button toggles the
+  links (`aria-expanded`, `aria-controls`, labelled "Open menu"/"Close
+  menu"); Escape closes the menu and the links stay keyboard reachable.
+- `components/public/PublicFooter.tsx` (server) — links to Terms and
+  Privacy, the contact email and phones from `CONTACT`, the office address
+  from `OFFICE_ADDRESS` (`lib/portal-content.ts`) and the copyright line.
+
+`/terms` and `/privacy` (`app/terms/page.tsx`, `app/privacy/page.tsx`) render
+`TERMS_OF_USE` and `PRIVACY_NOTICE` from `lib/legal-content.ts` (pure data,
+no React/Next imports) through `components/public/LegalPage.tsx`: title,
+subtitle, "Last updated: …" (`LEGAL_LAST_UPDATED`), intro, numbered sections
+with paragraphs and lists, and a "Contact us" block built from `CONTACT` and
+`OFFICE_ADDRESS`. Both pages render inside the shared public header/footer
+and set their `robots` metadata from the same `INDEXABLE` flag as the
+landing page (currently `noindex, nofollow`).
+
+**The legal text is a working draft awaiting legal review.** It was prepared
+for the owner and must be reviewed by Nare's legal advisor before the portal
+is promoted to the public — the same warning sits in a comment at the top of
+`lib/legal-content.ts`. The draft's retention promise (documents of
+applications that are not approved are deleted within 90 days of the
+decision) is honoured manually for now; see "Retention decisions still open"
+below.
 
 ## Data model
 
@@ -188,23 +291,29 @@ the same generic messages so bots learn nothing:
    the reviewer's identity.
 7. **Delete documents** (button on the detail page, behind a confirmation
    dialog) removes all KYC files and document rows for the application — the
-   manual tool for honouring erasure requests or cleaning up rejected
-   applications until a retention policy is decided. The deletion is audit
-   logged.
+   manual tool for honouring erasure requests and, until the scheduled
+   cleanup job exists, the 90-day deletion of documents for applications
+   that are not approved (see "Retention decisions still open"). The
+   deletion is audit logged.
 
 ## Retention decisions still open (owner: Nare)
 
-These are deliberately undecided in W5b and need a product-owner decision:
+These still need a product-owner decision:
 
-- How long KYC documents of **rejected** applications are kept before
-  deletion.
+- The exact retention mechanics for KYC documents of **rejected** (and
+  otherwise not approved) applications. The draft Privacy Notice already
+  promises applicants deletion **within 90 days of the decision** (or
+  earlier on request), so this is now a commitment to honour, not an open
+  question — but no scheduled cleanup job exists yet.
 - Whether documents of **approved** applications are retained for the life of
-  the agency or deleted once onboarding completes.
+  the agency or deleted once onboarding completes (the draft Privacy Notice
+  says they are kept while the partnership is active).
 - The standard handling and target turnaround of applicant **erasure
   requests** (today: manual, via the delete-documents action).
 
-Until decided, documents are kept and removals are done manually with the
-audit-logged delete-documents action.
+Until a cleanup job is built, all removals — including the 90-day deletion
+promised in the Privacy Notice — are done manually with the audit-logged
+delete-documents action on the application detail page.
 
 ## What W5c and W5d add
 
@@ -222,7 +331,13 @@ group (`consentChannels`) is already collected at application time.
 The behaviour above is pinned by `tests/partners/`: `apply-api.test.ts`
 (submission contract and abuse gates), `kyc-storage.test.ts` (storage rules),
 `reference.test.ts` (reference generation), `review-api.test.ts` (staff API
-gates, decisions, downloads, deletion), `review-ui.test.ts` and
-`apply-page.test.ts` (pages, nav, allow-list and entry links). The public
-apply page is in the AppShell allow-list in `tests/ui/design-guard.test.ts`
-with the reason "public unauthenticated partner application page (W5b)".
+gates, decisions, downloads, deletion), `review-ui.test.ts` (admin pages),
+`apply-page.test.ts` (page shell, token minting and fail-closed fallback,
+entry links), `apply-wizard.test.ts` (the four stages and their fields,
+per-stage validation against `applicationFieldsSchema`, stepper/review/file
+markup, no web storage, token-only colours) and `locations.test.ts` (the two
+country groups, the main-markets list, city-suggestion coverage). The public
+apply page and the two legal pages are in the AppShell allow-list in
+`tests/ui/design-guard.test.ts`; the shared public chrome and the legal pages
+are pinned by `tests/ui/pub-chrome.test.ts` and
+`tests/ui/legal-pages.test.ts`.

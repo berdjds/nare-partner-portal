@@ -1,8 +1,8 @@
 # Design System
 
 How the Nare Travel and Tours portal looks and how its shared chrome is built.
-This document describes what is implemented today (phase W4); the tests listed
-at the end pin it, so update both together.
+This document describes what is implemented today (phases W4–W5f); the tests
+listed at the end pin it, so update both together.
 
 ## Brand
 
@@ -112,8 +112,8 @@ Shared chrome lives in `components/app/`:
 
 Pages wrap themselves explicitly (`<AppShell>…</AppShell>` or
 `<AppShell variant="full">`) instead of a route-group layout; the travel
-module wraps once in `app/travel/layout.tsx`. Only `app/login/page.tsx` and
-`app/page.tsx` (a redirect) stay outside the shell.
+module wraps once in `app/travel/layout.tsx`. Only the public pages (landing,
+login, apply, terms, privacy — see "Public pages") stay outside the shell.
 
 ## Navigation model
 
@@ -172,14 +172,24 @@ The design system is pinned by `tests/ui/` (all pure node tests; only
   status maps, and token-cleanliness of button/toast/BrandMark.
 - `design-guard.test.ts` — repo-wide regression guards: no raw palette
   classes or hex in `app/`/`components/` outside the allow-list; every
-  `app/**/page.tsx` inside the shared AppShell (allow-list: login and the
-  root redirect); every top-level authenticated route covered by the nav
-  model. Includes negative fixtures proving the detectors bite.
+  `app/**/page.tsx` inside the shared AppShell (allow-list: the five public
+  pages — landing, login, apply, terms, privacy — each with a reason); every
+  top-level authenticated route covered by the nav model. Includes negative
+  fixtures proving the detectors bite.
 - `travel-shell.test.ts`, `admin-shell.test.ts`, `chat-shell.test.ts`,
   `calculator-shell.test.ts`, `login-brand.test.ts` — per-area checks that
   each surface renders inside the shared shell, has dropped its old header
   chrome, and kept its behaviour (guards, socket logic, calculator script,
   sign-in flow) unchanged.
+- `pub-chrome.test.ts` — the shared public header/footer: links and labels,
+  `aria-current` per `active` prop, mobile-menu wiring (`aria-expanded`,
+  `aria-controls`, Escape-to-close), footer contact/office/legal links and
+  copyright, token-only colours, and that the landing, apply and login pages
+  render the chrome.
+- `legal-pages.test.ts` — the `/terms` and `/privacy` pages: the drafted
+  documents rendered section by section, "Last updated", the "Contact us"
+  block, metadata titles and `robots` pinned to `robotsDirective()`, and
+  token-only colours.
 
 Run them with `npm test`.
 
@@ -202,9 +212,66 @@ A palette change touches **`app/globals.css` only** (plus the calculator's
 
 ## Public pages
 
-The portal has two public (signed-out) pages: the landing page at `/`
-(`app/page.tsx`) and the sign-in page at `/login` (`app/login/page.tsx`). Both
-were added in phase W5a.
+The portal has five public (signed-out) pages: the landing page at `/`
+(`app/page.tsx`), the sign-in page at `/login` (`app/login/page.tsx`), the
+partner application at `/partners/apply` (see `doc/partners.md`), and the
+legal pages at `/terms` and `/privacy`. The first two were added in phase
+W5a; the application page in W5b; the staged application, the shared public
+chrome and the legal pages in W5f.
+
+### Public chrome (header and footer)
+
+All five pages share the same header and footer, built with token colours
+only:
+
+- **`components/public/PublicHeader.tsx`** (client) — a bordered top bar
+  (`border-b border-border bg-background`, `max-w-5xl` inner) with the Nare
+  wordmark (text, not an image — tests forbid `/brand/` asset references)
+  linking home, and the primary nav (`aria-label="Primary"`): **Home** (`/`),
+  **Become a partner** (`/partners/apply`) and **Sign in** (`/login`). The
+  active page is passed in as an `active` prop (`"home" | "apply" | "login"`)
+  and its link gets `aria-current="page"` and `text-primary underline`;
+  inactive links are `text-muted-foreground hover:text-foreground`. On small
+  screens a menu button (`sm:hidden`) toggles the nav with `aria-expanded`
+  and `aria-controls="public-header-nav"`, swapping Menu/X icons; Escape
+  closes the menu from anywhere inside the header, and on `sm+` the nav is
+  always visible (`sm:flex`), so links stay keyboard reachable.
+- **`components/public/PublicFooter.tsx`** (server — no interactivity, so it
+  renders from server and client pages alike) — `border-t border-border`
+  with three columns (brand + `OFFICE_ADDRESS`, contact email/phones from
+  `CONTACT` as `mailto:`/`tel:` links, and a Legal nav linking `/terms` and
+  `/privacy`) and a bottom bar with the copyright line
+  `© {current year} {PRODUCT_NAME}. All rights reserved.`
+
+The landing page composes `PublicHeader active="home"`, the landing sections
+(`Hero`, `HowItWorks`, `Benefits`, `ContactBlock` from `components/landing/`)
+and `PublicFooter`; the earlier `components/landing/Footer.tsx` is retained
+but no longer used. The sign-in page renders `PublicHeader active="login"`
+above its two-column panel and `PublicFooter` below; the apply page renders
+`PublicHeader active="apply"`. The legal pages pass no `active` (none of the
+three header links is the current page).
+
+### Legal pages
+
+`app/terms/page.tsx` and `app/privacy/page.tsx` render `TERMS_OF_USE` and
+`PRIVACY_NOTICE` from **`lib/legal-content.ts`** (pure typed data —
+`LegalDocument` with `title`, `subtitle`, `intro` and `sections` of
+paragraphs and/or item lists, plus `LEGAL_LAST_UPDATED`) through
+**`components/public/LegalPage.tsx`** (server): an `<article max-w-3xl>`
+with the title header, the "Last updated: …" line, the intro, one numbered
+`<section>` per section (numbering is positional, not stored in the data)
+and a "Contact us" card (`bg-card border-border`) built from `CONTACT` and
+`OFFICE_ADDRESS`. Both pages use the shared public header/footer, title
+their metadata `{document.title} — Nare Travel and Tours Portal`, and set
+`robots` from `robotsDirective()` — the same `INDEXABLE` owner decision as
+the landing page.
+
+**The legal text is a working draft awaiting review by Nare's legal
+advisor** before the portal is promoted to the public (comment at the top of
+`lib/legal-content.ts`); the wording deliberately promises nothing the
+portal does not do today. Only the retention promise it makes (90-day
+deletion of documents for applications that are not approved) is already
+operational — honoured manually, see `doc/partners.md`.
 
 ### Where copy and contact details live
 
@@ -212,16 +279,28 @@ All public-page copy lives in `lib/portal-content.ts` as typed, exported
 constants — pages and components never hard-code strings:
 
 - `PRODUCT_NAME`, `PAGE_TITLES` — product name and the `<title>` metadata for
-  home and login.
+  home, login and the apply page.
 - `HERO`, `HOW_IT_WORKS_STEPS`, `BENEFITS` — landing page headline, sub-line,
   CTA label, the three "how it works" steps, and the benefit list.
 - `LOGIN_PANEL` — headline and bullets for the login brand panel.
+- `PARTNER_APPLY` — everything the application wizard renders: section and
+  field labels, the stepper chrome (`stepLabel` "Step {step} of {total}",
+  `progressLabel`, Back/Next/Edit/Replace), the review-stage strings
+  (`reviewHelper`, `notProvided`, `fixErrorsNotice`), consent text, file
+  rules and the success/unavailable copy.
 - `CONTACT` — contact block (`reservation@nare.am`, `+374 10 545046`,
   `+374 91 005046`), taken from the public nare.am site and flagged in a code
   comment as "owner to confirm" before launch.
+- `OFFICE_ADDRESS` — `91 Teryan St, Tparan Business Center, Yerevan,
+  Armenia` (owner-confirmed 2026-10-03), rendered in the footer and the legal
+  pages' "Contact us" card.
 - `MAILTO_SUBJECTS`, `FORGOT_ACCESS` — mailto subjects and the
   "Forgot your password? Contact your Nare account manager" mailto.
 - `INDEXABLE` and `robotsDirective()` — see below.
+
+The legal documents are not part of `portal-content.ts`: they live in
+`lib/legal-content.ts` as pure data (see "Legal pages" above), so pages and
+tests import them without React or Next.
 
 Wording is deliberately conservative: no pricing, no speed or automation
 claims, no self-registration wording. Portal access is granted by Nare staff
@@ -229,32 +308,36 @@ to approved partners; the only approved claims are one place to send requests,
 validation by the Nare team, and a clear status to follow.
 
 Landing page sections are composed from `components/landing/` (`Hero`,
-`HowItWorks`, `Benefits`, `ContactBlock`, `Footer`) by `app/page.tsx` for
-signed-out visitors. The brand gradient uses design tokens only
+`HowItWorks`, `Benefits`, `ContactBlock`) by `app/page.tsx` for signed-out
+visitors, between the shared `PublicHeader` and `PublicFooter`. The brand
+gradient uses design tokens only
 (`bg-gradient-to-br from-primary to-brand`); raw palette classes and hex
 literals stay out of page code.
 
 ### The INDEXABLE flag
 
 `INDEXABLE` in `lib/portal-content.ts` (default `false`) is the single switch
-for search-engine visibility of the landing page: `app/page.tsx` sets its
-`robots` metadata from `robotsDirective()`, which returns
-`"noindex, nofollow"` while the flag is `false` and `"index, follow"` once the
-owner approves indexing. The login page is **always** `noindex, nofollow`,
-independently of the flag — because `app/login/page.tsx` is a client
-component, its metadata lives in the small server layout
-`app/login/layout.tsx`.
+for search-engine visibility of the public pages: `app/page.tsx`, the apply
+page and both legal pages set their `robots` metadata from
+`robotsDirective()`, which returns `"noindex, nofollow"` while the flag is
+`false` and `"index, follow"` once the owner approves indexing. The login
+page is **always** `noindex, nofollow`, independently of the flag — because
+`app/login/page.tsx` is a client component, its metadata lives in the small
+server layout `app/login/layout.tsx`.
 
-### Landing and login sit outside the shell
+### Public pages sit outside the shell
 
-The two public pages render standalone, full-page layouts and do not use the
-portal shell components (e.g. `TravelShell`) or any authenticated chrome — no
-sidebar, no account UI, no session-dependent navigation. They rely only on
-brand tokens and the shared `components/ui/` primitives. `app/page.tsx` keeps
-its signed-in redirect logic untouched (ADMIN → `/admin`, inbox roles →
-`/dashboard`, others → `/travel` per the W1 access policy in
-`lib/access-policy.ts`); only signed-out or deactivated visitors see the
-landing page.
+The five public pages render standalone, full-page layouts and do not use
+the portal shell components (e.g. `TravelShell`) or any authenticated chrome
+— no sidebar, no account UI, no session-dependent navigation. They rely only
+on brand tokens, the shared `components/ui/` primitives and the public
+chrome above. All five are allow-listed in the AppShell guard in
+`tests/ui/design-guard.test.ts` (`app/page.tsx`, `app/login/page.tsx`,
+`app/partners/apply/page.tsx`, `app/terms/page.tsx`, `app/privacy/page.tsx`).
+`app/page.tsx` keeps its signed-in redirect logic untouched (ADMIN →
+`/admin`, inbox roles → `/dashboard`, others → `/travel` per the W1 access
+policy in `lib/access-policy.ts`); only signed-out or deactivated visitors
+see the landing page.
 
 ### Planned B2B hook points
 
@@ -268,6 +351,8 @@ connect them to B2B functionality arrive with the B2B BRD, not in W5a:
   contact mailto (`MAILTO_SUBJECTS.partnerAccess`) are placeholders for the
   B2B request-submission flow that the BRD will define.
 
-Until then, no self-registration, password reset, or request submission exists
-on the public pages, and nothing in W5a changes authentication, sessions,
-permissions, or APIs.
+Until then, no portal self-registration, password reset, or request
+submission exists on the public pages. The partner **application**
+(`/partners/apply`, W5b/W5f) is live but is not an account: it only starts
+the staff-reviewed enrollment flow (see `doc/partners.md`). Nothing in the
+public pages changes authentication, sessions, permissions, or APIs.
