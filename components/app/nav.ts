@@ -170,6 +170,15 @@ export function navGroupsForUser(user: NavUser | null | undefined): NavGroupMode
       match: (p) => p.startsWith("/admin/permissions"),
     });
   }
+  // Mirrors app/admin/partners/page.tsx: if (!hasPermission(user, "partners.review")) redirect.
+  if (hasPermission(user, "partners.review")) {
+    adminItems.push({
+      href: "/admin/partners",
+      label: "Partner applications",
+      icon: "building-2",
+      match: (p) => p.startsWith("/admin/partners"),
+    });
+  }
   if (adminItems.length > 0) groups.push({ label: "Admin", items: adminItems });
 
   return groups;

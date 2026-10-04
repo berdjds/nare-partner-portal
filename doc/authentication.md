@@ -13,11 +13,12 @@ The application uses a custom credentials provider defined in `lib/auth.ts`:
 
 ## Roles and Permissions
 
-Access is decided by a closed set of 13 permission keys defined in `lib/permissions.ts`:
+Access is decided by a closed set of 17 permission keys defined in `lib/permissions.ts`:
 `admin.users`, `admin.settings`, `whatsapp.inbox.view`, `whatsapp.inbox.send`,
-`whatsapp.admin`, `travel.access`, `travel.create`, `travel.review`, `travel.issue`,
+`whatsapp.admin`, `whatsapp.nare.view`, `whatsapp.nare.send`, `whatsapp.nare.admin`,
+`travel.access`, `travel.create`, `travel.review`, `travel.issue`,
 `travel.client_docs.download`, `travel.client_docs.send`, `travel.internal.view`,
-`travel.internal.download`. Each role maps to a default preset of keys:
+`travel.internal.download`, `partners.review`. Each role maps to a default preset of keys:
 
 | Role | Default permissions |
 |------|---------------------|
@@ -31,7 +32,9 @@ Per-user overrides (`UserPermission` rows: `allowed=true` grants a key,
 (preset ∪ grants) − denies, and a deny always wins. The internal-cost keys
 (`travel.internal.view`, `travel.internal.download`) are preset for ADMIN only, so
 non-admins have no internal-cost access until the owner confirms the permissions
-migration.
+migration. The Nare inbox triple (`whatsapp.nare.*`) and the W5b partner-review
+key (`partners.review`) are likewise preset for ADMIN only, reachable for other
+users through per-user grants.
 
 Every gate re-reads the user row and its override rows from the database on each
 request; the role stored in the JWT at login is never consulted. A role change,

@@ -8,7 +8,8 @@ import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Benefits } from "@/components/landing/Benefits";
 import { ContactBlock } from "@/components/landing/ContactBlock";
-import { Footer } from "@/components/landing/Footer";
+import { PublicHeader } from "@/components/public/PublicHeader";
+import { PublicFooter } from "@/components/public/PublicFooter";
 
 export const metadata: Metadata = {
   title: PAGE_TITLES.home,
@@ -41,11 +42,12 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
+      <PublicHeader active="home" />
       <Hero />
       <HowItWorks />
       <Benefits />
       <ContactBlock />
-      <Footer />
+      <PublicFooter />
     </main>
   );
 }

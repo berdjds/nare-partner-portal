@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HERO, PRODUCT_NAME } from "@/lib/portal-content";
+import { HERO, PARTNER_APPLY, PRODUCT_NAME } from "@/lib/portal-content";
 
 export function Hero() {
   return (
@@ -15,12 +15,20 @@ export function Hero() {
         <p className="mt-6 max-w-2xl text-lg leading-relaxed text-primary-foreground/90">
           {HERO.subline}
         </p>
-        <Link
-          href="/login"
-          className="mt-10 inline-flex h-12 items-center justify-center rounded-lg bg-card px-8 text-base font-semibold text-primary shadow-sm transition-colors hover:bg-muted"
-        >
-          {HERO.ctaLabel}
-        </Link>
+        <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
+          <Link
+            href="/login"
+            className="inline-flex h-12 items-center justify-center rounded-lg bg-card px-8 text-base font-semibold text-primary shadow-sm transition-colors hover:bg-muted"
+          >
+            {HERO.ctaLabel}
+          </Link>
+          <Link
+            href="/partners/apply"
+            className="inline-flex h-12 items-center justify-center rounded-lg border border-primary-foreground/40 px-8 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
+          >
+            {PARTNER_APPLY.linkLabel}
+          </Link>
+        </div>
       </div>
     </section>
   );

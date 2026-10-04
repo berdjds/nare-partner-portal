@@ -181,7 +181,7 @@ describe("permission API gate (admin.users)", () => {
     const res = await matrixGET();
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.keys).toHaveLength(16);
+    expect(body.keys).toHaveLength(17);
     expect(new Set(body.keys)).toEqual(new Set(PERMISSION_KEYS));
     // The migration is unconfirmed at this point in the file (see ordering note).
     expect(body.internalLocked).toBe(true);

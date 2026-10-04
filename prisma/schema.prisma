@@ -635,3 +635,68 @@ model TravelSettings {
   whatsappAccountKey      String  @default("nare")
   updatedAt               DateTime @updatedAt
 }
+
+// =============================================================================
+// W5b: B2B partner enrollment with KYC (additive)
+// Companies apply publicly with their trade licence; staff review, approve or
+// reject them, creating an Agency on approval. reviewedById (User.id) and
+// agencyId (Agency.id) are plain strings WITHOUT a foreign key on purpose —
+// the same no-FK precedent as WhatsApp accountId: adding Prisma relations
+// would require back-reference fields on the existing User/Agency models, and
+// this phase is restricted to purely additive changes (the two models below).
+// KYC files live under data/kyc/<applicationId>/ (see lib/partners/kyc-storage.ts);
+// PartnerDocument rows store metadata only.
+// =============================================================================
+
+model PartnerApplication {
+  id                String    @id @default(cuid())
+  reference         String    @unique // PA-YYYY-NNNN, transactional per-year sequence (lib/partners/reference.ts)
+  status            String    @default("SUBMITTED") // SUBMITTED | INFO_REQUESTED | APPROVED | REJECTED
+  companyLegalName  String
+  tradingName       String?
+  country           String
+  city              String
+  address           String
+  website           String?
+  licenceNumber     String
+  licenceAuthority  String
+  licenceExpiry     String // YYYY-MM-DD
+  contactName       String
+  contactRole       String?
+  contactEmail      String
+  contactPhone      String // international digits, must be WhatsApp capable
+  secondContactName  String?
+  secondContactEmail String?
+  secondContactPhone String?
+  notes             String?
+  consentKyc        Boolean
+  consentChannels   Boolean
+  consentVersion    String
+  ipHash            String // hashed applicant IP for abuse limits, never the raw IP
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  reviewedById      String? // User.id of the reviewer (no FK — see above)
+  reviewedAt        DateTime?
+  decisionNote      String? // required for reject / request-info
+  agencyId          String? // Agency.id created on approval (no FK — see above)
+
+  documents PartnerDocument[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([ipHash])
+}
+
+model PartnerDocument {
+  id            String   @id @default(cuid())
+  applicationId String
+  kind          String // TRADE_LICENCE | SIGNATORY_ID | OTHER
+  originalName  String // sanitised display name; the on-disk name is random
+  mime          String // decided server-side from magic bytes, never the client mime
+  size          Int
+  sha256        String
+  storagePath   String // under data/kyc/<applicationId>/, never public/uploads
+  createdAt     DateTime @default(now())
+
+  application PartnerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}

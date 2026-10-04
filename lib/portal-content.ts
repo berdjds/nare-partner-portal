@@ -13,11 +13,13 @@ export const PRODUCT_NAME = "Nare Travel and Tours";
 export interface PageTitles {
   readonly home: string;
   readonly login: string;
+  readonly partnerApply: string;
 }
 
 export const PAGE_TITLES: PageTitles = {
   home: "Nare Travel and Tours — Partner Portal",
   login: "Sign in — Nare Travel and Tours Portal",
+  partnerApply: "Become a partner — Nare Travel and Tours Portal",
 } as const;
 
 export interface HeroContent {
@@ -91,6 +93,9 @@ export const CONTACT: ContactInfo = {
   phones: ["+374 10 545046", "+374 91 005046"],
 } as const;
 
+/** Office address confirmed by the owner (2026-10-03). */
+export const OFFICE_ADDRESS = "91 Teryan St, Tparan Business Center, Yerevan, Armenia";
+
 export interface MailtoSubjects {
   readonly contact: string;
   readonly partnerAccess: string;
@@ -99,6 +104,146 @@ export interface MailtoSubjects {
 export const MAILTO_SUBJECTS: MailtoSubjects = {
   contact: "Nare partner portal — question",
   partnerAccess: "Nare partner portal — access request",
+} as const;
+
+/**
+ * Copy for the public partner application page /partners/apply (phase W5b).
+ * The wording is deliberately plain and makes no promises about review
+ * outcomes or dates: the Nare team reviews every application by hand and
+ * answers by email.
+ */
+export interface PartnerApplyContent {
+  /** Label of the entry links on the landing and sign-in pages. */
+  readonly linkLabel: string;
+  readonly headline: string;
+  readonly intro: string;
+  readonly sections: {
+    readonly company: string;
+    readonly licence: string;
+    readonly contacts: string;
+    readonly signatory: string;
+    readonly consent: string;
+    /** Fourth stage of the application wizard (W5f): read-only summary. */
+    readonly review: string;
+  };
+  readonly labels: {
+    readonly companyLegalName: string;
+    readonly tradingName: string;
+    readonly country: string;
+    readonly city: string;
+    readonly address: string;
+    readonly website: string;
+    readonly notes: string;
+    readonly licenceNumber: string;
+    readonly licenceAuthority: string;
+    readonly licenceExpiry: string;
+    readonly licenceFile: string;
+    readonly contactName: string;
+    readonly contactRole: string;
+    readonly contactEmail: string;
+    readonly contactPhone: string;
+    readonly secondContact: string;
+    readonly secondContactName: string;
+    readonly secondContactEmail: string;
+    readonly secondContactPhone: string;
+    readonly signatoryIdFile: string;
+    readonly otherFile: string;
+    readonly consentKyc: string;
+    readonly consentChannels: string;
+  };
+  readonly contactPhoneHelper: string;
+  readonly fileRules: string;
+  /** Wizard chrome (W5f): stepper, navigation and review copy. */
+  /** Template for the step position, e.g. "Step 2 of 4". */
+  readonly stepLabel: string;
+  /** Accessible name of the stepper navigation. */
+  readonly progressLabel: string;
+  readonly backLabel: string;
+  readonly nextLabel: string;
+  readonly editLabel: string;
+  /** Empty option at the top of the country select. */
+  readonly countryPlaceholder: string;
+  /** Shown above the read-only summary on the review stage. */
+  readonly reviewHelper: string;
+  /** Placeholder for optional entries left empty, shown on the review stage. */
+  readonly notProvided: string;
+  /** Announced when a stage cannot be passed because fields are invalid. */
+  readonly fixErrorsNotice: string;
+  /** Validation message when the required trade licence file is missing. */
+  readonly licenceFileRequired: string;
+  /** Replaces the file input once a file is chosen (W5f wizard). */
+  readonly replaceFileLabel: string;
+  readonly submitLabel: string;
+  readonly submittingLabel: string;
+  readonly successTitle: string;
+  readonly successReferenceLabel: string;
+  readonly successBody: string;
+  /** Shown instead of the form when the signed form token cannot be issued. */
+  readonly unavailable: string;
+}
+
+export const PARTNER_APPLY: PartnerApplyContent = {
+  linkLabel: "Become a partner",
+  headline: "Apply to become a Nare partner",
+  intro:
+    "Tell us about your company and upload your trade licence. The Nare team reviews every application and contacts you by email about the next steps.",
+  sections: {
+    company: "Company",
+    licence: "Trade licence",
+    contacts: "Contacts",
+    signatory: "Signatory ID (optional)",
+    consent: "Consent",
+    review: "Review",
+  },
+  labels: {
+    companyLegalName: "Registered company name",
+    tradingName: "Trading name (optional)",
+    country: "Country",
+    city: "City",
+    address: "Registered address",
+    website: "Website (optional)",
+    notes: "Anything else we should know (optional)",
+    licenceNumber: "Trade licence number",
+    licenceAuthority: "Issuing authority",
+    licenceExpiry: "Licence expiry date",
+    licenceFile: "Trade licence document",
+    contactName: "Contact person",
+    contactRole: "Role (optional)",
+    contactEmail: "Email",
+    contactPhone: "Phone (WhatsApp)",
+    secondContact: "Second contact (optional)",
+    secondContactName: "Name",
+    secondContactEmail: "Email",
+    secondContactPhone: "Phone (WhatsApp)",
+    signatoryIdFile: "ID of the person signing (optional)",
+    otherFile: "Additional document (optional)",
+    consentKyc:
+      "I agree that Nare Travel and Tours processes the information and documents I send to check this application (KYC review).",
+    consentChannels:
+      "I agree that Nare Travel and Tours contacts me by email and adds my contact number to a WhatsApp group used for communication about travel requests.",
+  },
+  contactPhoneHelper: "Include the country code. This number must be reachable on WhatsApp.",
+  fileRules: "PDF, JPG or PNG, up to 10 MB per file.",
+  stepLabel: "Step {step} of {total}",
+  progressLabel: "Application progress",
+  backLabel: "Back",
+  nextLabel: "Next",
+  editLabel: "Edit",
+  countryPlaceholder: "Select a country",
+  reviewHelper:
+    "Check every entry before you send the application. Use Edit to go back to a section and change it.",
+  notProvided: "Not provided",
+  fixErrorsNotice: "Some fields need your attention before you can continue.",
+  licenceFileRequired: "Upload the trade licence document.",
+  replaceFileLabel: "Replace",
+  submitLabel: "Submit application",
+  submittingLabel: "Submitting…",
+  successTitle: "Application received",
+  successReferenceLabel: "Your application reference",
+  successBody:
+    "Thank you — your application has been received. Keep your reference; you will need it whenever you contact us about this application. The Nare team reviews every application and the documents by hand and will write to your email address with the outcome or with any questions.",
+  unavailable:
+    "The application form is not available right now. Please try again later or email us.",
 } as const;
 
 export interface ForgotAccessContent {

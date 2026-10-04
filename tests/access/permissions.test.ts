@@ -57,6 +57,8 @@ const EXPECTED_KEYS: PermissionKey[] = [
   "travel.client_docs.send",
   "travel.internal.view",
   "travel.internal.download",
+  // W5b: B2B partner application review, admin-only by default.
+  "partners.review",
 ];
 
 describe("permission keys", () => {
@@ -144,6 +146,17 @@ describe("role presets", () => {
         expect(ROLE_PRESETS[role].has(key), `${role} must not preset ${key}`).toBe(role === "ADMIN");
       }
     }
+  });
+
+  it("partners.review is in the ADMIN preset only (W5b)", () => {
+    for (const role of ALL_ROLES) {
+      expect(ROLE_PRESETS[role].has("partners.review"), `${role} must not preset partners.review`).toBe(
+        role === "ADMIN",
+      );
+    }
+    // ...but it stays grantable per user like any other key.
+    const effective = effectivePermissions("VALIDATOR", [{ key: "partners.review", allowed: true }]);
+    expect(effective.has("partners.review")).toBe(true);
   });
 
   it("unknown, empty and missing roles get the empty preset (exact match, not case-insensitive)", () => {

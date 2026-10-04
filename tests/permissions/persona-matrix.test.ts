@@ -534,7 +534,7 @@ describe("GET /api/permissions (admin.users)", () => {
     const res = await permissionsGET();
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.keys).toHaveLength(16);
+    expect(body.keys).toHaveLength(17);
     // The migration confirmation Log row is never touched in this file.
     expect(body.internalLocked).toBe(true);
     expect(body.users.some((u: any) => u.id === waOnly.id)).toBe(true);

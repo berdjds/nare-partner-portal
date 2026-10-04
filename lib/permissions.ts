@@ -36,6 +36,9 @@
  * - travel.client_docs.download / travel.client_docs.send: the travel roles
  *   (owner / assigned validator / ADMIN today; per-request checks stay on
  *   top).
+ * - partners.review (W5b): the B2B partner application queue — review,
+ *   approve/reject and KYC document download. ADMIN-only by default (no
+ *   other preset opts in), granted per user like any other key.
  *
  * The enforcement sites still check roles (lib/access-policy.ts and the
  * travel guard/workflow) until the follow-up tasks wire them to these keys;
@@ -75,6 +78,8 @@ export const PERMISSION_KEYS = [
   "travel.internal.view",
   /** Download INTERNAL costing-sheet documents. */
   "travel.internal.download",
+  /** Review B2B partner applications and download their KYC documents (W5b). */
+  "partners.review",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

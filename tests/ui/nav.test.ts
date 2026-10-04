@@ -63,6 +63,7 @@ describe("navGroupsForUser", () => {
         items: [
           { href: "/admin", label: "Accounts and users panel", icon: "shield-check" },
           { href: "/admin/permissions", label: "Permissions report", icon: "users" },
+          { href: "/admin/partners", label: "Partner applications", icon: "building-2" },
         ],
       },
     ]);
@@ -157,13 +158,32 @@ describe("navGroupsForUser", () => {
     expect(itemLabels(groups, "Travel")).toEqual(["Templates", "Notifications"]);
   });
 
-  it("ADMIN denied admin.users sees only the Accounts and users panel", () => {
+  it("ADMIN denied admin.users loses the permissions report but keeps role-gated and partners.review items", () => {
     // app/admin/page.tsx is role-gated (ADMIN) and stays visible; the
     // permissions report is permission-gated (app/admin/permissions/page.tsx
-    // requires hasPermission(user, "admin.users")) and drops out.
+    // requires hasPermission(user, "admin.users")) and drops out; partner
+    // applications are gated on partners.review (app/admin/partners/page.tsx),
+    // which a plain ADMIN preset still holds.
     const groups = navGroupsForUser(user("ADMIN", [{ key: "admin.users", allowed: false }]));
     expect(groupLabels(groups)).toEqual(["Inbox", "Travel", "Tools", "Admin"]);
-    expect(itemLabels(groups, "Admin")).toEqual(["Accounts and users panel"]);
+    expect(itemLabels(groups, "Admin")).toEqual(["Accounts and users panel", "Partner applications"]);
+  });
+
+  it("ADMIN denied partners.review loses the Partner applications link (W5b)", () => {
+    // app/admin/partners/page.tsx requires hasPermission(user, "partners.review");
+    // denying it must hide the link even though the other admin pages stay.
+    const groups = navGroupsForUser(user("ADMIN", [{ key: "partners.review", allowed: false }]));
+    expect(itemLabels(groups, "Admin")).toEqual(["Accounts and users panel", "Permissions report"]);
+  });
+
+  it("non-admin granted partners.review sees an Admin group with only Partner applications", () => {
+    // The partners.review gate is purely permission-based (a non-admin granted
+    // the key may review, per lib/partners/review.ts requirePartnerReviewer),
+    // while the Accounts panel stays role-gated — so the group appears with a
+    // single item.
+    const groups = navGroupsForUser(user("VALIDATOR", [{ key: "partners.review", allowed: true }]));
+    expect(groupLabels(groups)).toEqual(["Travel", "Tools", "Admin"]);
+    expect(itemLabels(groups, "Admin")).toEqual(["Partner applications"]);
   });
 
   it("unknown role sees only Tools (Calculator visible to any active user)", () => {
@@ -179,6 +199,12 @@ describe("navGroupsForUser", () => {
     const admin = groups.find((g) => g.label === "Admin")!.items.find((i) => i.href === "/admin")!;
     expect(admin.match("/admin")).toBe(true);
     expect(admin.match("/admin/permissions")).toBe(false);
+    expect(admin.match("/admin/partners")).toBe(false);
+
+    const partners = groups.find((g) => g.label === "Admin")!.items.find((i) => i.href === "/admin/partners")!;
+    expect(partners.match("/admin/partners")).toBe(true);
+    expect(partners.match("/admin/partners/abc123")).toBe(true);
+    expect(partners.match("/admin")).toBe(false);
 
     const requests = groups.find((g) => g.label === "Travel")!.items.find((i) => i.href === "/travel")!;
     expect(requests.match("/travel")).toBe(true);

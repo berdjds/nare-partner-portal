@@ -12,7 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/toast";
 import { friendlyLoginError } from "@/lib/login-errors";
 import { BrandMark } from "@/components/app/BrandMark";
-import { FORGOT_ACCESS, LOGIN_PANEL, PRODUCT_NAME } from "@/lib/portal-content";
+import { PublicHeader } from "@/components/public/PublicHeader";
+import { PublicFooter } from "@/components/public/PublicFooter";
+import { FORGOT_ACCESS, LOGIN_PANEL, PARTNER_APPLY, PRODUCT_NAME } from "@/lib/portal-content";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -56,7 +58,9 @@ function LoginForm() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader active="login" />
+      <div className="grid flex-1 lg:grid-cols-2">
       {/* Brand panel: second column on large screens, hidden on phones. Text
           wordmark until the real logo asset ships; no image file exists yet. */}
       <aside className="hidden bg-gradient-to-br from-primary to-brand text-primary-foreground lg:flex lg:flex-col lg:justify-center lg:gap-10 lg:px-16">
@@ -158,8 +162,14 @@ function LoginForm() {
           </CardContent>
         </Card>
         <Link
+          href="/partners/apply"
+          className="mt-4 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          {PARTNER_APPLY.linkLabel}
+        </Link>
+        <Link
           href="/"
-          className="mt-6 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          className="mt-2 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
           Back to home
         </Link>
@@ -167,6 +177,8 @@ function LoginForm() {
           Developed by <span className="font-medium text-foreground/70">Hayk FZC</span>
         </p>
       </div>
+      </div>
+      <PublicFooter />
     </div>
   );
 }

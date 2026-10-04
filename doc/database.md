@@ -164,6 +164,14 @@ silent fallback to another account). `User` gained a nullable `phone` (WhatsApp
 notification destination) and role values ADVISOR/VALIDATOR. Money and FX values are decimal strings; JSON
 payloads are String columns. See `prisma/schema.prisma` comments and `lib/travel/contracts.ts`.
 
+W5b partner enrollment (additive): PartnerApplication (public B2B application with
+KYC consent data; unique `reference` PA-YYYY-NNNN from a transactional per-year
+sequence in `lib/partners/reference.ts`; status SUBMITTED | INFO_REQUESTED | APPROVED |
+REJECTED; `reviewedById`/`agencyId` are plain strings without FKs so User and Agency
+stay untouched) and PartnerDocument (KYC file metadata — kind, mime decided from
+magic bytes, size, sha256, storagePath under `data/kyc/<applicationId>/`; cascade
+delete with the application).
+
 `TravelRequest.travelers` is a JSON `TravelerSetup` string: counts (adults, children, infants,
 paying, complimentary, leaders, staff) plus an optional `childAges` number array (age of each
 child at return, 0–12; one entry per child, validated by `travelerSchema` in
