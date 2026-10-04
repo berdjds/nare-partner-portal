@@ -13,10 +13,11 @@
  */
 
 import type { Metadata } from "next";
-import Link from "next/link";
-import { CONTACT, PAGE_TITLES, PARTNER_APPLY, PRODUCT_NAME, robotsDirective } from "@/lib/portal-content";
+import { CONTACT, PAGE_TITLES, PARTNER_APPLY, robotsDirective } from "@/lib/portal-content";
 import { issueFormToken } from "@/lib/partners/abuse";
 import { ApplyForm } from "@/components/partners/ApplyForm";
+import { PublicHeader } from "@/components/public/PublicHeader";
+import { PublicFooter } from "@/components/public/PublicFooter";
 
 // The form token is minted per request from the runtime signing secret and the
 // current time. Without this the page is prerendered at BUILD time (nothing in
@@ -41,12 +42,9 @@ export default function PartnerApplyPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
+      <PublicHeader active="apply" />
       <header className="bg-gradient-to-br from-primary to-brand text-primary-foreground">
         <div className="mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-12">
-          {/* Text wordmark until the real logo asset ships; no image file exists yet. */}
-          <Link href="/" className="text-xl font-bold uppercase tracking-[0.2em]">
-            {PRODUCT_NAME}
-          </Link>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             {PARTNER_APPLY.headline}
           </h1>
@@ -68,6 +66,7 @@ export default function PartnerApplyPage() {
           <ApplyForm formToken={formToken} />
         )}
       </div>
+      <PublicFooter />
     </main>
   );
 }
