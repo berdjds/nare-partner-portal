@@ -123,6 +123,8 @@ export interface PartnerApplyContent {
     readonly contacts: string;
     readonly signatory: string;
     readonly consent: string;
+    /** Fourth stage of the application wizard (W5f): read-only summary. */
+    readonly review: string;
   };
   readonly labels: {
     readonly companyLegalName: string;
@@ -151,6 +153,26 @@ export interface PartnerApplyContent {
   };
   readonly contactPhoneHelper: string;
   readonly fileRules: string;
+  /** Wizard chrome (W5f): stepper, navigation and review copy. */
+  /** Template for the step position, e.g. "Step 2 of 4". */
+  readonly stepLabel: string;
+  /** Accessible name of the stepper navigation. */
+  readonly progressLabel: string;
+  readonly backLabel: string;
+  readonly nextLabel: string;
+  readonly editLabel: string;
+  /** Empty option at the top of the country select. */
+  readonly countryPlaceholder: string;
+  /** Shown above the read-only summary on the review stage. */
+  readonly reviewHelper: string;
+  /** Placeholder for optional entries left empty, shown on the review stage. */
+  readonly notProvided: string;
+  /** Announced when a stage cannot be passed because fields are invalid. */
+  readonly fixErrorsNotice: string;
+  /** Validation message when the required trade licence file is missing. */
+  readonly licenceFileRequired: string;
+  /** Replaces the file input once a file is chosen (W5f wizard). */
+  readonly replaceFileLabel: string;
   readonly submitLabel: string;
   readonly submittingLabel: string;
   readonly successTitle: string;
@@ -171,6 +193,7 @@ export const PARTNER_APPLY: PartnerApplyContent = {
     contacts: "Contacts",
     signatory: "Signatory ID (optional)",
     consent: "Consent",
+    review: "Review",
   },
   labels: {
     companyLegalName: "Registered company name",
@@ -201,6 +224,18 @@ export const PARTNER_APPLY: PartnerApplyContent = {
   },
   contactPhoneHelper: "Include the country code. This number must be reachable on WhatsApp.",
   fileRules: "PDF, JPG or PNG, up to 10 MB per file.",
+  stepLabel: "Step {step} of {total}",
+  progressLabel: "Application progress",
+  backLabel: "Back",
+  nextLabel: "Next",
+  editLabel: "Edit",
+  countryPlaceholder: "Select a country",
+  reviewHelper:
+    "Check every entry before you send the application. Use Edit to go back to a section and change it.",
+  notProvided: "Not provided",
+  fixErrorsNotice: "Some fields need your attention before you can continue.",
+  licenceFileRequired: "Upload the trade licence document.",
+  replaceFileLabel: "Replace",
   submitLabel: "Submit application",
   submittingLabel: "Submitting…",
   successTitle: "Application received",

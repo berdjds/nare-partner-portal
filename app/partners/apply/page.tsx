@@ -1,5 +1,6 @@
 /**
- * Public partner application page (W5b) — /partners/apply.
+ * Public partner application page (W5b, staged wizard in W5f) —
+ * /partners/apply.
  *
  * Deliberately outside the authenticated AppShell (allow-listed in
  * tests/ui/design-guard.test.ts): anyone can open it, signed in or not. It is
@@ -15,7 +16,7 @@
 import type { Metadata } from "next";
 import { CONTACT, PAGE_TITLES, PARTNER_APPLY, robotsDirective } from "@/lib/portal-content";
 import { issueFormToken } from "@/lib/partners/abuse";
-import { ApplyForm } from "@/components/partners/ApplyForm";
+import { ApplyWizard } from "@/components/partners/ApplyWizard";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 
@@ -63,7 +64,7 @@ export default function PartnerApplyPage() {
             </a>
           </p>
         ) : (
-          <ApplyForm formToken={formToken} />
+          <ApplyWizard formToken={formToken} />
         )}
       </div>
       <PublicFooter />

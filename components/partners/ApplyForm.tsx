@@ -1,7 +1,13 @@
 "use client";
 
 /**
- * Public partner application form (W5b) — rendered by app/partners/apply/page.tsx.
+ * Public partner application form (W5b).
+ *
+ * Superseded on the page by the staged ApplyWizard (W5f,
+ * components/partners/ApplyWizard.tsx); kept in the repository for now
+ * because it owns the shared client-side pieces the wizard reuses (file
+ * rules, honeypot name, submit error strings, upload checks) and the
+ * ApplySuccess view.
  *
  * The field names mirror applicationFieldsSchema (lib/partners/validation.ts)
  * exactly, because the form posts multipart FormData straight to
@@ -32,22 +38,24 @@ import { CONTACT, PARTNER_APPLY } from "@/lib/portal-content";
 import { CONSENT_VERSION } from "@/lib/partners/validation";
 
 // Mirrors KYC_MAX_FILE_BYTES (lib/partners/kyc-storage.ts, node-only).
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_FILE_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
-const FILE_INPUT_ACCEPT = ALLOWED_FILE_EXTENSIONS.join(",");
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const ALLOWED_FILE_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
+export const FILE_INPUT_ACCEPT = ALLOWED_FILE_EXTENSIONS.join(",");
 
 // Mirrors HONEYPOT_FIELD (lib/partners/abuse.ts, node-only).
-const HONEYPOT_FIELD_NAME = "companyFax";
+export const HONEYPOT_FIELD_NAME = "companyFax";
 
-const FILE_FIELD_NAMES = ["licenceFile", "signatoryIdFile", "otherFile"] as const;
+export const FILE_FIELD_NAMES = ["licenceFile", "signatoryIdFile", "otherFile"] as const;
 
-const GENERIC_SUBMIT_ERROR =
+export type FileFieldName = (typeof FILE_FIELD_NAMES)[number];
+
+export const GENERIC_SUBMIT_ERROR =
   "Your application could not be submitted. Please check the form and try again.";
-const NETWORK_ERROR =
+export const NETWORK_ERROR =
   "The application could not be sent. Please check your connection and try again.";
 
 /** Client-side pre-check; the server decides the real type by magic bytes. */
-function validateUpload(file: File): string | null {
+export function validateUpload(file: File): string | null {
   if (file.size > MAX_FILE_BYTES) {
     return "Files must be at most 10 MB each.";
   }
@@ -59,7 +67,7 @@ function validateUpload(file: File): string | null {
   return null;
 }
 
-function isPresentFile(value: FormDataEntryValue | null): value is File {
+export function isPresentFile(value: FormDataEntryValue | null): value is File {
   return typeof File !== "undefined" && value instanceof File && (value.size > 0 || value.name !== "");
 }
 
