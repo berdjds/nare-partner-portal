@@ -54,6 +54,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 - **Travel sends never fall back between accounts.** All travel-module WhatsApp sends go through the account configured in the travel settings (`nare` by default); if it is disabled or not paired the send fails and is retried on the same account — never via Marhaba. See `doc/architecture.md` and `doc/deployment.md` for the accounts model and the Nare pairing runbook.
 - The first startup downloads a Chromium browser for Puppeteer. On Linux servers you may need to install additional system dependencies.
 - Keep `.wwebjs_auth/`, `.wwebjs_cache/`, `.env`, and the SQLite database secret — they contain the WhatsApp session and admin credentials.
+- **Security headers and start-up checks.** Every route sends the standard protective headers (HSTS, `nosniff`, frame denial, referrer/permissions policy, a baseline CSP) and the production server refuses to boot with a missing, placeholder or shorter-than-16-character `NEXTAUTH_SECRET` — see `doc/security.md` for the full list and the CSP roadmap.
 
 ## Environment variables
 
@@ -61,7 +62,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 |----------|---------|-------------|
 | `DATABASE_URL` | `file:./dev.db` | SQLite database path |
 | `NEXTAUTH_URL` | `http://localhost:3000` | App URL |
-| `NEXTAUTH_SECRET` | — | Random secret for JWT signing |
+| `NEXTAUTH_SECRET` | — | Random secret for JWT signing; use 32+ random characters. Production refuses to start with a missing, placeholder or shorter-than-16-character value (see `doc/security.md`) |
 | `ADMIN_EMAIL` | `admin@example.com` | Seeded admin email |
 | `ADMIN_PASSWORD` | `admin123` | Seeded admin password |
 

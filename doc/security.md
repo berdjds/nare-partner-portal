@@ -73,7 +73,9 @@ next upgraded or the peer is dropped — target: W2 dependency pass.
 
 ### Credentials and Secrets
 
-- Change `NEXTAUTH_SECRET` to a strong random value.
+- Change `NEXTAUTH_SECRET` to a strong random value (32+ characters; e.g.
+  `openssl rand -base64 32`). Since W7a the server enforces this at start-up —
+  see "Start-up environment validation (W7a)" below.
 - Change the seeded `ADMIN_PASSWORD` before deployment.
 - Do not commit `.env` or `.wwebjs_auth/`.
 
@@ -87,8 +89,10 @@ The Socket.io server (`/api/socket`) no longer answers cross-origin requests: th
 `allowRequest` hook in `lib/socket-auth.ts` accepts a handshake only when its
 `Origin` header exactly matches the origin of `NEXTAUTH_URL` (plus the optional
 comma-separated `SOCKET_ALLOWED_ORIGINS`, for local development). There is no
-`Access-Control-Allow-Origin: *` response header (the `/api/socket` headers in
-`next.config.js` were removed) and a missing `Origin` header is refused too.
+`Access-Control-Allow-Origin: *` response header (the `/api/socket` CORS
+headers in `next.config.js` were removed; the `headers()` function there now
+only emits the global security headers described under "HTTP security headers
+(W7a)" below) and a missing `Origin` header is refused too.
 On top of the origin gate, every handshake authenticates the NextAuth session
 cookie and only active users holding at least one socket-eligible permission
 connect (W3: any WhatsApp account's view or admin permission —
@@ -362,6 +366,68 @@ exposes the matrix as a per-user Permissions dialog in the existing users tab
 
 **Rate limiting and media validation.** Still open (see below).
 
+## HTTP security headers, start-up validation and QR rendering (W7a)
+
+**HTTP security headers.** `next.config.js` sets `poweredByHeader: false` (the
+framework is no longer advertised in `X-Powered-By`) and returns the following
+headers on every route via its `headers()` function:
+
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self';
+  form-action 'self'; object-src 'none'`
+
+These are emitted by the Next.js handler, so they cover the app pages and API
+routes; the Socket.io handshake and the `/uploads/*` media stream are answered
+by the custom server before Next.js and are governed by their own gates
+(origin/session checks — see "Access policy and permission model").
+`X-Frame-Options: DENY` and CSP `frame-ancestors 'none'` together block
+clickjacking for both old and new browsers.
+
+**Start-up environment validation.** `lib/env-check.ts` exports
+`checkEnvironment(env)`, a pure, Node-safe function (no Next.js or Prisma
+imports) that `server.ts` calls before anything listens. In production
+(`NODE_ENV=production`) a `NEXTAUTH_SECRET` that is missing, a placeholder
+(contains the `.env.example` marker `change-me`) or shorter than 16 characters
+is **fatal**: the process logs a `[Env] fatal: ...` line and exits non-zero
+instead of signing JWTs with a guessable key. A secret of 16–31 characters and
+a missing `NEXTAUTH_URL` are **warnings** (logged as `[Env] warning: ...`);
+outside production every problem is a warning only, so local development and
+CI keep working with the `.env.example` value. Log lines never include the
+secret value — they are written to the deploy log verbatim.
+
+**Safe QR rendering.** The admin Accounts tab
+(`components/admin/AccountsPanel.tsx`) renders the WhatsApp pairing QR as an
+`<img>` with a `data:image/svg+xml` URI (`encodeURIComponent` of the SVG)
+instead of injecting the SVG with `dangerouslySetInnerHTML`: the SVG comes
+from the WhatsApp runtime, and injecting it as markup would hand that channel
+a script-execution path. A guard test (`tests/ui/no-raw-html.test.ts`) fails
+the suite if `dangerouslySetInnerHTML` appears anywhere in `app/` or
+`components/` outside an allow-list that is currently empty.
+
+**Content-Security-Policy roadmap.** The W7a policy deliberately omits
+`script-src` and `style-src`: locking those down requires per-request nonces,
+because the App Router emits inline bootstrap scripts and inline styles. A
+later W7 phase will add them roughly as follows:
+
+1. Generate a cryptographic nonce per request in Next.js middleware and expose
+   it to the app through a request header (read it in the root layout and pass
+   it to every inline `<Script nonce={...}>` / style tag).
+2. Send `Content-Security-Policy` from the same middleware with
+   `script-src 'self' 'nonce-<value>' 'strict-dynamic'` (and a `style-src`
+   nonce or hash list), replacing the static header from `next.config.js` for
+   document responses.
+3. Keep `frame-ancestors 'none'; base-uri 'self'; form-action 'self';
+   object-src 'none'` from W7a and add `default-src 'self'` once the nonce
+   rollout is verified not to break Socket.io, the uploads stream or sign-in.
+4. Verify with nonce-aware tooling (e.g. CSP Evaluator) and a manual pass over
+   the dashboard, admin panel and travel module before enforcing; optionally
+   ship `Content-Security-Policy-Report-Only` first.
+
 ## Security Checklist Before Production
 
 - [ ] Upgrade all dependencies and resolve `npm audit` findings.
@@ -371,5 +437,8 @@ exposes the matrix as a per-user Permissions dialog in the existing users tab
 - [x] Authenticate and room-scope Socket.io (W1: session-cookie handshake, server-managed rooms — W3: per-account `inbox:<accountKey>`/`admins:<accountKey>`, 60s + token-expiry revalidation — see "Access policy and permission model").
 - [ ] Add rate limiting and input size limits.
 - [x] Protect `/uploads/` (W1: authenticated streaming via the custom server — see "Access policy and permission model"; media stays under `public/uploads/`).
+- [x] Send the standard security headers on every route (W7a: `next.config.js` `headers()` + `poweredByHeader: false` — see "HTTP security headers, start-up validation and QR rendering (W7a)").
+- [x] Refuse to boot production with a placeholder or short `NEXTAUTH_SECRET` (W7a: `checkEnvironment()` in `lib/env-check.ts`, called from `server.ts` before listening).
+- [ ] Add `script-src`/`style-src` to the Content-Security-Policy with per-request nonces (later W7 phase — see the CSP roadmap in the W7a section).
 - [ ] Back up `.wwebjs_auth/` securely.
 - [ ] Review Puppeteer sandbox settings for your hosting environment.
