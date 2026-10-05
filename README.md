@@ -77,6 +77,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 ## Documentation
 
 - [doc/README.md](doc/README.md) — full documentation index
+- [doc/landing-content.md](doc/landing-content.md) — public landing page copy: where it lives (`lib/portal-content.ts`), the owner review rule before launch, the claims left out on purpose, and how to add a section
 - [doc/deployment.md](doc/deployment.md) — production release path for portal.nare.am: server provisioning, the CI release pipeline (staging → production), rollback/restore runbooks, backups and drills
 
 The repo-root `docker-compose.yml` is for **local development only**; the
