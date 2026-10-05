@@ -7,6 +7,19 @@ import { socketAllowRequest } from "./lib/socket-auth";
 import { startNotificationWorker, sweepOverdueValidations } from "./lib/travel/notifications";
 import { handleUploadsRequest, routeUploadsRequest } from "./lib/uploads";
 import { resolveServerRuntime } from "./lib/server-mode";
+import { checkEnvironment } from "./lib/env-check";
+
+// W7a start-up check: refuse to boot a production deployment with a missing,
+// placeholder or trivially short session secret. Runs before anything
+// listens; the log line must never print the secret value.
+const envCheck = checkEnvironment();
+for (const warning of envCheck.warnings) {
+  console.warn(`[Env] warning: ${warning}`);
+}
+if (envCheck.fatal.length > 0) {
+  console.error(`[Env] fatal: ${envCheck.fatal.join("; ")}`);
+  process.exit(1);
+}
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
