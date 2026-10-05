@@ -10,6 +10,14 @@
  *  2. populate it with chats, messages and a notification delivery
  *  3. run the repo's current `prisma db push` against that file
  *  4. verify the data with the current Prisma client
+ *
+ * The final describe block extends the drill for W6a: the deploy-time push on
+ * a populated database must also create the additive PasswordResetToken and
+ * SecurityRequest tables with their declared constraints (unique tokenHash,
+ * @@index([userId]), @@index([kind, createdAt]), no foreign key on
+ * SecurityRequest). These assertions use raw SQL on purpose: they verify the
+ * database structure itself and stay valid even before `prisma generate` has
+ * regenerated the typed client with the new models.
  */
 
 import { execSync } from "child_process";
@@ -257,5 +265,59 @@ describe("db push backfill on a populated pre-W3 database", () => {
         data: { accountId: "marhaba", chatId: "c1", remoteJid: "37411000001@c.us", whatsappMessageId: "wamid.old.1" },
       })
     ).rejects.toMatchObject({ code: "P2002" });
+  });
+});
+
+describe("W6a additive tables on the pushed populated database", () => {
+  // Test-only hashes, built at run time (never real tokens).
+  const hashA = String("a".repeat(64));
+  const hashB = String("b".repeat(64));
+  const subjectHash = String("c".repeat(64));
+  const ipHash = String("d".repeat(64));
+
+  it("creates PasswordResetToken with a unique tokenHash and an index on userId", async () => {
+    // userId is a plain string without a foreign key: a row referencing a
+    // user id that does not exist in this fixture must still insert.
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "PasswordResetToken" ("id","userId","tokenHash","expiresAt","usedAt","createdAt")
+       VALUES ('prt1','u-missing','${hashA}',datetime('now','+30 minutes'),NULL,datetime('now'))`
+    );
+    // tokenHash is unique: a second row with the same hash is rejected.
+    await expect(
+      prisma.$executeRawUnsafe(
+        `INSERT INTO "PasswordResetToken" ("id","userId","tokenHash","expiresAt","usedAt","createdAt")
+         VALUES ('prt2','u1','${hashA}',datetime('now','+30 minutes'),NULL,datetime('now'))`
+      )
+    ).rejects.toThrow();
+    // userId is indexed, not unique: one user may hold several tokens.
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "PasswordResetToken" ("id","userId","tokenHash","expiresAt","usedAt","createdAt")
+       VALUES ('prt3','u1','${hashB}',datetime('now','+30 minutes'),NULL,datetime('now'))`
+    );
+
+    const indexes = await prisma.$queryRawUnsafe<{ name: string }[]>(
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'PasswordResetToken' AND name NOT LIKE 'sqlite_autoindex_%'`
+    );
+    expect(indexes.map((i) => i.name).sort()).toEqual([
+      "PasswordResetToken_tokenHash_key",
+      "PasswordResetToken_userId_idx",
+    ]);
+  });
+
+  it("creates SecurityRequest with a (kind, createdAt) index and no foreign keys", async () => {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "SecurityRequest" ("id","kind","subjectHash","ipHash","createdAt")
+       VALUES ('sr1','PASSWORD_RESET_REQUEST','${subjectHash}','${ipHash}',datetime('now'))`
+    );
+
+    const foreignKeys = await prisma.$queryRawUnsafe<unknown[]>(
+      `PRAGMA foreign_key_list('SecurityRequest')`
+    );
+    expect(foreignKeys).toHaveLength(0);
+
+    const indexes = await prisma.$queryRawUnsafe<{ name: string }[]>(
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'SecurityRequest' AND name NOT LIKE 'sqlite_autoindex_%'`
+    );
+    expect(indexes.map((i) => i.name)).toEqual(["SecurityRequest_kind_createdAt_idx"]);
   });
 });

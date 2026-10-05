@@ -700,3 +700,39 @@ model PartnerDocument {
 
   application PartnerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 }
+
+// =============================================================================
+// W6a: self-service password reset (additive)
+// PasswordResetToken stores only the sha256 hash of the emailed reset token,
+// never the token itself; issuing a new token invalidates earlier unused ones
+// and a successful reset marks the token used (single-use, 30-minute lifetime,
+// see lib/security/reset-token.ts). userId is a plain string WITHOUT a foreign
+// key — the same no-FK precedent as W5b (PartnerApplication): a Prisma
+// relation would require a back-reference field on the existing User model,
+// and this phase is restricted to purely additive changes.
+// SecurityRequest is the DB-backed counter for the request limits in
+// lib/security/limits.ts (per hashed IP, per hashed email, global daily, and
+// confirm attempts); subjectHash and ipHash hold hashes only, never raw
+// emails or IP addresses.
+// =============================================================================
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String // User.id of the account being reset (no FK — see above)
+  tokenHash String    @unique // sha256 of the emailed token, bound to the reset purpose
+  expiresAt DateTime
+  usedAt    DateTime? // set when the token is consumed; null = still usable
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model SecurityRequest {
+  id          String   @id @default(cuid())
+  kind        String // PASSWORD_RESET_REQUEST | PASSWORD_RESET_CONFIRM
+  subjectHash String // hashed email the request targets
+  ipHash      String // hashed client IP, never the raw IP
+  createdAt   DateTime @default(now())
+
+  @@index([kind, createdAt])
+}
