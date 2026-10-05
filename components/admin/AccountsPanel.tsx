@@ -92,7 +92,14 @@ export default function AccountsPanel({ accounts, browserLink, busyAccount, onAc
               {state?.qrSvg ? (
                 <div className="rounded-lg border bg-white p-4">
                   <p className="mb-2 text-sm font-medium">Scan this QR code with WhatsApp on your phone:</p>
-                  <div dangerouslySetInnerHTML={{ __html: state.qrSvg }} className="inline-block" />
+                  {/* Data-URI img instead of raw HTML: the SVG comes from the
+                      WhatsApp runtime, and injecting it as markup would hand
+                      that channel a script-execution path (W7a). */}
+                  <img
+                    src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(state.qrSvg)}`}
+                    alt={`WhatsApp pairing QR code for ${account.displayName}`}
+                    className="inline-block"
+                  />
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">{state?.info || "Waiting for WhatsApp state..."}</p>
