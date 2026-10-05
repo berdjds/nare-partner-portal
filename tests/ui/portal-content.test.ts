@@ -8,16 +8,22 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  ABOUT_NARE,
+  ARMENIA_GLANCE,
+  B2B_SERVICES,
   BENEFITS,
   CONTACT,
+  DMC_STRENGTHS,
   FORGOT_ACCESS,
   HERO,
   HOW_IT_WORKS_STEPS,
   INDEXABLE,
+  LANDING_SECTION_TITLES,
   LOGIN_PANEL,
   MAILTO_SUBJECTS,
   PAGE_TITLES,
   PRODUCT_NAME,
+  WHY_NARE,
   robotsDirective,
 } from "@/lib/portal-content";
 
@@ -142,3 +148,100 @@ describe("portal content: wording guards", () => {
     expect(userFacing).toMatch(/access is granted by the Nare team/i);
   });
 });
+
+describe("portal content: W5e approved B2B copy shape", () => {
+  it("lists exactly four B2B services", () => {
+    expect(B2B_SERVICES).toHaveLength(4);
+  });
+
+  it("lists exactly four reasons to choose Nare", () => {
+    expect(WHY_NARE).toHaveLength(4);
+  });
+
+  it("lists exactly four DMC strengths", () => {
+    expect(DMC_STRENGTHS).toHaveLength(4);
+  });
+
+  it("lists exactly three Armenia at a glance items", () => {
+    expect(ARMENIA_GLANCE.items).toHaveLength(3);
+  });
+
+  it("has no empty string anywhere in the W5e exports", () => {
+    const strings = collectStrings([
+      B2B_SERVICES,
+      WHY_NARE,
+      DMC_STRENGTHS,
+      ABOUT_NARE,
+      ARMENIA_GLANCE,
+      LANDING_SECTION_TITLES,
+    ]);
+    expect(strings.length).toBeGreaterThan(0);
+    for (const value of strings) {
+      expect(value.trim()).not.toBe("");
+    }
+  });
+});
+
+describe("portal content: W5e approved wording", () => {
+  it("exposes the exact B2B services section heading and first service", () => {
+    expect(LANDING_SECTION_TITLES.services).toEqual({
+      title: "Our B2B Services",
+      subtitle: "Comprehensive solutions for business travel and events",
+    });
+    expect(B2B_SERVICES[0]).toEqual({
+      title: "DMC Services",
+      body: "Comprehensive Destination Management Company services in Armenia",
+    });
+  });
+
+  it("exposes the exact story title and body", () => {
+    expect(ABOUT_NARE.title).toBe("Our Story");
+    expect(ABOUT_NARE.body).toBe(
+      "Founded in 2014, Nare Travel and Tours has grown from a small local agency to one of Armenia's leading travel companies. We began with a simple mission: to share Armenia's rich cultural heritage with the world while providing exceptional travel experiences. Today, we're proud to serve thousands of travelers each year, offering both local and international travel solutions with the same dedication to quality and personal attention that has been our hallmark since day one.",
+    );
+  });
+
+  it("exposes the exact Armenia intro and DMC coverage line", () => {
+    expect(ARMENIA_GLANCE.intro).toBe(
+      "Experience the rich history and stunning landscapes of our ancient land",
+    );
+    expect(DMC_STRENGTHS[3]).toEqual({
+      title: "Armenia and Georgia",
+      body: "Your trusted Destination Management Company in Armenia and Georgia",
+    });
+  });
+});
+
+describe("portal content: W5e banned claims", () => {
+  const userFacing = collectStrings([
+    B2B_SERVICES,
+    WHY_NARE,
+    DMC_STRENGTHS,
+    ABOUT_NARE,
+    ARMENIA_GLANCE,
+    LANDING_SECTION_TITLES,
+  ]).join("\n");
+
+  it("contains no numeric claims such as 500+ or 99%", () => {
+    expect(userFacing).not.toMatch(/\d\s*[+%]/);
+  });
+
+  it("contains no price, speed, award or superlative claims", () => {
+    expect(userFacing).not.toMatch(
+      /\b(prices?|cheap|fastest|awards?|instant(ly)?|best)\b/i,
+    );
+  });
+});
+
+function collectStrings(value: unknown): string[] {
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(collectStrings);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.values(value).flatMap(collectStrings);
+  }
+  return [];
+}

@@ -265,3 +265,130 @@ export const INDEXABLE: boolean = false;
 export function robotsDirective(): string {
   return INDEXABLE ? "index, follow" : "noindex, nofollow";
 }
+
+/**
+ * Approved Nare B2B landing copy (phase W5e). Every string below is wording
+ * approved from the public nare.am site; no other claims (prices, speed,
+ * awards, partner counts or any number beyond "2014" and "24/7") may be
+ * added without approval.
+ */
+export interface TitledContentItem {
+  readonly title: string;
+  readonly body: string;
+}
+
+/** b2b.services — the four B2B service lines. */
+export const B2B_SERVICES: readonly TitledContentItem[] = [
+  {
+    title: "DMC Services",
+    body: "Comprehensive Destination Management Company services in Armenia",
+  },
+  {
+    title: "MICE Solutions",
+    body: "Complete MICE event planning and management",
+  },
+  {
+    title: "Corporate Travel",
+    body: "Efficient business travel management services",
+  },
+  {
+    title: "Group Bookings",
+    body: "Specialized services for large group travel",
+  },
+] as const;
+
+/** home.features / about — why partners choose Nare. */
+export const WHY_NARE: readonly TitledContentItem[] = [
+  {
+    title: "Experience since 2014",
+    body: "Crafting unforgettable travel experiences since 2014",
+  },
+  {
+    title: "Global network",
+    body: "International partnerships and connections",
+  },
+  {
+    title: "Local expertise",
+    body: "In-depth knowledge of destinations and attractions",
+  },
+  {
+    title: "Professional team",
+    body: "Experienced multilingual staff",
+  },
+] as const;
+
+/** b2b.dmc.features — Destination Management Company strengths. */
+export const DMC_STRENGTHS: readonly TitledContentItem[] = [
+  {
+    title: "24/7 Support",
+    body: "Round-the-clock assistance for your clients",
+  },
+  {
+    title: "Secure Operations",
+    body: "Licensed and insured services",
+  },
+  {
+    title: "Professional Team",
+    body: "Experienced multilingual staff",
+  },
+  {
+    title: "Armenia and Georgia",
+    body: "Your trusted Destination Management Company in Armenia and Georgia",
+  },
+] as const;
+
+export interface AboutNareContent {
+  readonly title: string;
+  readonly body: string;
+}
+
+/** about.story — the company story. */
+export const ABOUT_NARE: AboutNareContent = {
+  title: "Our Story",
+  body: "Founded in 2014, Nare Travel and Tours has grown from a small local agency to one of Armenia's leading travel companies. We began with a simple mission: to share Armenia's rich cultural heritage with the world while providing exceptional travel experiences. Today, we're proud to serve thousands of travelers each year, offering both local and international travel solutions with the same dedication to quality and personal attention that has been our hallmark since day one.",
+} as const;
+
+export interface ArmeniaGlanceContent {
+  readonly intro: string;
+  readonly items: readonly TitledContentItem[];
+}
+
+/** armeniaTours — Armenia at a glance. */
+export const ARMENIA_GLANCE: ArmeniaGlanceContent = {
+  intro: "Experience the rich history and stunning landscapes of our ancient land",
+  items: [
+    {
+      title: "Cultural tours",
+      body: "Deep dive into Armenian heritage and traditions",
+    },
+    {
+      title: "Day trips",
+      body: "Explore Armenia's highlights in one-day excursions",
+    },
+    {
+      title: "Multi-day tours",
+      body: "Comprehensive tours covering multiple destinations",
+    },
+  ],
+} as const;
+
+export interface LandingSectionTitles {
+  readonly services: { readonly title: string; readonly subtitle: string };
+  readonly whyNare: { readonly title: string };
+  readonly dmc: { readonly title: string };
+  readonly armenia: { readonly title: string };
+}
+
+/**
+ * Accessible headings for the W5e landing sections; the story heading lives
+ * in ABOUT_NARE.title.
+ */
+export const LANDING_SECTION_TITLES: LandingSectionTitles = {
+  services: {
+    title: "Our B2B Services",
+    subtitle: "Comprehensive solutions for business travel and events",
+  },
+  whyNare: { title: "Why choose us" },
+  dmc: { title: "DMC strengths" },
+  armenia: { title: "Armenia at a glance" },
+} as const;
