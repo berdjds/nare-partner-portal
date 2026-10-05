@@ -190,6 +190,17 @@ The design system is pinned by `tests/ui/` (all pure node tests; only
   documents rendered section by section, "Last updated", the "Contact us"
   block, metadata titles and `robots` pinned to `robotsDirective()`, and
   token-only colours.
+- `landing-v2.test.ts` (W5e) — the landing renders the four approved B2B
+  sections in order between the hero and the contact block, each with its id
+  and an accessible labelled heading, every W5e content string from
+  `lib/portal-content.ts`, the h1→h2/h3 heading outline in order, and the
+  `/partners/apply` + `/login` links on both the landing and the sign-in
+  page.
+- `public-no-green.test.ts` (W5e) — no green-family colour classes
+  (green/emerald/lime/teal) and no raw hex or hsl colours anywhere on the
+  public surface (`components/landing`, `components/public`, `app/page.tsx`,
+  `app/login`, `app/partners/apply`, `app/terms`, `app/privacy`), with
+  negative fixtures proving the detectors bite.
 
 Run them with `npm test`.
 
@@ -244,8 +255,11 @@ only:
   `© {current year} {PRODUCT_NAME}. All rights reserved.`
 
 The landing page composes `PublicHeader active="home"`, the landing sections
-(`Hero`, `HowItWorks`, `Benefits`, `ContactBlock` from `components/landing/`)
-and `PublicFooter`; the earlier `components/landing/Footer.tsx` is retained
+from `components/landing/` — `Hero`, then the W5e B2B sections
+(`ServicesSection` with the `DMC strengths` sub-block, `WhyNareSection`,
+`AboutNareSection`, `ArmeniaGlanceSection`, each a `<section>` with an id and
+an `aria-labelledby` heading), then `HowItWorks`, `Benefits`, `ContactBlock`
+— and `PublicFooter`; the earlier `components/landing/Footer.tsx` is retained
 but no longer used. The sign-in page renders `PublicHeader active="login"`
 above its two-column panel and `PublicFooter` below; the apply page renders
 `PublicHeader active="apply"`. The legal pages pass no `active` (none of the
@@ -282,6 +296,9 @@ constants — pages and components never hard-code strings:
   home, login and the apply page.
 - `HERO`, `HOW_IT_WORKS_STEPS`, `BENEFITS` — landing page headline, sub-line,
   CTA label, the three "how it works" steps, and the benefit list.
+- `B2B_SERVICES`, `WHY_NARE`, `DMC_STRENGTHS`, `ABOUT_NARE`,
+  `ARMENIA_GLANCE`, `LANDING_SECTION_TITLES` (W5e) — the approved nare.am B2B
+  copy for the four landing sections and their accessible headings.
 - `LOGIN_PANEL` — headline and bullets for the login brand panel.
 - `PARTNER_APPLY` — everything the application wizard renders: section and
   field labels, the stepper chrome (`stepLabel` "Step {step} of {total}",
@@ -308,11 +325,14 @@ to approved partners; the only approved claims are one place to send requests,
 validation by the Nare team, and a clear status to follow.
 
 Landing page sections are composed from `components/landing/` (`Hero`,
-`HowItWorks`, `Benefits`, `ContactBlock`) by `app/page.tsx` for signed-out
+`ServicesSection`, `WhyNareSection`, `AboutNareSection`,
+`ArmeniaGlanceSection`, `HowItWorks`, `Benefits`, `ContactBlock`) by
+`app/page.tsx` for signed-out
 visitors, between the shared `PublicHeader` and `PublicFooter`. The brand
 gradient uses design tokens only
 (`bg-gradient-to-br from-primary to-brand`); raw palette classes and hex
-literals stay out of page code.
+literals stay out of page code, and no green-family colour appears on any
+public page (guarded by `tests/ui/public-no-green.test.ts`).
 
 ### The INDEXABLE flag
 

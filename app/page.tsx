@@ -5,6 +5,10 @@ import { authOptions } from "@/lib/auth";
 import { canUseInbox, getActiveUser } from "@/lib/access-policy";
 import { PAGE_TITLES, robotsDirective } from "@/lib/portal-content";
 import { Hero } from "@/components/landing/Hero";
+import { ServicesSection } from "@/components/landing/ServicesSection";
+import { WhyNareSection } from "@/components/landing/WhyNareSection";
+import { AboutNareSection } from "@/components/landing/AboutNareSection";
+import { ArmeniaGlanceSection } from "@/components/landing/ArmeniaGlanceSection";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Benefits } from "@/components/landing/Benefits";
 import { ContactBlock } from "@/components/landing/ContactBlock";
@@ -44,6 +48,12 @@ export default async function HomePage() {
     <main className="min-h-screen bg-background text-foreground">
       <PublicHeader active="home" />
       <Hero />
+      {/* W5e: the approved Nare B2B story sits between the hero and the
+          portal mechanics, before the contact block. */}
+      <ServicesSection />
+      <WhyNareSection />
+      <AboutNareSection />
+      <ArmeniaGlanceSection />
       <HowItWorks />
       <Benefits />
       <ContactBlock />
