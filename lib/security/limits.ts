@@ -17,6 +17,8 @@
  * race can overshoot by a little — acceptable for abuse protection.
  */
 
+import { createHash } from "node:crypto";
+
 export const MAX_RESET_REQUESTS_PER_IP_PER_HOUR = 5;
 export const MAX_RESET_REQUESTS_PER_EMAIL_PER_HOUR = 3;
 export const MAX_RESET_REQUESTS_PER_DAY_GLOBAL = 200;
@@ -27,6 +29,28 @@ export const SECURITY_REQUEST_KIND_REQUEST = "PASSWORD_RESET_REQUEST";
 export const SECURITY_REQUEST_KIND_CONFIRM = "PASSWORD_RESET_CONFIRM";
 
 const HOUR_MS = 60 * 60 * 1000;
+
+const EMAIL_HASH_PURPOSE = "password-reset-email";
+
+// Hidden field on the /forgot-password form that bots fill and humans never
+// see; any non-empty value means bot. Shared by the request route and the
+// page (Next.js route modules may only export HTTP verbs, so it lives here).
+export const PASSWORD_RESET_HONEYPOT_FIELD = "website";
+
+/**
+ * Salted one-way hash of the email a reset request targets; the raw address
+ * is never persisted (SecurityRequest.subjectHash). Normalised (trimmed,
+ * lowercased) so case variations share one quota bucket. Like hashClientIp
+ * in lib/partners/abuse.ts, a missing NEXTAUTH_SECRET fails closed: with a
+ * known salt anyone could reverse the hash over a dictionary of emails.
+ */
+export function hashResetEmail(email: string): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error("NEXTAUTH_SECRET is required to hash reset request emails");
+  return createHash("sha256")
+    .update(`${EMAIL_HASH_PURPOSE}:${secret}:${email.trim().toLowerCase()}`)
+    .digest("hex");
+}
 
 /** The slice of PrismaClient (or a transaction client) the limit checks need. */
 export interface SecurityRequestCounter {
