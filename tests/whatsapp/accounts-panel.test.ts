@@ -86,9 +86,13 @@ describe("AccountsPanel", () => {
     expect(html).toContain("37420000099");
     expect(html).toContain("Not paired");
 
-    // Only nare carries a QR: its markup renders exactly once, while
-    // marhaba's card keeps its own state text and the no-QR fallback.
-    expect(count(html, "<svg>nare-qr</svg>")).toBe(1);
+    // Only nare carries a QR: it renders exactly once as an <img> with the
+    // SVG URI-encoded into a data URI (never as raw markup), while marhaba's
+    // card keeps its own state text and the no-QR fallback.
+    expect(count(html, "<img")).toBe(1);
+    expect(html).toContain(`src="data:image/svg+xml;charset=utf-8,${encodeURIComponent("<svg>nare-qr</svg>")}"`);
+    expect(html).toContain('alt="WhatsApp pairing QR code for Nare Travel and Tours"');
+    expect(html).not.toContain("<svg>nare-qr</svg>");
     expect(count(html, "Scan this QR code with WhatsApp")).toBe(1);
     expect(count(html, "Waiting for WhatsApp state...")).toBe(1);
     expect(html).toContain(">ready<");
