@@ -48,3 +48,26 @@ export function buildPasswordResetEmailText(token: string): string {
 export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
   await sendEmail({ to, subject: RESET_EMAIL_SUBJECT, text: buildPasswordResetEmailText(token) });
 }
+
+export const RESET_CONFIRMED_EMAIL_SUBJECT = "Your partner portal password was changed";
+
+export function buildPasswordResetConfirmedEmailText(): string {
+  return [
+    "Hello,",
+    "",
+    "The password for this account was just changed, and every other signed-in session was signed out.",
+    "",
+    "If this was you, there is nothing more to do.",
+    "If you did not change your password, contact your Nare account manager right away.",
+    "",
+    "Nare Travel and Tours",
+  ].join("\n");
+}
+
+export async function sendPasswordResetConfirmationEmail(to: string): Promise<void> {
+  await sendEmail({
+    to,
+    subject: RESET_CONFIRMED_EMAIL_SUBJECT,
+    text: buildPasswordResetConfirmedEmailText(),
+  });
+}
