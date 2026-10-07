@@ -34,7 +34,7 @@ The main exports, in the order they appear on the page:
 | `LOGIN_PANEL` | Headline and bullets on the sign-in page |
 | `PARTNER_APPLY` | All wording for the partner application wizard |
 | `CONTACT`, `OFFICE_ADDRESS` | Email, phone numbers and office address |
-| `MAILTO_SUBJECTS`, `FORGOT_ACCESS` | Contact links and the forgot-password hint |
+| `MAILTO_SUBJECTS`, `FORGOT_ACCESS` | Contact links; `FORGOT_ACCESS` is the sign-in page's "Forgot your password?" link to /forgot-password (W6a), and `FORGOT_PAGE` / `RESET_PAGE` hold the two reset pages' copy |
 | `INDEXABLE`, `robotsDirective()` | The single place that decides whether public pages may be indexed (currently `noindex`) |
 
 ## Review rule

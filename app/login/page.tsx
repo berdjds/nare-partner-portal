@@ -152,12 +152,12 @@ function LoginForm() {
               </Button>
             </form>
             <p className="mt-4 text-center text-sm">
-              <a
-                href={`mailto:${FORGOT_ACCESS.mailto}`}
+              <Link
+                href={FORGOT_ACCESS.href}
                 className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
               >
-                {FORGOT_ACCESS.text}
-              </a>
+                {FORGOT_ACCESS.label}
+              </Link>
             </p>
           </CardContent>
         </Card>
