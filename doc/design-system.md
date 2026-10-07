@@ -311,8 +311,9 @@ constants — pages and components never hard-code strings:
 - `OFFICE_ADDRESS` — `91 Teryan St, Tparan Business Center, Yerevan,
   Armenia` (owner-confirmed 2026-10-03), rendered in the footer and the legal
   pages' "Contact us" card.
-- `MAILTO_SUBJECTS`, `FORGOT_ACCESS` — mailto subjects and the
-  "Forgot your password? Contact your Nare account manager" mailto.
+- `MAILTO_SUBJECTS`, `FORGOT_ACCESS` — mailto subjects and the sign-in
+  page's "Forgot your password?" link to /forgot-password (W6a); the reset
+  pages' copy lives in `FORGOT_PAGE` and `RESET_PAGE`.
 - `INDEXABLE` and `robotsDirective()` — see below.
 
 The legal documents are not part of `portal-content.ts`: they live in

@@ -106,6 +106,14 @@ const PAGE_ALLOWLIST: { file: string; reason: string }[] = [
     reason: "public unauthenticated partner application page (W5b) — deliberately outside the authenticated shell, like login",
   },
   {
+    file: "app/forgot-password/page.tsx",
+    reason: "public unauthenticated password-reset request page (W6a) — deliberately outside the authenticated shell, like login",
+  },
+  {
+    file: "app/reset-password/page.tsx",
+    reason: "public unauthenticated password-reset confirm page (W6a) — reached from the emailed link, outside the authenticated shell like login",
+  },
+  {
     file: "app/terms/page.tsx",
     reason: "public unauthenticated legal page (W5f) — renders the drafted Terms of Use with the public header/footer, not the authenticated shell",
   },
@@ -202,10 +210,12 @@ describe("W4 design guards", () => {
 
     it("the allow-listed pages are exactly the root redirect, the public pages and the legal pages", () => {
       expect(PAGE_ALLOWLIST.map((e) => e.file).sort()).toEqual([
+        "app/forgot-password/page.tsx",
         "app/login/page.tsx",
         "app/page.tsx",
         "app/partners/apply/page.tsx",
         "app/privacy/page.tsx",
+        "app/reset-password/page.tsx",
         "app/terms/page.tsx",
       ]);
       // app/page.tsx must stay a redirect-only page to keep its exemption.

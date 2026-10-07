@@ -1,6 +1,7 @@
 /**
- * Typed content for the public landing page and sign-in page of the
- * Nare Travel and Tours B2B partner portal (phase W5a).
+ * Typed content for the public landing page, sign-in page and self-service
+ * password-reset pages of the Nare Travel and Tours B2B partner portal
+ * (phase W5a; reset pages added in W6a).
  *
  * Kept dependency-free and pure so both App Router pages and tests can import
  * it without pulling in React or Next. Wording is deliberately conservative:
@@ -14,12 +15,16 @@ export interface PageTitles {
   readonly home: string;
   readonly login: string;
   readonly partnerApply: string;
+  readonly forgotPassword: string;
+  readonly resetPassword: string;
 }
 
 export const PAGE_TITLES: PageTitles = {
   home: "Nare Travel and Tours — Partner Portal",
   login: "Sign in — Nare Travel and Tours Portal",
   partnerApply: "Become a partner — Nare Travel and Tours Portal",
+  forgotPassword: "Forgot your password — Nare Travel and Tours Portal",
+  resetPassword: "Choose a new password — Nare Travel and Tours Portal",
 } as const;
 
 export interface HeroContent {
@@ -247,13 +252,95 @@ export const PARTNER_APPLY: PartnerApplyContent = {
 } as const;
 
 export interface ForgotAccessContent {
-  readonly text: string;
-  readonly mailto: string;
+  /** Link label shown under the sign-in form. */
+  readonly label: string;
+  /** Target of the link — the self-service reset request page (W6a). */
+  readonly href: string;
 }
 
 export const FORGOT_ACCESS: ForgotAccessContent = {
-  text: "Forgot your password? Contact your Nare account manager",
-  mailto: CONTACT.email,
+  label: "Forgot your password?",
+  href: "/forgot-password",
+} as const;
+
+/**
+ * Copy for the public /forgot-password page (W6a) — step 1 of the
+ * self-service password reset. The success text is deliberately generic:
+ * it is shown for every submission, whether or not the email belongs to an
+ * account, so the page cannot be used to probe which emails are registered.
+ */
+export interface ForgotPageContent {
+  readonly headline: string;
+  readonly intro: string;
+  readonly emailLabel: string;
+  readonly submitLabel: string;
+  readonly submittingLabel: string;
+  readonly successTitle: string;
+  readonly successBody: string;
+  readonly backToSignIn: string;
+  /** Shown when the request itself fails (limit, server or network error). */
+  readonly unavailable: string;
+}
+
+export const FORGOT_PAGE: ForgotPageContent = {
+  headline: "Forgot your password?",
+  intro:
+    "Enter the email address on your portal account. If an account exists for it, we email you a link to choose a new password. The link works once and expires in 30 minutes.",
+  emailLabel: "Email",
+  submitLabel: "Send reset link",
+  submittingLabel: "Sending…",
+  successTitle: "Check your email",
+  successBody:
+    "If an account exists for that email address, we have sent a link to reset the password. The link works once and expires in 30 minutes.",
+  backToSignIn: "Back to sign in",
+  unavailable: "Something went wrong. Please try again later.",
+} as const;
+
+/**
+ * Copy for the public /reset-password page (W6a) — step 2, reached from the
+ * emailed link. The requirements line mirrors the shared policy in
+ * lib/security/password-policy.ts in plain words.
+ */
+export interface ResetPageContent {
+  readonly headline: string;
+  readonly intro: string;
+  readonly newLabel: string;
+  readonly confirmLabel: string;
+  /** Plain-wording summary of the shared password policy. */
+  readonly requirements: string;
+  readonly mismatchError: string;
+  readonly showLabel: string;
+  readonly hideLabel: string;
+  readonly submitLabel: string;
+  readonly submittingLabel: string;
+  readonly successTitle: string;
+  readonly successBody: string;
+  readonly signInLabel: string;
+  /** Missing, used or expired link — the same wording the endpoint returns. */
+  readonly invalidLink: string;
+  readonly requestNewLink: string;
+  readonly unavailable: string;
+}
+
+export const RESET_PAGE: ResetPageContent = {
+  headline: "Choose a new password",
+  intro:
+    "Choose a new password for your portal account. When it is saved, every other signed-in session ends and you sign in again with the new password.",
+  newLabel: "New password",
+  confirmLabel: "Repeat new password",
+  requirements:
+    "Use at least 12 characters. The password cannot be your email address or a very common password.",
+  mismatchError: "The two passwords do not match.",
+  showLabel: "Show password",
+  hideLabel: "Hide password",
+  submitLabel: "Change password",
+  submittingLabel: "Changing…",
+  successTitle: "Password changed",
+  successBody: "Your password has been changed. You can now sign in with your new password.",
+  signInLabel: "Sign in",
+  invalidLink: "This reset link is invalid or has expired. Please request a new one.",
+  requestNewLink: "Request a new reset link",
+  unavailable: "Something went wrong. Please try again later.",
 } as const;
 
 /**

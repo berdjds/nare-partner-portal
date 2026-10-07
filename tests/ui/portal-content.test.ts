@@ -15,6 +15,7 @@ import {
   CONTACT,
   DMC_STRENGTHS,
   FORGOT_ACCESS,
+  FORGOT_PAGE,
   HERO,
   HOW_IT_WORKS_STEPS,
   INDEXABLE,
@@ -23,6 +24,7 @@ import {
   MAILTO_SUBJECTS,
   PAGE_TITLES,
   PRODUCT_NAME,
+  RESET_PAGE,
   WHY_NARE,
   robotsDirective,
 } from "@/lib/portal-content";
@@ -87,12 +89,9 @@ describe("portal content: contact details", () => {
     expect(MAILTO_SUBJECTS.partnerAccess.trim()).not.toBe("");
   });
 
-  it("provides forgot-password text pointing at the contact email", () => {
-    expect(FORGOT_ACCESS.text).toBe(
-      "Forgot your password? Contact your Nare account manager",
-    );
-    expect(FORGOT_ACCESS.mailto).toBe("reservation@nare.am");
-    expect(FORGOT_ACCESS.mailto).toBe(CONTACT.email);
+  it("provides a forgot-password link to the self-service reset page (W6a)", () => {
+    expect(FORGOT_ACCESS.label).toBe("Forgot your password?");
+    expect(FORGOT_ACCESS.href).toBe("/forgot-password");
   });
 });
 
@@ -125,7 +124,8 @@ describe("portal content: wording guards", () => {
     ...BENEFITS,
     LOGIN_PANEL.headline,
     ...LOGIN_PANEL.bullets,
-    FORGOT_ACCESS.text,
+    FORGOT_ACCESS.label,
+    ...collectStrings([FORGOT_PAGE, RESET_PAGE]),
   ].join("\n");
 
   it("contains no pricing words", () => {

@@ -4,7 +4,7 @@
  * Covers the redesigned app/login/page.tsx: the two-column brand panel copy
  * from lib/portal-content.ts, the accessibility attributes (autocomplete
  * hints, the show/hide password toggle with aria-pressed and an accessible
- * name), the forgot-password mailto and the back-to-home link, and the
+ * name), the forgot-password link and the back-to-home link, and the
  * metadata layout app/login/layout.tsx (login title, always noindex).
  *
  * The page is a client component whose error and caps-lock states only appear
@@ -129,11 +129,11 @@ describe("rendered markup", () => {
     expect(html).toContain('aria-label="Show password"');
   });
 
-  it("links the forgot-password mailto and the back-to-home link", () => {
+  it("links the forgot-password page and the back-to-home link", () => {
     const html = renderLogin();
 
-    expect(html).toContain(`href="mailto:${FORGOT_ACCESS.mailto}"`);
-    expect(html).toContain(escapeHtml(FORGOT_ACCESS.text));
+    expect(html).toContain('href="/forgot-password"');
+    expect(html).toContain(escapeHtml(FORGOT_ACCESS.label));
     expect(html).toContain('href="/"');
     expect(html).toContain("Back to home");
   });
