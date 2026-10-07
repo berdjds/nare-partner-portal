@@ -11,6 +11,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 - **Text, image, voice, document** — send and view media messages.
 - **Admin panel** — manage WhatsApp connection, users, and logs.
 - **Role-based login with per-user permissions** — role presets by default (ADMIN runs everything, USER the WhatsApp chat inbox, ADVISOR/VALIDATOR the B2B travel module), adjustable per user through the permissions matrix in the admin panel. Internal-cost access is separate and off by default for non-admins until the owner confirms the permissions migration — see `doc/security.md` and `doc/authentication.md`.
+- **Self-service password reset** — users reset a forgotten password through a single-use emailed link (30-minute expiry, request limits, all sessions revoked on completion, no account enumeration). See `doc/account-recovery.md`.
 
 ## Stack
 
@@ -64,6 +65,14 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 | `NEXTAUTH_SECRET` | — | Random secret for JWT signing |
 | `ADMIN_EMAIL` | `admin@example.com` | Seeded admin email |
 | `ADMIN_PASSWORD` | `admin123` | Seeded admin password |
+| `SMTP_HOST` | — | SMTP server for transactional email (password reset, travel notifications); unset disables sending |
+| `SMTP_PORT` | `587` | SMTP port (`465` uses implicit TLS) |
+| `SMTP_USER` / `SMTP_PASS` | — | SMTP credentials, if the server requires auth |
+| `SMTP_FROM` | SMTP user | Sender address for outgoing mail |
+
+`NEXTAUTH_URL` must be the canonical public origin in production: password
+reset links are built from it. The full operator checklist for email delivery
+is in [doc/account-recovery.md](doc/account-recovery.md).
 
 ## Scripts
 
@@ -79,6 +88,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 - [doc/README.md](doc/README.md) — full documentation index
 - [doc/landing-content.md](doc/landing-content.md) — public landing page copy: where it lives (`lib/portal-content.ts`), the owner review rule before launch, the claims left out on purpose, and how to add a section
 - [doc/deployment.md](doc/deployment.md) — production release path for portal.nare.am: server provisioning, the CI release pipeline (staging → production), rollback/restore runbooks, backups and drills
+- [doc/account-recovery.md](doc/account-recovery.md) — self-service password reset: flow, request limits, audit events, stored data (hashes only), the SMTP / `NEXTAUTH_URL` operator checklist, and how to revoke sessions after a suspected compromise
 
 The repo-root `docker-compose.yml` is for **local development only**; the
 production and staging compose projects live under `deploy/portal/` and
