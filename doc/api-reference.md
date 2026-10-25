@@ -282,7 +282,7 @@ Creates a new user.
 {
   "email": "user@example.com",
   "name": "User Name",
-  "password": "password",
+  "password": "correct horse battery staple",
   "role": "USER",
   "phone": "37499123456"
 }
@@ -290,7 +290,9 @@ Creates a new user.
 
 `role` is one of `ADMIN` / `USER` / `ADVISOR` / `VALIDATOR` (defaults to `USER`). `phone` is
 optional — 7–15 digits, optional leading `+` (stored without it); used for WhatsApp
-notifications and document delivery.
+notifications and document delivery. `password` must satisfy the shared password policy
+(W7b): at least 12 characters, not equal to the account email, and not a common password;
+a violating request is refused with 400 and the rule message.
 
 #### PATCH /api/users
 
@@ -307,13 +309,15 @@ Updates a user.
   "name": "New Name",
   "role": "ADMIN",
   "active": true,
-  "password": "newpassword",
+  "password": "correct horse battery staple",
   "phone": null
 }
 ```
 
 All fields except `id` are optional; `role` accepts `ADMIN` / `USER` / `ADVISOR` / `VALIDATOR`
-and `phone: null` clears the WhatsApp number.
+and `phone: null` clears the WhatsApp number. A `password` change must satisfy the same
+shared password policy as user creation (W7b); a violating request is refused with 400 and
+the rule message.
 
 Changing the `password`, changing the `role`, or setting `active: false` also bumps the
 user's `sessionVersion` (W1b), revoking every session token minted before the change on

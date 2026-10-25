@@ -105,7 +105,9 @@ describe("PATCH /api/users revocation triggers (W1b)", () => {
   it("password change bumps the session version (W1b)", async () => {
     const target = await createTarget();
     login(admin);
-    const res = await usersPATCH(req(USERS_URL, { method: "PATCH", body: { id: target.id, password: "newpass123" } }));
+    // Compliant with the W7b password policy (>= 12 chars, not the email, not common).
+    const newPassword = ["sv", "meadow", "lantern", "73"].join("-");
+    const res = await usersPATCH(req(USERS_URL, { method: "PATCH", body: { id: target.id, password: newPassword } }));
     expect(res.status).toBe(200);
 
     expect(await sessionVersionOf(target.id)).toBe(1);
@@ -118,7 +120,7 @@ describe("PATCH /api/users revocation triggers (W1b)", () => {
 
     // The new password was actually stored (bcrypt hash verifies).
     const row = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
-    expect(await bcrypt.compare("newpass123", row.password)).toBe(true);
+    expect(await bcrypt.compare(newPassword, row.password)).toBe(true);
   });
 
   it("role change bumps the session version (W1b)", async () => {

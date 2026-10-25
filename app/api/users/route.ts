@@ -6,6 +6,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { getActiveUser } from "@/lib/access-policy";
 import { hasPermission, INTERNAL_PERMISSION_KEYS } from "@/lib/permissions";
 import { getPermissionsMigrationConfirmation } from "@/lib/permissions-report";
+import { passwordSchemaFor } from "@/lib/security/password-policy";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -20,7 +21,7 @@ const phoneSchema = z
 const createSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
-  password: z.string().min(4),
+  password: z.string(),
   role: z.enum(["ADMIN", "USER", "ADVISOR", "VALIDATOR"]).default("USER"),
   phone: phoneSchema,
 });
@@ -31,9 +32,21 @@ const updateSchema = z.object({
   name: z.string().min(1).optional(),
   role: z.enum(["ADMIN", "USER", "ADVISOR", "VALIDATOR"]).optional(),
   active: z.boolean().optional(),
-  password: z.string().min(4).optional(),
+  password: z.string().optional(),
   phone: phoneSchema,
 });
+
+/**
+ * W7b: applies the shared password policy (lib/security/password-policy.ts)
+ * for the given account email and returns the first rule message, or null
+ * when the password complies. Both POST and PATCH route through this so the
+ * two password-setting surfaces cannot drift apart.
+ */
+function passwordPolicyError(email: string, password: string): string | null {
+  const result = passwordSchemaFor(email).safeParse(password);
+  if (result.success) return null;
+  return result.error.issues[0]?.message ?? "Password does not meet the password policy";
+}
 
 const deleteSchema = z.object({
   id: z.string().min(1),
@@ -65,6 +78,11 @@ export async function POST(req: NextRequest) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors }, { status: 400 });
+  }
+
+  const policyError = passwordPolicyError(parsed.data.email, parsed.data.password);
+  if (policyError) {
+    return NextResponse.json({ error: policyError }, { status: 400 });
   }
 
   try {
@@ -102,8 +120,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { id, password, ...rest } = parsed.data;
-  const data: any = { ...rest };
-  if (password) data.password = await bcrypt.hash(password, 10);
 
   // W1b: account changes that must invalidate existing sessions (new
   // password, role change, transition to inactive) bump sessionVersion, so
@@ -111,10 +127,22 @@ export async function PATCH(req: NextRequest) {
   // getActiveUser() on its next request. No-op role/active values and
   // name/email/phone-only edits do not bump. A missing row keeps the old
   // behavior: the update below throws and the catch answers 500.
+  // The email is selected because the not-the-email password rule needs the
+  // account email even when this PATCH does not change it.
   const current = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, role: true, active: true },
+    select: { id: true, email: true, role: true, active: true },
   });
+
+  if (password) {
+    const policyError = passwordPolicyError(parsed.data.email ?? current?.email ?? "", password);
+    if (policyError) {
+      return NextResponse.json({ error: policyError }, { status: 400 });
+    }
+  }
+
+  const data: any = { ...rest };
+  if (password) data.password = await bcrypt.hash(password, 10);
 
   // W2 guards, evaluated before any update and without audit entries:
   // an admin cannot demote or deactivate themselves through the user API
