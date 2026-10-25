@@ -7,7 +7,7 @@ import { getActiveUser } from "@/lib/access-policy";
 import { hasPermission, INTERNAL_PERMISSION_KEYS } from "@/lib/permissions";
 import { getPermissionsMigrationConfirmation } from "@/lib/permissions-report";
 import { passwordSchemaFor } from "@/lib/security/password-policy";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "@/lib/security/hash";
 import { z } from "zod";
 
 // WhatsApp notification destination: digits with an optional leading +
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const hashed = await bcrypt.hash(parsed.data.password, 10);
+    const hashed = await hashPassword(parsed.data.password);
     const created = await prisma.user.create({
       data: {
         email: parsed.data.email,
@@ -142,7 +142,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const data: any = { ...rest };
-  if (password) data.password = await bcrypt.hash(password, 10);
+  if (password) data.password = await hashPassword(password);
 
   // W2 guards, evaluated before any update and without audit entries:
   // an admin cannot demote or deactivate themselves through the user API

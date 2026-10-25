@@ -10,6 +10,7 @@ import {
   hashLoginEmail,
   hashLoginIp,
 } from "@/lib/security/login-limits";
+import { hashPassword, needsRehash } from "@/lib/security/hash";
 import { z } from "zod";
 
 const credentialsSchema = z.object({
@@ -125,6 +126,22 @@ export const authOptions: NextAuthOptions = {
             });
           } catch (err) {
             console.error("[auth] failed to clear login failure counter:", err);
+          }
+        }
+
+        // W7b rehash-on-login: pre-W7b hashes were minted at cost 10. Awaited
+        // so the upgrade is durable before the session exists, but best-effort
+        // — a failed update never blocks the sign-in, and only the password
+        // column is written (sessionVersion must not move here: bumping it
+        // would revoke the session this very sign-in is about to mint).
+        if (needsRehash(user.password)) {
+          try {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { password: await hashPassword(parsed.data.password) },
+            });
+          } catch (err) {
+            console.error("[auth] failed to upgrade password hash cost:", err);
           }
         }
 

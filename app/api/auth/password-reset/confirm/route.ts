@@ -19,8 +19,8 @@
  *   presented token (which for a valid token equals the stored tokenHash).
  *   The raw token and raw IP are never persisted.
  * - The reset itself is ONE transaction: the token is claimed atomically
- *   (a concurrent replay finds it already used), the bcrypt hash (cost 10,
- *   like the users API) is stored, sessionVersion is incremented — ending
+ *   (a concurrent replay finds it already used), the bcrypt hash (cost
+ *   HASH_COST via lib/security/hash.ts, like the users API) is stored, sessionVersion is incremented — ending
  *   every session minted before the reset via the sv check in
  *   lib/access-policy.ts — and the user's other unused tokens are
  *   invalidated.
@@ -31,12 +31,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { clientIpFromHeaders, hashClientIp } from "@/lib/partners/abuse";
 import { SECURITY_REQUEST_KIND_CONFIRM, checkConfirmLimits } from "@/lib/security/limits";
 import { passwordSchemaFor } from "@/lib/security/password-policy";
+import { hashPassword } from "@/lib/security/hash";
 import {
   hashResetToken,
   isResetTokenExpired,
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
 
     const completed = await prisma.$transaction(async (tx) => {
       // Atomic claim: a concurrent confirm of the same token finds usedAt
