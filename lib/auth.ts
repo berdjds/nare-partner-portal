@@ -2,12 +2,39 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { writeAuditLog } from "@/lib/audit";
+import {
+  SECURITY_REQUEST_KIND_LOGIN_FAIL,
+  checkLoginLimits,
+  clientIpFromSignInHeaders,
+  hashLoginEmail,
+  hashLoginIp,
+} from "@/lib/security/login-limits";
 import { z } from "zod";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+/** Hashed identifiers for the W7b sign-in throttle counters. */
+type LoginSubject = { subjectHash: string; ipHash: string };
+
+/**
+ * Records one failed sign-in attempt on SecurityRequest (hashes only; unknown
+ * emails are recorded too, so they are throttled exactly like known ones).
+ * Best-effort: a recording fault never changes the authorize() outcome.
+ */
+async function recordLoginFailure(subject: LoginSubject | null): Promise<void> {
+  if (!subject) return;
+  try {
+    await prisma.securityRequest.create({
+      data: { kind: SECURITY_REQUEST_KIND_LOGIN_FAIL, ...subject },
+    });
+  } catch (err) {
+    console.error("[auth] failed to record login failure:", err);
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: undefined, // credentials provider requires no adapter for JWT
@@ -24,9 +51,42 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
+
+        // W7b sign-in throttling. Hashing, the limit check, failure recording
+        // and the counter clear all run inside try/catch blocks that fail
+        // OPEN: a throttle fault must never block a legitimate sign-in or
+        // change what an attempt reveals about the account.
+        let subject: LoginSubject | null = null;
+        try {
+          subject = {
+            subjectHash: hashLoginEmail(parsed.data.email),
+            ipHash: hashLoginIp(clientIpFromSignInHeaders(req?.headers)),
+          };
+          const verdict = await checkLoginLimits(prisma, subject);
+          if (verdict) {
+            // Throttled: the same null as a wrong password, without ever
+            // checking it. The attempt is still recorded so the counters keep
+            // pace with a sustained attack; the audit row (hashed identifiers
+            // only) is written only when the quota is first reached.
+            await prisma.securityRequest.create({
+              data: { kind: SECURITY_REQUEST_KIND_LOGIN_FAIL, ...subject },
+            });
+            if (verdict.firstHit) {
+              await writeAuditLog(
+                "LOGIN_THROTTLED",
+                null,
+                `Sign-in throttled (${verdict.limit} limit): subject hash ${subject.subjectHash}, IP hash ${subject.ipHash}`,
+              );
+            }
+            return null;
+          }
+        } catch (err) {
+          subject = null;
+          console.error("[auth] login throttle check failed, allowing attempt:", err);
+        }
 
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
@@ -42,10 +102,31 @@ export const authOptions: NextAuthOptions = {
           },
         });
 
-        if (!user || !user.active) return null;
+        if (!user || !user.active) {
+          await recordLoginFailure(subject);
+          return null;
+        }
 
         const valid = await bcrypt.compare(parsed.data.password, user.password);
-        if (!valid) return null;
+        if (!valid) {
+          await recordLoginFailure(subject);
+          return null;
+        }
+
+        // A successful sign-in clears the account's counter (the per-IP
+        // counter is shared across accounts and stays untouched).
+        if (subject) {
+          try {
+            await prisma.securityRequest.deleteMany({
+              where: {
+                kind: SECURITY_REQUEST_KIND_LOGIN_FAIL,
+                subjectHash: subject.subjectHash,
+              },
+            });
+          } catch (err) {
+            console.error("[auth] failed to clear login failure counter:", err);
+          }
+        }
 
         return {
           id: user.id,
