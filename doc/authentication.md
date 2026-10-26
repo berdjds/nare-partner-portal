@@ -7,9 +7,51 @@ WAControl uses NextAuth.js v4 with a credentials provider and JWT sessions.
 The application uses a custom credentials provider defined in `lib/auth.ts`:
 
 - Email and password are validated against the `User` table.
-- Passwords are hashed with bcrypt.
+- Passwords are hashed with bcrypt at cost 12 (`lib/security/hash.ts`); hashes
+  minted before W7b at cost 10 stay valid and are upgraded on the owner's next
+  successful sign-in (rehash-on-login, see "Sign-in throttling, password
+  policy and hash cost (W7b)" below).
 - Only active users can sign in.
+- Failed sign-ins are throttled per account and per client IP (W7b, see below).
 - Session strategy is JWT.
+
+## Sign-in throttling, password policy and hash cost (W7b)
+
+**Throttling.** Failed sign-in attempts are counted on the `SecurityRequest`
+table as `LOGIN_FAIL` rows (`lib/security/login-limits.ts`) holding only salted
+sha256 hashes — of the normalized email and of the client IP (first
+`x-forwarded-for` hop) — never the raw values. Rolling-window quotas:
+
+- more than **8 failures per account in 15 minutes**, or
+- more than **30 failures per hashed IP in 1 hour**,
+
+make `authorize` return `null` **without checking the password** — the exact
+outcome of a wrong password, so the throttle reveals neither account existence
+nor password correctness. Unknown emails are counted exactly like known ones.
+A successful sign-in clears the account's counter; the per-IP counter (shared
+across accounts) is untouched. When a quota is first reached, one
+`LOGIN_THROTTLED` audit row is written with `userId: null` and the hashed
+identifiers only — a sustained attack produces one row per window, not one per
+attempt. All throttle bookkeeping fails open: a fault never blocks a
+legitimate sign-in.
+
+**Password policy for admin-set passwords.** The users API
+(`app/api/users/route.ts`, POST and PATCH) validates new and changed passwords
+with the shared W6a policy (`lib/security/password-policy.ts`): at least 12
+and at most 128 characters, not equal to the account email
+(case-insensitive), and not on a small list of very common passwords. A
+violation is rejected with 400 and a message naming the broken rule. Existing
+users are unaffected until their password is next set through the API; the
+same schema already backed the self-service reset (see
+`doc/account-recovery.md`).
+
+**Hash cost.** Every new password hash — users API, self-service reset
+confirm, seeds — is created through `hashPassword()` in
+`lib/security/hash.ts` at bcrypt cost 12. On a successful sign-in, a stored
+hash below cost 12 (pre-W7b hashes were minted at cost 10) is replaced with a
+cost-12 hash of the same password (`needsRehash()`); this writes only the
+password column, so the session minted by that sign-in is unaffected, and a
+failed upgrade never blocks the sign-in.
 
 ## Roles and Permissions
 

@@ -40,7 +40,8 @@ Implementation entry points:
    password to `POST /api/auth/password-reset/confirm`.
 5. In **one transaction** the confirm route claims the token atomically
    (a concurrent replay finds it already used), stores the new bcrypt hash
-   (cost 10, same as the users API), increments `User.sessionVersion` —
+   (through the shared `hashPassword()`, cost 12 since W7b, same as the
+   users API), increments `User.sessionVersion` —
    which ends every session minted before the reset via the `sv` check in
    `lib/access-policy.ts` — and invalidates the user's other unused tokens.
 6. A best-effort confirmation email tells the user the password was changed

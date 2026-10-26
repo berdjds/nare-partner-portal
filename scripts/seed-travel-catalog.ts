@@ -12,11 +12,11 @@
  * CLI: npx tsx scripts/seed-travel-catalog.ts [path-to-evidence.json]
  */
 
-import bcrypt from "bcryptjs";
 import { readFileSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { prisma } from "@/lib/prisma";
+import { hashPassword } from "@/lib/security/hash";
 import {
   isNumeric,
   parseWorkbookEvidence,
@@ -715,7 +715,7 @@ async function seedSettingsAndUsers() {
     process.env.SEED_DEMO_USERS === "true" ||
     (process.env.NODE_ENV !== "production" && process.env.SEED_DEMO_USERS !== "false");
   if (seedDemo) {
-    const demoPassword = await bcrypt.hash("travel123", 10);
+    const demoPassword = await hashPassword("travel123");
     for (const u of [
       { email: "advisor1@wacontrol.local", name: "Travel Advisor (demo)", role: "ADVISOR" },
       { email: "validator1@wacontrol.local", name: "Travel Validator (demo)", role: "VALIDATOR" },

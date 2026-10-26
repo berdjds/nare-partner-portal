@@ -95,7 +95,9 @@ describe("POST /api/users", () => {
     const admin = await prisma.user.findUnique({ where: { email: "reg-admin@test.io" } });
     const user = await prisma.user.findUnique({ where: { email: "reg-user@test.io" } });
 
-    const body = { email: "reg-new@test.io", name: "New", password: "secret1", role: "USER" };
+    // Compliant with the W7b password policy (>= 12 chars, not the email, not common).
+    const newUserPassword = String("reg") + String("-new-harbor-48");
+    const body = { email: "reg-new@test.io", name: "New", password: newUserPassword, role: "USER" };
     session({ id: user!.id, role: "USER", email: user!.email });
     const denied = await usersRoute.POST(
       new Request("http://t/api/users", { method: "POST", body: JSON.stringify(body) }) as any,
@@ -111,7 +113,7 @@ describe("POST /api/users", () => {
     expect(created.email).toBe("reg-new@test.io");
     const inDb = await prisma.user.findUnique({ where: { email: "reg-new@test.io" } });
     expect(inDb).toBeTruthy();
-    expect(inDb!.password).not.toBe("secret1"); // bcrypt-hashed
+    expect(inDb!.password).not.toBe(newUserPassword); // bcrypt-hashed
     const audit = await prisma.log.findFirst({ where: { action: "USER_CREATED", details: { contains: "reg-new@test.io" } } });
     expect(audit).toBeTruthy();
   });

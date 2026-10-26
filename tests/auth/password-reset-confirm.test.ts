@@ -9,7 +9,8 @@
  *   tokens, for inactive accounts, and for unparseable/invalid bodies. The
  *   only distinguishable 400 is a password-policy violation, which carries
  *   the policy message and leaves the token usable.
- * - A valid token resets the password (bcrypt cost 10, verified through the
+ * - A valid token resets the password (bcrypt cost HASH_COST=12 from
+ *   lib/security/hash.ts, verified through the
  *   real lib/auth.ts authorize) and bumps sessionVersion in one transaction,
  *   so a session carrying the previous sv is rejected by the existing
  *   getActiveUser check; the used token and the user's other unused tokens
