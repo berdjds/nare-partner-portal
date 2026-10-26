@@ -107,7 +107,11 @@ connect (W3: any WhatsApp account's view or admin permission —
 
 ### Rate Limiting
 
-There is no built-in rate limiting on API routes or the WhatsApp send endpoint. Add rate limiting (e.g., with `rate-limiter-flexible` or a reverse proxy) before public deployment.
+The sign-in endpoint is throttled since W7b (failed-attempt quotas per account
+and per client IP — see "Sign-in throttling, password policy and hash cost
+(W7b)" below and `doc/authentication.md`). Other API routes and the WhatsApp
+send endpoint still have no built-in rate limiting. Add rate limiting (e.g.,
+with `rate-limiter-flexible` or a reverse proxy) before public deployment.
 
 ### HTTPS
 
@@ -115,7 +119,7 @@ Always serve the application over HTTPS in production. Set `NEXTAUTH_URL` to the
 
 ### Admin Access
 
-Any user with `ADMIN` role can manage users and the WhatsApp session. Ensure admin accounts are protected with strong passwords and ideally multi-factor authentication if extended.
+Any user with `ADMIN` role can manage users and the WhatsApp session. Ensure admin accounts are protected with strong passwords — W7b enforces the shared password policy on passwords set through the users API (see "Sign-in throttling, password policy and hash cost (W7b)" below) — and ideally multi-factor authentication if extended.
 
 ### Travel module: validation and documents
 
@@ -149,6 +153,55 @@ they are 404'd from other people's requests. INTERNAL PDFs remain invisible to
 advisors (including owners) by default: no non-admin preset holds the internal keys (D2), so
 they stay out of reach until an admin grants `travel.internal.download`/`travel.internal.view`
 — which itself is locked until the migration report is confirmed.
+
+## Sign-in throttling, password policy and hash cost (W7b)
+
+Phase 2 of REQ-2026-0008 makes password guessing impractical without changing
+what an attacker can learn from sign-in responses.
+
+**Throttling quotas.** The credentials `authorize` path (`lib/auth.ts`,
+counters in `lib/security/login-limits.ts`) records every failed sign-in as a
+`LOGIN_FAIL` row on the `SecurityRequest` table, keyed by salted sha256 hashes
+of the normalized email (`subjectHash`) and of the client IP from the first
+`x-forwarded-for` hop (`ipHash`) — raw emails and IPs are never persisted.
+Once an account has **8 failures within a rolling 15-minute window**, or a
+hashed IP has **30 failures within a rolling hour**, `authorize` returns
+`null` without comparing the password: the response, timing and error surface
+are the same as for a wrong password, so throttling cannot be used to
+enumerate accounts or confirm guesses. Unknown emails accrue counters exactly
+like known ones. A successful sign-in deletes the account's `LOGIN_FAIL`
+rows; the per-IP counter is shared across accounts and is never cleared by
+one account's success. On the attempt where a quota is first reached, one
+`LOGIN_THROTTLED` audit row is written (`userId: null`, detail holds the
+hashes only), so a sustained attack yields one audit row per window instead
+of one per attempt. The whole throttle fails open — a database or hashing
+fault is logged and the sign-in proceeds — because availability for
+legitimate users outranks counter accuracy. Legitimate users are not locked
+out: their own successful sign-in resets their account counter immediately,
+and the windows are short and rolling.
+
+**Password policy.** Passwords set through the users API (admin-created users
+and admin password changes, `app/api/users/route.ts`) must satisfy the shared
+W6a schema (`lib/security/password-policy.ts`, also used by the self-service
+reset): 12–128 characters, not equal to the account email
+(case-insensitive), not on the common-password list. Rejections answer 400
+with a message naming the rule. The policy applies only when a password is
+set — existing users with older passwords keep signing in until their
+password is next changed.
+
+**Hash cost and rehash-on-login.** All new hashes go through
+`hashPassword()` (`lib/security/hash.ts`) at **bcrypt cost 12** — the users
+API, the reset confirm route and the seeds share it, so cost cannot drift per
+surface. Hashes minted before W7b at cost 10 remain valid (`bcrypt.compare`
+reads the cost from the hash); after a successful sign-in, `needsRehash()`
+detects them and the stored hash is replaced with a cost-12 hash of the same
+password. The replacement writes only the password column — `sessionVersion`
+is deliberately not bumped, so the session being minted stays valid — and the
+update is best-effort, never blocking the sign-in.
+
+The sign-in page, the NextAuth configuration shape, the session version
+semantics and the permission/socket gates are unchanged. Audit entries never
+contain raw emails, IPs or passwords.
 
 ## Access policy and permission model (W2)
 
@@ -435,7 +488,9 @@ later W7 phase will add them roughly as follows:
 - [ ] Serve over HTTPS with a valid certificate.
 - [x] Restrict CORS/socket origins (W1: exact-origin allow-list via `allowRequest` in `lib/socket-auth.ts` — see "Access policy and permission model").
 - [x] Authenticate and room-scope Socket.io (W1: session-cookie handshake, server-managed rooms — W3: per-account `inbox:<accountKey>`/`admins:<accountKey>`, 60s + token-expiry revalidation — see "Access policy and permission model").
-- [ ] Add rate limiting and input size limits.
+- [ ] Add rate limiting on the remaining API routes and input size limits (W7b covered the sign-in endpoint — see "Sign-in throttling, password policy and hash cost (W7b)").
+- [x] Enforce a password policy on admin-set passwords (W7b: shared W6a schema on the users API — 12+ chars, not the email, not a common password).
+- [x] Hash passwords at bcrypt cost 12 and upgrade older cost-10 hashes on login (W7b: `lib/security/hash.ts`, rehash-on-login in `lib/auth.ts`).
 - [x] Protect `/uploads/` (W1: authenticated streaming via the custom server — see "Access policy and permission model"; media stays under `public/uploads/`).
 - [x] Send the standard security headers on every route (W7a: `next.config.js` `headers()` + `poweredByHeader: false` — see "HTTP security headers, start-up validation and QR rendering (W7a)").
 - [x] Refuse to boot production with a placeholder or short `NEXTAUTH_SECRET` (W7a: `checkEnvironment()` in `lib/env-check.ts`, called from `server.ts` before listening).
