@@ -210,6 +210,10 @@ this checklist):
   job — the branch's tests are the PR's responsibility — and production jobs
   never run for `workflow_dispatch`.
 
+In `.github/workflows/ci-cd.yml`, a push that changes only files under `doc/`
+does not run the deploy pipeline. Any push that changes a file outside `doc/`
+still runs the deploy pipeline.
+
 Repository configuration:
 
 | Kind | Name | Purpose |
