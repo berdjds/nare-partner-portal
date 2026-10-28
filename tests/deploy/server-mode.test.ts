@@ -25,6 +25,7 @@ describe("resolveServerRuntime", () => {
     expect(rt.whatsapp).toBe(true);
     expect(rt.notificationWorker).toBe(true);
     expect(rt.overdueSweep).toBe(true);
+    expect(rt.retentionSweep).toBe(true);
   });
 
   it("trial mode starts no WhatsApp client and no background jobs", () => {
@@ -33,6 +34,7 @@ describe("resolveServerRuntime", () => {
     expect(rt.whatsapp).toBe(false);
     expect(rt.notificationWorker).toBe(false);
     expect(rt.overdueSweep).toBe(false);
+    expect(rt.retentionSweep).toBe(false);
   });
 
   it("paused mode starts no notification worker (WhatsApp and sweep still run)", () => {
@@ -42,6 +44,7 @@ describe("resolveServerRuntime", () => {
     expect(rt.notificationWorker).toBe(false);
     expect(rt.whatsapp).toBe(true);
     expect(rt.overdueSweep).toBe(true);
+    expect(rt.retentionSweep).toBe(true);
   });
 
   it("trial wins over paused: every background writer stays off", () => {
@@ -50,6 +53,7 @@ describe("resolveServerRuntime", () => {
     expect(rt.notificationWorker).toBe(false);
     expect(rt.whatsapp).toBe(false);
     expect(rt.overdueSweep).toBe(false);
+    expect(rt.retentionSweep).toBe(false);
   });
 
   it("only the exact values 'trial' and '1' trigger the gates", () => {
@@ -57,6 +61,18 @@ describe("resolveServerRuntime", () => {
     expect(resolveServerRuntime({ NODE_ENV: "test", WACONTROL_MODE: "trial " }).whatsapp).toBe(true);
     expect(resolveServerRuntime({ NODE_ENV: "test", WACONTROL_NOTIFICATIONS_PAUSED: "true" }).notificationWorker).toBe(true);
     expect(resolveServerRuntime({ NODE_ENV: "test", WACONTROL_NOTIFICATIONS_PAUSED: "0" }).notificationWorker).toBe(true);
+  });
+
+  it("allows only the retention sweep to be disabled", () => {
+    const rt = resolveServerRuntime({ NODE_ENV: "test", WACONTROL_RETENTION_SWEEP_DISABLED: "1" });
+    expect(rt.retentionSweep).toBe(false);
+    expect(rt.overdueSweep).toBe(true);
+    expect(rt.notificationWorker).toBe(true);
+    expect(rt.whatsapp).toBe(true);
+
+    for (const value of ["0", "true", " 1"]) {
+      expect(resolveServerRuntime({ NODE_ENV: "test", WACONTROL_RETENTION_SWEEP_DISABLED: value }).retentionSweep).toBe(true);
+    }
   });
 });
 
@@ -67,6 +83,7 @@ describe("resolveServerRuntime WHATSAPP_DISABLED gate (staging, W3b)", () => {
     expect(rt.whatsapp).toBe(false);
     expect(rt.notificationWorker).toBe(true);
     expect(rt.overdueSweep).toBe(true);
+    expect(rt.retentionSweep).toBe(true);
     expect(rt.notificationsPaused).toBe(false);
   });
 
@@ -86,6 +103,7 @@ describe("resolveServerRuntime WHATSAPP_DISABLED gate (staging, W3b)", () => {
     expect(rt.whatsapp).toBe(false);
     expect(rt.notificationWorker).toBe(false);
     expect(rt.overdueSweep).toBe(true);
+    expect(rt.retentionSweep).toBe(true);
   });
 
   it("trial still wins over WHATSAPP_DISABLED: every background writer stays off", () => {
@@ -94,6 +112,7 @@ describe("resolveServerRuntime WHATSAPP_DISABLED gate (staging, W3b)", () => {
     expect(rt.whatsapp).toBe(false);
     expect(rt.notificationWorker).toBe(false);
     expect(rt.overdueSweep).toBe(false);
+    expect(rt.retentionSweep).toBe(false);
   });
 });
 
@@ -117,5 +136,11 @@ describe("server.ts deploy-gate wiring", () => {
 
   it("schedules the overdue sweep only behind runtime.overdueSweep", () => {
     expect(source).toMatch(/if \(runtime\.overdueSweep\) \{\s*setInterval\(\(\) => \{\s*sweepOverdueValidations/);
+  });
+
+  it("schedules the retention sweep after five minutes and then daily", () => {
+    expect(source).toMatch(/if \(runtime\.retentionSweep\) \{\s*const sweep = \(\) => \{\s*runRetentionSweep\(prisma\)/);
+    expect(source).toContain("setInterval(sweep, 24 * 60 * 60 * 1000);");
+    expect(source).toContain("}, 5 * 60 * 1000);");
   });
 });
