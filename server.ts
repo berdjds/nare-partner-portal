@@ -8,6 +8,8 @@ import { startNotificationWorker, sweepOverdueValidations } from "./lib/travel/n
 import { handleUploadsRequest, routeUploadsRequest } from "./lib/uploads";
 import { resolveServerRuntime } from "./lib/server-mode";
 import { checkEnvironment } from "./lib/env-check";
+import { prisma } from "./lib/prisma";
+import { runRetentionSweep } from "./lib/partners/retention";
 
 // W7a start-up check: refuse to boot a production deployment with a missing,
 // placeholder or trivially short session secret. Runs before anything
@@ -85,7 +87,7 @@ app.prepare().then(async () => {
   setSocketServer(io);
 
   // Deploy gate (scripts/vps-deploy.sh): WACONTROL_MODE=trial serves HTTP only
-  // — no WhatsApp client, no notification worker, no overdue sweep — so a
+  // — no WhatsApp client, notification worker or periodic sweep — so a
   // candidate build can run against a copy of production data. HTTP, sockets
   // and the media gate above stay live; that is what the trial health check
   // verifies. WACONTROL_NOTIFICATIONS_PAUSED=1 stops only the worker.
@@ -119,6 +121,22 @@ app.prepare().then(async () => {
         console.error("[Travel] overdue sweep error:", err);
       });
     }, 60 * 60 * 1000);
+  }
+
+  if (runtime.retentionSweep) {
+    const sweep = () => {
+      runRetentionSweep(prisma)
+        .then((cleaned) => {
+          console.log(`[Partners] retention sweep: ${cleaned} application(s) cleaned`);
+        })
+        .catch((err) => {
+          console.error("[Partners] retention sweep error:", err);
+        });
+    };
+    setTimeout(() => {
+      sweep();
+      setInterval(sweep, 24 * 60 * 60 * 1000);
+    }, 5 * 60 * 1000);
   }
 
   httpServer
