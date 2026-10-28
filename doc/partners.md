@@ -238,7 +238,8 @@ never under `public/`. Rules:
 - **Audit log actions:** `PARTNER_APPLICATION_SUBMITTED` (userId null),
   `PARTNER_APPLICATION_APPROVED`, `PARTNER_APPLICATION_REJECTED`,
   `PARTNER_APPLICATION_INFO_REQUESTED`, `PARTNER_KYC_DOCUMENT_DOWNLOADED`,
-  `PARTNER_KYC_DOCUMENTS_DELETED`.
+  `PARTNER_KYC_DOCUMENTS_DELETED` (manual deletion),
+  `PARTNER_DOCUMENTS_EXPIRED` (scheduled retention, userId null).
 - **What applicants see.** Only their reference and generic wording. Error
   messages never reveal internals or whether a company or email address is
   already known to us.
