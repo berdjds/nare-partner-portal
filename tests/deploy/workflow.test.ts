@@ -5,8 +5,8 @@
  * job only; a push to main runs deploy staging -> smoke staging -> deploy
  * production -> smoke production through the server's forced-command
  * dispatcher (upload <name>, deploy <env> <tarball>, smoke <env>);
- * workflow_dispatch runs staging-only drills. These tests parse the workflow
- * YAML and pin the security-relevant structure:
+ * workflow_dispatch runs staging drills and manual dev/staging branch deploys.
+ * These tests parse the workflow YAML and pin the security-relevant structure:
  *
  *   - no ssh-keyscan anywhere; ~/.ssh/known_hosts is written from the pinned
  *     DEPLOY_KNOWN_HOSTS secret;
@@ -14,9 +14,8 @@
  *     smoke blocks anything from touching production;
  *   - deploy/smoke jobs run only for pushes to main, and pull requests still
  *     execute the test job only;
- *   - drills are offered as drill-rollback | drill-restore alongside the
- *     manual deploy-staging rehearsal choice, and can never target
- *     production;
+ *   - drills are offered alongside the manual deploy-staging and deploy-dev
+ *     choices, and can never target production;
  *   - secrets are referenced only through env mappings — never interpolated
  *     into run scripts and never echoed to the log.
  */
@@ -56,9 +55,8 @@ const on = (doc.on ?? doc["true"]) as Record<string, any>;
 const jobs = doc.jobs ?? {};
 
 const DEPLOY_JOBS = ["deploy-staging", "smoke-staging", "deploy-production", "smoke-production"];
-// Manual-only jobs (workflow_dispatch): the staging drills and the W3g
-// staging deploy rehearsal.
-const MANUAL_JOBS = ["drill", "deploy-staging-manual"];
+// Manual-only jobs (workflow_dispatch): staging drills and branch deploys.
+const MANUAL_JOBS = ["drill", "deploy-staging-manual", "deploy-dev-manual"];
 
 function needsOf(job: Job | undefined): string[] {
   if (!job || job.needs === undefined) return [];
@@ -171,17 +169,17 @@ describe("SSH authentication", () => {
       expect(scripts, name).toContain("printf '%s\\n' \"$DEPLOY_SSH_KEY\" > ~/.ssh/deploy_key");
       expect(scripts, name).toContain("printf '%s\\n' \"$DEPLOY_KNOWN_HOSTS\" > ~/.ssh/known_hosts");
     }
-    // The four deploy/smoke jobs plus the two manual jobs install the key.
+    // Every push release job and every manual job installs the key.
     expect(installers).toBe(DEPLOY_JOBS.length + MANUAL_JOBS.length);
   });
 });
 
 describe("staging drills", () => {
-  it("offers drill-rollback, drill-restore and deploy-staging as the workflow_dispatch action", () => {
+  it("offers drills and branch deploys as workflow_dispatch actions", () => {
     const action = on.workflow_dispatch?.inputs?.action;
     expect(action?.required).toBe(true);
     expect(action?.type).toBe("choice");
-    expect(action?.options).toEqual(["drill-rollback", "drill-restore", "deploy-staging"]);
+    expect(action?.options).toEqual(["drill-rollback", "drill-restore", "deploy-staging", "deploy-dev"]);
   });
 
   it("runs drills only on workflow_dispatch and can never target production", () => {
