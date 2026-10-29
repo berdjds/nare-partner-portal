@@ -7,7 +7,7 @@
 #   sudo deploy/provision-server.sh --pubkey-file <path> [--dry-run]
 #
 # Idempotent (cmp-based installs, mkdir -p, write-only-if-absent for
-# operator-owned files, a marker-delimited caddy block that regenerates
+# operator-owned files, marker-delimited caddy blocks that regenerate
 # byte-identically) so re-running it after adding missing pieces (e.g. the
 # production compose file or the Caddyfile) converges the server without
 # disturbing anything. NEVER run by CI: the pipeline only ever talks to the
@@ -25,14 +25,14 @@
 #   - /usr/local/sbin/portal-deploy-entry (the dispatcher) and the sudoers
 #     drop-in that lets `deploy` run ONLY that dispatcher as root
 #   - the daily backup systemd units + /etc/portal-backup.env
-#   - the /opt/stack layout dirs and the staging compose project (compose
-#     file, .env.staging + .env symlink)
+#   - the /opt/stack layout dirs and the staging and dev compose projects
+#     (compose files, operator-owned env files + .env symlinks)
 #   - the production Docker network, discovered from the running portal-app
-#     container and recorded as PORTAL_NETWORK in the staging env file: the
-#     live layout (/opt/stack/docker-compose.yml, mirrored in deploy/portal/)
+#     container and recorded as PORTAL_NETWORK in the staging and dev env files:
+#     the live layout (/opt/stack/docker-compose.yml, mirrored in deploy/portal/)
 #     uses a compose-managed network whose real name is project-prefixed, so
 #     it is discovered, never hard-coded
-#   - the managed staging site block (BEGIN/END markers) in the live
+#   - the managed staging and dev site blocks (BEGIN/END markers) in the live
 #     /opt/stack/Caddyfile: timestamped backup, the candidate validated inside
 #     the caddy container BEFORE the live path is touched, then a reload; on
 #     any failure the backup is restored
@@ -82,7 +82,7 @@ Environment:
   PORTAL_APP_CONTAINER   Production app container the network is discovered
                          from (default: portal-app).
   PORTAL_NETWORK         Production Docker network; when set, discovery is
-                         skipped and this value is recorded for staging.
+                         skipped and this value is recorded for staging and dev.
 EOF
 }
 
@@ -148,6 +148,7 @@ fi
 # and tests.
 
 STAGING_DIR="${PORTAL_STAGING_DIR:-$ROOT/opt/stack/staging}"
+DEV_DIR="$ROOT/opt/stack/dev"
 PORTAL_CADDY_CONTAINER="${PORTAL_CADDY_CONTAINER:-caddy}"
 PORTAL_CADDYFILE="${PORTAL_CADDYFILE:-$ROOT/opt/stack/Caddyfile}"
 PORTAL_APP_CONTAINER="${PORTAL_APP_CONTAINER:-portal-app}"
@@ -155,6 +156,8 @@ PORTAL_NETWORK="${PORTAL_NETWORK:-}"
 
 BEGIN_MARKER="# BEGIN staging.portal.nare.am (managed by provision-server.sh)"
 END_MARKER="# END staging.portal.nare.am"
+DEV_BEGIN_MARKER="# BEGIN dev.portal.nare.am (managed by provision-server.sh)"
+DEV_END_MARKER="# END dev.portal.nare.am"
 
 # --- helpers (all filesystem writes funnel through these) ---------------------
 
@@ -413,6 +416,11 @@ mkdir_p "$STAGING_DIR/portal/uploads"
 mkdir_p "$STAGING_DIR/portal/auth"
 mkdir_p "$STAGING_DIR/portal/src"
 mkdir_p "$STAGING_DIR/backups"
+mkdir_p "$DEV_DIR/portal/data"
+mkdir_p "$DEV_DIR/portal/uploads"
+mkdir_p "$DEV_DIR/portal/auth"
+mkdir_p "$DEV_DIR/portal/src"
+mkdir_p "$DEV_DIR/backups"
 mkdir_p "$ROOT/etc/sudoers.d"
 mkdir_p "$ROOT/usr/local/lib/portal-deploy"
 mkdir_p "$ROOT/usr/local/sbin"
@@ -469,14 +477,55 @@ else
   printf '[symlink] %s -> .env.staging\n' "$ENV_LINK"
 fi
 
-# --- step 12: production network discovery -----------------------------------------
-# The staging compose project joins the production network as an external
-# network named by PORTAL_NETWORK. The live network name is
+# --- step 12: dev compose project -------------------------------------------------
+
+if [ -f "$REPO_ROOT/deploy/dev/docker-compose.yml" ]; then
+  install_file "$REPO_ROOT/deploy/dev/docker-compose.yml" "$DEV_DIR/docker-compose.yml" 0644
+else
+  warn "deploy/dev/docker-compose.yml not found — dev compose project not installed"
+fi
+
+install_if_absent "$(stage_content <<'EOF'
+# Development environment for https://dev.portal.nare.am — written once by
+# deploy/provision-server.sh, then operator-owned. Dev holds test data only.
+# docker compose reads this file through the .env symlink next to the dev
+# compose file.
+WHATSAPP_DISABLED=1
+# Credentials are intentionally EMPTY: the dev compose file guards them with
+# ${VAR:?}, so dev refuses to boot until the owner fills in real values.
+PORTAL_NEXTAUTH_SECRET=
+PORTAL_ADMIN_EMAIL=
+PORTAL_ADMIN_PASSWORD=
+# The production Docker network the dev project joins as an external network.
+# Provisioning discovers its compose-project-prefixed name and records it here.
+PORTAL_NETWORK=
+# Dev mail goes to a sink, never to real recipients.
+PORTAL_SMTP_HOST=mail-sink.invalid
+PORTAL_SMTP_PORT=25
+PORTAL_SMTP_USER=
+PORTAL_SMTP_PASS=
+PORTAL_SMTP_FROM=dev@portal.nare.am
+EOF
+)" "$DEV_DIR/.env.dev" 0600
+
+ENV_LINK="$DEV_DIR/.env"
+if [ -e "$ENV_LINK" ] || [ -L "$ENV_LINK" ]; then
+  printf '[unchanged] %s\n' "$ENV_LINK"
+elif [ "$DRY_RUN" -eq 1 ]; then
+  printf '[dry-run] would symlink %s -> .env.dev\n' "$ENV_LINK"
+else
+  ln -s .env.dev "$ENV_LINK" || die "failed to create symlink $ENV_LINK"
+  printf '[symlink] %s -> .env.dev\n' "$ENV_LINK"
+fi
+
+# --- step 13: production network discovery -----------------------------------------
+# The staging and dev compose projects join the production network as an
+# external network named by PORTAL_NETWORK. The live network name is
 # compose-project-prefixed, so it is discovered from the running portal-app
 # container. Discovery is best-effort: provisioning also runs before the
 # stack exists (the owner installs the production compose file afterwards),
 # so a failed discovery warns and is picked up by a later re-run — the
-# staging compose :? guard refuses to boot until a value is recorded.
+# compose :? guards refuse to boot until a value is recorded.
 
 discover_network() {
   # Sets DISCOVERED_NETWORK; empty means "not discoverable right now".
@@ -487,12 +536,12 @@ discover_network() {
     return 0
   fi
   if ! docker_available; then
-    warn "docker not found — cannot discover the production network; set PORTAL_NETWORK in $STAGING_DIR/.env.staging or re-run once the stack is up"
+    warn "docker not found — cannot discover the production network; set PORTAL_NETWORK in $STAGING_DIR/.env.staging and $DEV_DIR/.env.dev or re-run once the stack is up"
     return 0
   fi
   local networks
   if ! networks="$(docker inspect --format '{{range $name, $conf := .NetworkSettings.Networks}}{{println $name}}{{end}}' "$PORTAL_APP_CONTAINER" 2> /dev/null)"; then
-    warn "could not inspect container '$PORTAL_APP_CONTAINER' (is the live stack running?) — PORTAL_NETWORK not recorded; set it in $STAGING_DIR/.env.staging or re-run after the stack is up"
+    warn "could not inspect container '$PORTAL_APP_CONTAINER' (is the live stack running?) — PORTAL_NETWORK not recorded; set it in $STAGING_DIR/.env.staging and $DEV_DIR/.env.dev or re-run after the stack is up"
     return 0
   fi
   DISCOVERED_NETWORK="$(printf '%s\n' "$networks" | awk 'NF { print; exit }')"
@@ -503,10 +552,9 @@ discover_network() {
   printf 'discovered production network from %s: %s\n' "$PORTAL_APP_CONTAINER" "$DISCOVERED_NETWORK"
 }
 
-record_staging_network() {
-  local network="$1"
+record_network() {
+  local network="$1" env_file="$2"
   [ -n "$network" ] || return 0
-  local env_file="$STAGING_DIR/.env.staging"
   local current=""
   if [ -f "$env_file" ]; then
     current="$(sed -n 's/^PORTAL_NETWORK=//p' "$env_file" | head -n 1)"
@@ -528,20 +576,20 @@ record_staging_network() {
 }
 
 discover_network
-record_staging_network "$DISCOVERED_NETWORK"
+record_network "$DISCOVERED_NETWORK" "$STAGING_DIR/.env.staging"
+record_network "$DISCOVERED_NETWORK" "$DEV_DIR/.env.dev"
 
-# --- step 13: staging Caddy site block ------------------------------------------------
-# The staging site is a managed block (BEGIN/END markers) inside the live
-# Caddyfile, NOT a separate host file: the live layout mounts a single
-# Caddyfile into the caddy container. The candidate (old block dropped,
-# trailing blank lines trimmed, fresh block appended) is byte-identical on
-# every re-run, validated inside the caddy container BEFORE the live path is
-# touched, and the live file is restored from its timestamped backup when
-# anything fails.
+# --- step 14: staging and dev Caddy site blocks --------------------------------------
+# Both sites are managed blocks (BEGIN/END markers) inside the live Caddyfile,
+# NOT separate host files: the live layout mounts a single Caddyfile into the
+# caddy container. The candidate (old blocks dropped, trailing blank lines
+# trimmed, fresh blocks appended) is byte-identical on every re-run, validated
+# inside the caddy container BEFORE the live path is touched, and the live file
+# is restored from its timestamped backup when anything fails.
 
-install_staging_caddy_block() {
+install_caddy_blocks() {
   if [ ! -f "$PORTAL_CADDYFILE" ]; then
-    warn "$PORTAL_CADDYFILE not found — install it from deploy/portal/Caddyfile.example and re-run; staging block not installed"
+    warn "$PORTAL_CADDYFILE not found — install it from deploy/portal/Caddyfile.example and re-run; staging and dev blocks not installed"
     return 0
   fi
 
@@ -549,9 +597,9 @@ install_staging_caddy_block() {
   candidate="$(mktemp)" || die "mktemp failed"
   TMP_FILES+=("$candidate")
   {
-    awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" '
-      $0 == begin { skip = 1; next }
-      $0 == end { skip = 0; next }
+    awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" -v dev_begin="$DEV_BEGIN_MARKER" -v dev_end="$DEV_END_MARKER" '
+      $0 == begin || $0 == dev_begin { skip = 1; next }
+      $0 == end || $0 == dev_end { skip = 0; next }
       skip { next }
       { lines[++n] = $0 }
       END {
@@ -563,14 +611,17 @@ install_staging_caddy_block() {
     printf '%s\n' "$BEGIN_MARKER"
     printf 'staging.portal.nare.am {\n\tencode gzip\n\treverse_proxy portal-staging:3000\n}\n'
     printf '%s\n' "$END_MARKER"
-  } > "$candidate" || die "failed to build the staging Caddyfile candidate"
+    printf '%s\n' "$DEV_BEGIN_MARKER"
+    printf 'dev.portal.nare.am {\n\tencode gzip\n\treverse_proxy portal-dev:3000\n}\n'
+    printf '%s\n' "$DEV_END_MARKER"
+  } > "$candidate" || die "failed to build the Caddyfile candidate"
 
   if cmp -s -- "$candidate" "$PORTAL_CADDYFILE"; then
-    printf '[unchanged] %s (staging block present)\n' "$PORTAL_CADDYFILE"
+    printf '[unchanged] %s (staging and dev blocks present)\n' "$PORTAL_CADDYFILE"
     return 0
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf '[dry-run] would install the staging block into %s\n' "$PORTAL_CADDYFILE"
+    printf '[dry-run] would install the staging and dev blocks into %s\n' "$PORTAL_CADDYFILE"
     return 0
   fi
 
@@ -589,7 +640,7 @@ install_staging_caddy_block() {
     fi
     printf '[caddy] candidate validated inside the %s container\n' "$PORTAL_CADDY_CONTAINER"
   else
-    warn "$PORTAL_CADDY_CONTAINER container not reachable — installing the staging block WITHOUT validation"
+    warn "$PORTAL_CADDY_CONTAINER container not reachable — installing the staging and dev blocks WITHOUT validation"
   fi
 
   # Write the candidate IN PLACE, preserving the inode: the live layout
@@ -599,8 +650,8 @@ install_staging_caddy_block() {
   # (install/mv) would leave the container serving the OLD content — the
   # reload below would succeed against the old file and the staging site would
   # never activate until a container restart.
-  cat -- "$candidate" > "$PORTAL_CADDYFILE" || die "failed to install the staging block into $PORTAL_CADDYFILE"
-  printf '[caddy] staging block installed in %s\n' "$PORTAL_CADDYFILE"
+  cat -- "$candidate" > "$PORTAL_CADDYFILE" || die "failed to install the staging and dev blocks into $PORTAL_CADDYFILE"
+  printf '[caddy] staging and dev blocks installed in %s\n' "$PORTAL_CADDYFILE"
 
   # The reload targets the container-internal config path (where the live
   # Caddyfile is mounted): only the caddy container ever sees that path, and
@@ -614,13 +665,13 @@ install_staging_caddy_block() {
     fi
     printf '[caddy] reloaded inside the %s container\n' "$PORTAL_CADDY_CONTAINER"
   else
-    warn "$PORTAL_CADDY_CONTAINER container not reachable — reload caddy once the stack is up to activate the staging site"
+    warn "$PORTAL_CADDY_CONTAINER container not reachable — reload caddy once the stack is up to activate the staging and dev sites"
   fi
 }
 
-install_staging_caddy_block
+install_caddy_blocks
 
-# --- step 14: AFTER manifest — provisioning must never touch production data -------
+# --- step 15: AFTER manifest — provisioning must never touch production data -------
 
 compute_manifest
 printf 'production data manifest (after): %s\n' "$MANIFEST_SUMMARY"
@@ -629,7 +680,7 @@ if [ "$MANIFEST_SUMMARY" != "$BEFORE_SUMMARY" ]; then
   die "production data dirs changed during provisioning"
 fi
 
-# --- step 15: what remains for the owner ----------------------------------------------
+# --- step 16: what remains for the owner ----------------------------------------------
 
 cat <<'EOF'
 NEXT STEPS:
@@ -642,12 +693,15 @@ NEXT STEPS:
      (PORTAL_NEXTAUTH_SECRET, PORTAL_ADMIN_EMAIL, PORTAL_ADMIN_PASSWORD) —
      provisioning leaves them empty on purpose, and the compose :? guards
      refuse to boot staging until real values are set.
-  3. Re-run this script once the production stack is up (or set
-     PORTAL_NETWORK in /opt/stack/staging/.env.staging by hand) so the
-     production network is recorded and the staging Caddy block is
-     validated and activated.
-  4. Add the DEPLOY_* secrets and the PORTAL_URL / STAGING_URL variables to
+  3. Set the dev credentials in /opt/stack/dev/.env.dev. The same compose :?
+     guards refuse to boot dev until real values are set. Dev holds test data
+     only.
+  4. Re-run this script once the production stack is up (or set
+     PORTAL_NETWORK in /opt/stack/staging/.env.staging and /opt/stack/dev/.env.dev
+     by hand) so the production network is recorded and the staging and dev
+     Caddy blocks are validated and activated.
+  5. Add the DEPLOY_* secrets and the PORTAL_URL / STAGING_URL variables to
      the CI project settings.
-  5. Run the staging drills (drill-rollback / drill-restore through the
+  6. Run the staging drills (drill-rollback / drill-restore through the
      deploy key) before enabling the production release pipeline.
 EOF
