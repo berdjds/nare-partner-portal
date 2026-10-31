@@ -14,8 +14,9 @@ Brand palette (from the Nare Travel and Tours website repository):
 
 | Role | Colour | Token |
 | --- | --- | --- |
-| Brand blue (marks, decoration) | `hsl(203 89% 53%)` | `--brand` |
-| Primary / active (buttons, links) | Deepened brand blue `hsl(203 89% 40%)` — AA contrast with white text | `--primary`, `--ring`, `--sidebar-primary` |
+| Brand blue (marks, decoration) | Exact logo blue `hsl(203 89% 53%)` | `--brand` |
+| Primary / active (buttons, links) | Deepened brand blue `hsl(203 89% 35%)` (`#0a6ca9`) — 5.17:1 on `--background`, 4.83:1 on `--muted`, 5.65:1 on white; white on it is 5.65:1 | `--primary`, `--ring`, `--sidebar-primary` |
+| Hero gradient end | `hsl(203 89% 38%)` (`#0b75b7`) — white on it is 4.95:1 | `--gradient-end` (Tailwind colour `gradient-end`) |
 | Warm highlight (rare) | Nare orange `hsl(27 96% 61%)` | `--warm` |
 | Accent tint | Light blue `hsl(203 87% 95%)` / text `203 89% 28%` | `--accent`, `--accent-foreground` |
 | Text | Near-black `hsl(0 0% 10%)` | `--foreground` |
@@ -47,6 +48,13 @@ Token groups:
 
 - **Primary** (deepened Nare blue) is reserved for primary actions and the active
   navigation state. Keep it rare; do not use it for decoration.
+- **Brand** (`--brand`) is the exact logo blue and is decorative only: never put
+  it behind text.
+- **Hero gradients** on `/`, `/login` and `/partners/apply` run
+  `from-primary to-gradient-end`, never `to-brand`, so white hero text retains
+  AA contrast.
+- **Contrast** is guarded by `tests/ui/contrast.test.ts`: it checks the primary
+  and gradient-end foreground/background pairings above at 4.5:1 or better.
 - **Destructive** keeps its own brighter red (`--destructive: 0 84% 60%`),
   visibly distinct from the brand blue, and is only used with an icon
   and a confirmation.
@@ -233,12 +241,13 @@ chrome and the legal pages in W5f.
 ### Public chrome (header and footer)
 
 All five pages share the same header and footer, built with token colours
-only:
+only. **One brand lockup per screen** is the rule: the global public header
+shows BrandMark's logo mark beside the wordmark on every public page, and
+heroes, login panels and cards must not repeat the lockup.
 
 - **`components/public/PublicHeader.tsx`** (client) — a bordered top bar
-  (`border-b border-border bg-background`, `max-w-5xl` inner) with the Nare
-  wordmark (text, not an image — tests forbid `/brand/` asset references)
-  linking home, and the primary nav (`aria-label="Primary"`): **Home** (`/`),
+  (`border-b border-border bg-background`, `max-w-5xl` inner) with the
+  BrandMark lockup linking home, and the primary nav (`aria-label="Primary"`): **Home** (`/`),
   **Become a partner** (`/partners/apply`) and **Sign in** (`/login`). The
   active page is passed in as an `active` prop (`"home" | "apply" | "login"`)
   and its link gets `aria-current="page"` and `text-primary underline`;
@@ -331,7 +340,7 @@ Landing page sections are composed from `components/landing/` (`Hero`,
 `app/page.tsx` for signed-out
 visitors, between the shared `PublicHeader` and `PublicFooter`. The brand
 gradient uses design tokens only
-(`bg-gradient-to-br from-primary to-brand`); raw palette classes and hex
+(`bg-gradient-to-br from-primary to-gradient-end`); raw palette classes and hex
 literals stay out of page code, and no green-family colour appears on any
 public page (guarded by `tests/ui/public-no-green.test.ts`).
 
