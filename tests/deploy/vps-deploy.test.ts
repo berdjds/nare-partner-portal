@@ -49,6 +49,8 @@ const DEPLOY_SCRIPT = path.join(REPO_ROOT, "scripts", "vps-deploy.sh");
 const ENTRYPOINT_SCRIPT = path.join(REPO_ROOT, "docker-entrypoint.sh");
 const DOCKER_STUB = path.join(REPO_ROOT, "tests", "deploy", "docker-stub.sh");
 const CURL_STUB = path.join(REPO_ROOT, "tests", "deploy", "curl-stub.sh");
+const FREE_STUB = path.join(REPO_ROOT, "tests", "deploy", "free-stub.sh");
+const DF_STUB = path.join(REPO_ROOT, "tests", "deploy", "df-stub.sh");
 const APP_CONTAINER = "portal-app";
 const DATA_DIRS = ["data", "uploads", "auth"];
 // The server compose file is provisioning-owned; the tarball ships a
@@ -94,6 +96,8 @@ function runDeploy(appRoot: string, stubEnv: Record<string, string> = {}): RunRe
   for (const [stub, name] of [
     [DOCKER_STUB, "docker"],
     [CURL_STUB, "curl"],
+    [FREE_STUB, "free"],
+    [DF_STUB, "df"],
   ] as const) {
     const stubPath = path.join(stubBin, name);
     cpSync(stub, stubPath);
@@ -748,6 +752,123 @@ describe("scripts/vps-deploy.sh", () => {
     }
     expectDataMarkersIntact(appRoot);
     expectNoAutomaticRestore(ctx);
+  });
+
+  it("dev deploy uses portal-dev, its own override and image tags, and WHATSAPP_DISABLED=1", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      PORTAL_ENV_NAME: "dev",
+      PORTAL_PUBLIC_URL: "https://dev.portal.test",
+      STUB_INSPECT_IMAGE: "portal-dev:latest",
+    });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    const out = ctx.stdout + ctx.stderr;
+
+    expect(out).toContain("dev resource guard passed");
+    expect(out).toContain("WHATSAPP_DISABLED=1");
+    expect(out).toContain("deploy finished successfully");
+    expect(countLine(ctx.dockerLog, "stop portal-dev")).toBe(1);
+    expect(ctx.dockerLog).not.toContain("stop portal-app");
+    const overridePath = path.join(appRoot, "portal-dev.overrides.yml");
+    const cutoverLine = `compose -f ${path.join(appRoot, "docker-compose.yml")} -f ${overridePath} up -d --force-recreate --no-deps portal-dev`;
+    expect(countLine(ctx.dockerLog, cutoverLine)).toBe(1);
+    const overrideContent = readFileSync(overridePath, "utf8");
+    expect(overrideContent).toContain("portal-dev:");
+    expect(overrideContent).toContain("image: portal-dev:latest");
+    expect(overrideContent).toContain("WHATSAPP_DISABLED=1");
+    expect(ctx.dockerLog).toContain("build -t portal-dev:candidate");
+    expect(ctx.dockerLog).toContain("tag portal-dev:latest portal-dev:previous");
+    expect(ctx.dockerLog).toContain("tag portal-dev:candidate portal-dev:latest");
+    for (const line of lines(ctx.dockerLog)) {
+      if (line.startsWith("build ") || line.startsWith("tag ") || line.startsWith("image inspect ")) {
+        expect(line).not.toMatch(/(^|\s)portal:(candidate|previous|latest)(\s|$)/);
+      }
+    }
+    expect(ctx.curlLog).toContain("https://dev.portal.test/login");
+    expect(backupArchives(appRoot)[0]).toMatch(/^portal-dev-.*\.tar\.gz$/);
+    expectDataMarkersIntact(appRoot);
+    expectNoAutomaticRestore(ctx);
+  });
+
+  it("dev refuses below the memory threshold before changing anything", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      PORTAL_ENV_NAME: "dev",
+      STUB_MEM_TOTAL: "1000",
+      STUB_MEM_AVAILABLE: "199",
+    });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("dev resource guard: free memory 19% is below required 20%");
+    expect(ctx.dockerLog).toBe("");
+    expect(ctx.curlLog).toBe("");
+    expect(existsSync(path.join(appRoot, "portal-source.tar.gz"))).toBe(true);
+    expect(existsSync(path.join(appRoot, "portal", "src"))).toBe(false);
+    expect(existsSync(path.join(appRoot, "backups"))).toBe(false);
+    expect(existsSync(path.join(appRoot, "portal-dev.overrides.yml"))).toBe(false);
+    expect(readFileSync(path.join(appRoot, "docker-compose.yml"), "utf8")).toBe(SERVER_COMPOSE_CONTENT);
+    expectDataMarkersIntact(appRoot);
+  });
+
+  it("dev refuses below the disk threshold before changing anything", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      PORTAL_ENV_NAME: "dev",
+      STUB_DISK_TOTAL: "1000",
+      STUB_DISK_AVAILABLE: "149",
+    });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stdout + ctx.stderr).toContain("dev resource guard: free disk 14% is below required 15%");
+    expect(ctx.dockerLog).toBe("");
+    expect(ctx.curlLog).toBe("");
+    expect(existsSync(path.join(appRoot, "portal-source.tar.gz"))).toBe(true);
+    expect(existsSync(path.join(appRoot, "portal", "src"))).toBe(false);
+    expect(existsSync(path.join(appRoot, "backups"))).toBe(false);
+    expect(existsSync(path.join(appRoot, "portal-dev.overrides.yml"))).toBe(false);
+    expect(readFileSync(path.join(appRoot, "docker-compose.yml"), "utf8")).toBe(SERVER_COMPOSE_CONTENT);
+    expectDataMarkersIntact(appRoot);
+  });
+
+  it("dev resource thresholds are overridable and equality passes", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, {
+      PORTAL_ENV_NAME: "dev",
+      PORTAL_DEV_MIN_MEM_PCT: "15",
+      PORTAL_DEV_MIN_DISK_PCT: "14",
+      STUB_MEM_TOTAL: "1000",
+      STUB_MEM_AVAILABLE: "150",
+      STUB_DISK_TOTAL: "1000",
+      STUB_DISK_AVAILABLE: "140",
+      STUB_INSPECT_IMAGE: "portal-dev:latest",
+    });
+    expect(ctx.status, ctx.stdout + ctx.stderr).toBe(0);
+    expect(ctx.stdout).toContain("free memory 15% (minimum 15%), free disk 14% (minimum 14%)");
+    expect(ctx.stdout).toContain("deploy finished successfully");
+  });
+
+  it("staging and production deploys are not subject to the dev resource guard", () => {
+    for (const environment of ["staging", "production"]) {
+      const appRoot = setupAppRoot();
+      const ctx = runDeploy(appRoot, {
+        PORTAL_ENV_NAME: environment,
+        STUB_MEM_TOTAL: "1000",
+        STUB_MEM_AVAILABLE: "0",
+        STUB_DISK_TOTAL: "1000",
+        STUB_DISK_AVAILABLE: "0",
+        STUB_INSPECT_IMAGE: environment === "staging" ? "portal-staging:latest" : "portal:latest",
+      });
+      expect(ctx.status, `${environment}: ${ctx.stdout}${ctx.stderr}`).toBe(0);
+      expect(ctx.stdout + ctx.stderr).not.toContain("dev resource guard");
+      expect(ctx.stdout).toContain("deploy finished successfully");
+    }
+  });
+
+  it("rejects environment names other than dev, staging and production", () => {
+    const appRoot = setupAppRoot();
+    const ctx = runDeploy(appRoot, { PORTAL_ENV_NAME: "qa" });
+    expect(ctx.status).toBe(1);
+    expect(ctx.stderr).toContain("environment must be 'dev', 'staging' or 'production' (got 'qa')");
+    expect(ctx.dockerLog).toBe("");
+    expect(existsSync(path.join(appRoot, "portal", "src"))).toBe(false);
   });
 
   it("aborts before the freeze when another container mounts a data dir", () => {

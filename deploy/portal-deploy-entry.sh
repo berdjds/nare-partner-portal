@@ -26,9 +26,9 @@
 #                                 scp/sftp cannot pass a forced command, since
 #                                 their SSH_ORIGINAL_COMMAND is `scp -t ...` or
 #                                 the sftp-server path, both rejected below.
-#   deploy <env> <tarball>        env = staging|production; a bare tarball name
-#                                 is rewritten to $UPLOAD_DIR/<name>
-#   smoke <env>                   env = staging|production
+#   deploy <env> <tarball>        env = dev|staging|production; a bare tarball
+#                                 name is rewritten to $UPLOAD_DIR/<name>
+#   smoke <env>                   env = dev|staging|production
 #   backup
 #   restore <archive>             staging only
 #   restore --production <archive>
@@ -39,7 +39,7 @@
 #   upload   -> never dispatched: stage 1 handles it as the deploy user, and
 #               stage 2 rejects it (uploads must never run as root)
 #   deploy   -> $LIB_DIR/portal-deploy <env> <tarball>
-#   smoke    -> $LIB_DIR/portal-smoke <url>  (staging/public URL per env)
+#   smoke    -> $LIB_DIR/portal-smoke <url>  (dev/staging/public URL per env)
 #   backup   -> $LIB_DIR/portal-backup
 #   restore  -> PORTAL_ENV_NAME=<env> $LIB_DIR/portal-restore <archive> --yes
 #               (the dispatcher invocation IS the operator's --yes
@@ -61,6 +61,7 @@
 #   PORTAL_DEPLOY_UPLOAD_DIR (/home/deploy)
 #   PORTAL_PUBLIC_URL        (https://portal.nare.am)
 #   PORTAL_STAGING_URL       (https://staging.portal.nare.am)
+#   PORTAL_DEV_URL           (https://dev.portal.nare.am)
 
 set -euo pipefail
 # No pathname expansion anywhere in this script: client words must stay
@@ -73,6 +74,7 @@ SUDO="${PORTAL_DEPLOY_SUDO:-sudo}"
 UPLOAD_DIR="${PORTAL_DEPLOY_UPLOAD_DIR:-/home/deploy}"
 PUBLIC_URL="${PORTAL_PUBLIC_URL:-https://portal.nare.am}"
 STAGING_URL="${PORTAL_STAGING_URL:-https://staging.portal.nare.am}"
+DEV_URL="${PORTAL_DEV_URL:-https://dev.portal.nare.am}"
 
 reject() {
   printf 'portal-deploy-entry: rejected: %s\n' "$*" >&2
@@ -151,9 +153,9 @@ validate_command() {
     deploy)
       [ "$#" -eq 3 ] || reject "usage: deploy <env> <tarball>"
       case "$2" in
-        staging | production) ;;
+        dev | staging | production) ;;
         *)
-          reject "deploy environment must be 'staging' or 'production'"
+          reject "deploy environment must be 'dev', 'staging' or 'production'"
           ;;
       esac
       local tarball="$3"
@@ -177,9 +179,9 @@ validate_command() {
     smoke)
       [ "$#" -eq 2 ] || reject "usage: smoke <env>"
       case "$2" in
-        staging | production) ;;
+        dev | staging | production) ;;
         *)
-          reject "smoke environment must be 'staging' or 'production'"
+          reject "smoke environment must be 'dev', 'staging' or 'production'"
           ;;
       esac
       CMD_WORDS=("smoke" "$2")
@@ -247,11 +249,17 @@ if [ "${1:-}" = "--exec" ]; then
       exec "$LIB_DIR/portal-deploy" "${CMD_WORDS[1]}" "${CMD_WORDS[2]}"
       ;;
     smoke)
-      if [ "${CMD_WORDS[1]}" = "staging" ]; then
-        exec "$LIB_DIR/portal-smoke" "$STAGING_URL"
-      else
-        exec "$LIB_DIR/portal-smoke" "$PUBLIC_URL"
-      fi
+      case "${CMD_WORDS[1]}" in
+        dev)
+          exec "$LIB_DIR/portal-smoke" "$DEV_URL"
+          ;;
+        staging)
+          exec "$LIB_DIR/portal-smoke" "$STAGING_URL"
+          ;;
+        production)
+          exec "$LIB_DIR/portal-smoke" "$PUBLIC_URL"
+          ;;
+      esac
       ;;
     backup)
       exec "$LIB_DIR/portal-backup"

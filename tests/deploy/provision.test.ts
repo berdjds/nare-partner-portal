@@ -7,9 +7,9 @@
  * compose project runs the caddy container (PORTAL_CADDY_CONTAINER, default
  * "caddy") and the app container (PORTAL_APP_CONTAINER, default "portal-app")
  * on a compose-managed network whose real name is discovered from the running
- * app container, and the staging site is a marker-delimited block inside the
- * single live Caddyfile (PORTAL_CADDYFILE, default /opt/stack/Caddyfile) that
- * is validated and reloaded INSIDE the caddy container via docker exec.
+ * app container, and the staging/dev sites are marker-delimited blocks inside
+ * the single live Caddyfile (PORTAL_CADDYFILE, default /opt/stack/Caddyfile)
+ * that is validated and reloaded INSIDE the caddy container via docker exec.
  *
  * These tests run the real script with bash in "transplant mode"
  * (PORTAL_PROVISION_ROOT=<tmpdir>): every absolute target path lands under
@@ -25,16 +25,17 @@
  *     opt/stack/portal/{data,uploads,auth} stays byte-identical, and the
  *     before/after manifest lines are equal;
  *   - the installed layout (dispatcher, tool library incl. portal-drill,
- *     sudoers drop-in, systemd units, staging compose project, .env.staging
- *     + .env symlink) and the absence of the old host-level etc/caddy layout;
+ *     sudoers drop-in, systemd units, staging/dev compose projects and their
+ *     environment files + relative .env symlinks) and the absence of the old
+ *     host-level etc/caddy layout;
  *   - the exact authorized_keys line (forced command + all four no-* options)
  *     and a sudoers drop-in with exactly one non-comment line naming only the
  *     dispatcher;
- *   - .env.staging ships EMPTY credentials and an empty PORTAL_NETWORK line
+ *   - staging/dev environments ship EMPTY credentials and PORTAL_NETWORK lines
  *     (never a fixed known secret) so the compose :? guards refuse to boot a
- *     forgotten staging;
- *   - the live-layout caddy flow: the managed staging block is appended with
- *     BEGIN/END markers, the candidate is validated inside the caddy
+ *     forgotten instance;
+ *   - the live-layout caddy flow: managed staging then dev blocks are appended
+ *     with BEGIN/END markers in one candidate, validated inside the caddy
  *     container BEFORE the live path is touched, a timestamped backup is
  *     kept, a validation failure leaves the live file untouched, a reload
  *     failure restores the backup, a preset PORTAL_NETWORK skips discovery,
@@ -74,6 +75,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   statSync,
   writeFileSync,
 } from "fs";
@@ -105,6 +107,11 @@ const CADDYFILE_FIXTURE =
   "{\n\temail admin@nare.am\n}\n\nportal.nare.am {\n\tencode gzip\n\treverse_proxy portal:3000\n}\n";
 const BEGIN_MARKER = "# BEGIN staging.portal.nare.am (managed by provision-server.sh)";
 const END_MARKER = "# END staging.portal.nare.am";
+const DEV_BEGIN_MARKER = "# BEGIN dev.portal.nare.am (managed by provision-server.sh)";
+const DEV_END_MARKER = "# END dev.portal.nare.am";
+const STAGING_SITE_BLOCK = "staging.portal.nare.am {\n\tencode gzip\n\treverse_proxy portal-staging:3000\n}";
+const DEV_SITE_BLOCK = "dev.portal.nare.am {\n\tencode gzip\n\treverse_proxy portal-dev:3000\n}";
+const DEV_DIRS = ["portal/data", "portal/uploads", "portal/auth", "portal/src", "backups"] as const;
 
 /**
  * The stub scripts below deliberately use only "$var" expansions (the ${...}
@@ -285,6 +292,25 @@ function caddyBackups(fx: ProvisionFixture): string[] {
   return readdirSync(fx.stackDir).filter((entry) => entry.startsWith("Caddyfile.bak-"));
 }
 
+function devPath(fx: ProvisionFixture, ...parts: string[]): string {
+  return path.join(fx.root, "opt", "stack", "dev", ...parts);
+}
+
+function stagingPath(fx: ProvisionFixture, ...parts: string[]): string {
+  return path.join(fx.root, "opt", "stack", "staging", ...parts);
+}
+
+/** File bytes, modes and symlink targets used to prove a run changed nothing. */
+function fileSnapshot(root: string): string[] {
+  return walk(root)
+    .sort()
+    .map((file) => {
+      const stat = lstatSync(file);
+      const target = stat.isSymbolicLink() ? `link:${readlinkSync(file)}` : `file:${readFileSync(file).toString("base64")}`;
+      return `${path.relative(root, file)} mode=${stat.mode & 0o777} ${target}`;
+    });
+}
+
 /** Assert that the given steps appear in the log in order. */
 function assertInOrder(log: string, steps: string[]): void {
   let cursor = 0;
@@ -397,11 +423,17 @@ describe("deploy/provision-server.sh --dry-run", () => {
     // System mutations are never executed under a transplant root.
     expect(res.stdout).toContain("[skip] system step in test root:");
     expect(res.stdout).toContain("[dry-run] would symlink");
+    for (const dir of DEV_DIRS) {
+      expect(res.stdout).toContain(`/opt/stack/dev/${dir}`);
+    }
+    expect(res.stdout).toContain("/opt/stack/dev/docker-compose.yml");
+    expect(res.stdout).toContain("/opt/stack/dev/.env.dev");
+    expect(res.stdout).toContain("/opt/stack/dev/.env -> .env.dev");
     expect(res.stdout).toContain("NEXT STEPS:");
     // The NEXT STEPS must never tell the operator to overwrite the live
     // compose or Caddyfile, or to create unprefixed runtime variables — the
-    // live files stay exactly as they are; only staging credentials and the
-    // drills remain.
+    // live files stay exactly as they are; only staging/dev credentials and
+    // the drills remain.
     const nextSteps = res.stdout.slice(res.stdout.indexOf("NEXT STEPS:"));
     expect(nextSteps).not.toContain("install -m 0644");
     expect(nextSteps).not.toContain("Caddyfile.example");
@@ -413,10 +445,24 @@ describe("deploy/provision-server.sh --dry-run", () => {
     // Not a single file or directory was created under the root.
     expect(existsSync(root)).toBe(false);
   });
+
+  it("reports the combined dev Caddy plan without mutating an existing transplant", () => {
+    const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
+    withDockerStub(fx);
+    const before = fileSnapshot(fx.root);
+
+    const res = runProvision(fx, { dryRun: true });
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+    expect(res.stdout).toMatch(/\[dry-run\].*(?:staging.*dev|dev).*\/opt\/stack\/Caddyfile/);
+    expect(res.stdout).toContain("/opt/stack/dev/.env.dev");
+    expect(fileSnapshot(fx.root)).toEqual(before);
+    expect(existsSync(devPath(fx))).toBe(false);
+    expect(caddyBackups(fx)).toEqual([]);
+  });
 });
 
 describe("deploy/provision-server.sh idempotency and manifests", () => {
-  it("two runs converge; the second reports only [unchanged]/[skip] and leaves production data byte-identical", () => {
+  it("two runs converge; every dev item is unchanged and production, staging and Caddy data stay byte-identical", () => {
     const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
     withDockerStub(fx);
     const seeded = seededBytes(fx);
@@ -427,18 +473,16 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
     const manifest1 = manifestLines(run1.stdout);
     expect(manifest1.before).toBe(manifest1.after);
     expect(manifest1.before).toContain("files=3");
-    // The managed staging block was appended to the live Caddyfile and the
-    // discovered production network recorded for staging.
-    expect(readFileSync(fx.caddyfilePath, "utf8")).toContain(BEGIN_MARKER);
-    expect(readFileSync(fx.caddyfilePath, "utf8")).toContain("reverse_proxy portal-staging:3000");
-    expect(readFileSync(path.join(fx.root, "opt", "stack", "staging", ".env.staging"), "utf8")).toContain(
-      "PORTAL_NETWORK=stack_portal_net"
-    );
+    expect(readFileSync(stagingPath(fx, ".env.staging"), "utf8")).toContain("PORTAL_NETWORK=stack_portal_net");
+    expect(readFileSync(devPath(fx, ".env.dev"), "utf8")).toContain("PORTAL_NETWORK=stack_portal_net");
     // Seeded production data is byte-identical after run 1.
     expect(seededBytes(fx).db.equals(seeded.db)).toBe(true);
     expect(seededBytes(fx).upload.equals(seeded.upload)).toBe(true);
     expect(seededBytes(fx).auth.equals(seeded.auth)).toBe(true);
     const caddyfileAfterRun1 = readFileSync(fx.caddyfilePath, "utf8");
+    const stagingAfterRun1 = fileSnapshot(stagingPath(fx));
+    const devAfterRun1 = fileSnapshot(devPath(fx));
+    const backupsAfterRun1 = caddyBackups(fx);
 
     const run2 = runProvision(fx);
     expect(run2.status, run2.stdout + run2.stderr).toBe(0);
@@ -449,19 +493,32 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
     for (const line of actionLines) {
       expect(line).toMatch(/^\[(unchanged|skip)\]/);
     }
-    expect(actionLines.some((line) => line.startsWith("[unchanged]"))).toBe(true);
+    for (const dir of DEV_DIRS) {
+      const directory = devPath(fx, ...dir.split("/"));
+      expect(actionLines).not.toContain(`[mkdir] ${directory}`);
+      expect(statSync(directory).isDirectory(), dir).toBe(true);
+    }
+    for (const file of ["docker-compose.yml", ".env.dev", ".env"]) {
+      expect(actionLines).toContain(`[unchanged] ${devPath(fx, file)}`);
+    }
+    expect(actionLines).toContain(`[unchanged] PORTAL_NETWORK in ${devPath(fx, ".env.dev")}`);
     const manifest2 = manifestLines(run2.stdout);
     expect(manifest2.before).toBe(manifest2.after);
     expect(manifest2.before).toBe(manifest1.before);
-    // The live Caddyfile regenerated byte-identically.
+    // The complete live Caddyfile and every staging/dev file regenerated
+    // byte-identically, without another timestamped backup.
     expect(readFileSync(fx.caddyfilePath, "utf8")).toBe(caddyfileAfterRun1);
+    expect(fileSnapshot(stagingPath(fx))).toEqual(stagingAfterRun1);
+    expect(fileSnapshot(devPath(fx))).toEqual(devAfterRun1);
+    expect(caddyBackups(fx)).toEqual(backupsAfterRun1);
+    expect(caddyBackups(fx)).toHaveLength(1);
     // Seeded production data is still byte-identical after run 2.
     expect(seededBytes(fx).db.equals(seeded.db)).toBe(true);
     expect(seededBytes(fx).upload.equals(seeded.upload)).toBe(true);
     expect(seededBytes(fx).auth.equals(seeded.auth)).toBe(true);
   });
 
-  it("installs the layout: dispatcher, tool library, systemd units and the staging project", () => {
+  it("installs the layout: dispatcher, tool library, systemd units and the staging/dev projects", () => {
     // No Caddyfile and no docker stub: the live-stack steps degrade to
     // warnings while the rest of the layout is installed.
     const fx = makeProvisionFixture();
@@ -483,6 +540,8 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
       "etc/portal-backup.env",
       "opt/stack/staging/docker-compose.yml",
       "opt/stack/staging/.env.staging",
+      "opt/stack/dev/docker-compose.yml",
+      "opt/stack/dev/.env.dev",
     ];
     for (const rel of expectedFiles) {
       expect(existsSync(path.join(fx.root, ...rel.split("/"))), rel).toBe(true);
@@ -491,12 +550,25 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
     expect(statSync(path.join(fx.root, "usr/local/sbin/portal-deploy-entry")).mode & 0o111).not.toBe(0);
     expect(statSync(path.join(fx.root, "etc/sudoers.d/portal-deploy")).mode & 0o777).toBe(0o440);
     // The staging data dirs exist, separate from the production ones.
-    expect(existsSync(path.join(fx.root, "opt/stack/staging/portal/data"))).toBe(true);
-    expect(existsSync(path.join(fx.root, "opt/stack/staging/portal/uploads"))).toBe(true);
-    expect(existsSync(path.join(fx.root, "opt/stack/staging/portal/auth"))).toBe(true);
-    // .env is a relative symlink to .env.staging.
-    const envLink = path.join(fx.root, "opt/stack/staging/.env");
-    expect(lstatSync(envLink).isSymbolicLink()).toBe(true);
+    expect(existsSync(stagingPath(fx, "portal", "data"))).toBe(true);
+    expect(existsSync(stagingPath(fx, "portal", "uploads"))).toBe(true);
+    expect(existsSync(stagingPath(fx, "portal", "auth"))).toBe(true);
+    for (const dir of DEV_DIRS) {
+      expect(statSync(devPath(fx, ...dir.split("/"))).isDirectory(), dir).toBe(true);
+    }
+    // Dev compose is installed verbatim; its operator-owned secrets are 0600.
+    expect(readFileSync(devPath(fx, "docker-compose.yml"), "utf8")).toBe(
+      readFileSync(path.join(REPO_ROOT, "deploy", "dev", "docker-compose.yml"), "utf8")
+    );
+    expect(statSync(devPath(fx, "docker-compose.yml")).mode & 0o777).toBe(0o644);
+    expect(statSync(devPath(fx, ".env.dev")).mode & 0o777).toBe(0o600);
+    // Both .env files are relative symlinks to their environment-specific file.
+    const stagingEnvLink = stagingPath(fx, ".env");
+    expect(lstatSync(stagingEnvLink).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(stagingEnvLink)).toBe(".env.staging");
+    const devEnvLink = devPath(fx, ".env");
+    expect(lstatSync(devEnvLink).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(devEnvLink)).toBe(".env.dev");
     // The old host-level caddy layout is gone: provisioning never creates
     // etc/caddy — the live Caddyfile is a single file under /opt/stack.
     expect(existsSync(path.join(fx.root, "etc", "caddy"))).toBe(false);
@@ -552,6 +624,25 @@ describe("deploy/provision-server.sh idempotency and manifests", () => {
     expect(res.stdout).toMatch(/staging credentials|\.env\.staging/);
   });
 
+  it("writes .env.dev with empty credentials/network, WhatsApp disabled and mail-sink settings", () => {
+    const fx = makeProvisionFixture();
+    const res = runProvision(fx);
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+
+    const content = readFileSync(devPath(fx, ".env.dev"), "utf8");
+    expect(content).not.toContain("CHANGE-ME");
+    expect(content).toMatch(/^PORTAL_NEXTAUTH_SECRET=$/m);
+    expect(content).toMatch(/^PORTAL_ADMIN_EMAIL=$/m);
+    expect(content).toMatch(/^PORTAL_ADMIN_PASSWORD=$/m);
+    expect(content).toMatch(/^PORTAL_NETWORK=$/m);
+    expect(content).toMatch(/^WHATSAPP_DISABLED=1$/m);
+    expect(content).toMatch(/^PORTAL_SMTP_HOST=mail-sink\.invalid$/m);
+    expect(content).toMatch(/^PORTAL_SMTP_PORT=25$/m);
+    expect(content).toMatch(/^PORTAL_SMTP_USER=$/m);
+    expect(content).toMatch(/^PORTAL_SMTP_PASS=$/m);
+    expect(content).toMatch(/^PORTAL_SMTP_FROM=dev@portal\.nare\.am$/m);
+  });
+
   it("creates the deploy user with a real login shell — nologin would break the forced command", () => {
     // sshd runs the forced command as `<login shell> -c <command>`; with a
     // nologin shell every CI connection would die before the dispatcher runs.
@@ -574,7 +665,7 @@ describe("deploy/provision-server.sh validation gates", () => {
 });
 
 describe("deploy/provision-server.sh live layout", () => {
-  it("success: network recorded, managed block installed, backup kept, validate before reload", () => {
+  it("success: both networks recorded, exact staging/dev blocks installed in one candidate, then one reload", () => {
     const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
     withDockerStub(fx);
 
@@ -582,30 +673,36 @@ describe("deploy/provision-server.sh live layout", () => {
     expect(res.status, res.stdout + res.stderr).toBe(0);
 
     // The network came from the stubbed `docker inspect portal-app`.
-    expect(readFileSync(path.join(fx.root, "opt", "stack", "staging", ".env.staging"), "utf8")).toContain(
-      "PORTAL_NETWORK=stack_portal_net"
-    );
+    expect(readFileSync(stagingPath(fx, ".env.staging"), "utf8")).toContain("PORTAL_NETWORK=stack_portal_net");
+    expect(readFileSync(devPath(fx, ".env.dev"), "utf8")).toContain("PORTAL_NETWORK=stack_portal_net");
     const dockerLog = readDockerLog(fx);
     expect(dockerLog).toContain("inspect");
     expect(dockerLog).toContain("portal-app");
 
-    // Exactly one managed staging block in the live Caddyfile.
+    // Exactly one byte-exact managed block for each site, staging before dev.
     const content = readFileSync(fx.caddyfilePath, "utf8");
+    const stagingBlock = `${BEGIN_MARKER}\n${STAGING_SITE_BLOCK}\n${END_MARKER}`;
+    const devBlock = `${DEV_BEGIN_MARKER}\n${DEV_SITE_BLOCK}\n${DEV_END_MARKER}`;
     expect(content.match(/^# BEGIN staging\.portal\.nare\.am/gm)).toHaveLength(1);
     expect(content.match(/^# END staging\.portal\.nare\.am$/gm)).toHaveLength(1);
-    expect(content).toContain("staging.portal.nare.am {");
-    expect(content).toContain("reverse_proxy portal-staging:3000");
+    expect(content.match(/^# BEGIN dev\.portal\.nare\.am/gm)).toHaveLength(1);
+    expect(content.match(/^# END dev\.portal\.nare\.am$/gm)).toHaveLength(1);
+    expect(content).toContain(stagingBlock);
+    expect(content).toContain(devBlock);
+    expect(content.indexOf(stagingBlock)).toBeLessThan(content.indexOf(devBlock));
 
     // Exactly one timestamped backup, holding the pre-provisioning content.
     const backups = caddyBackups(fx);
     expect(backups).toHaveLength(1);
     expect(readFileSync(path.join(fx.stackDir, backups[0]), "utf8")).toBe(CADDYFILE_FIXTURE);
 
-    // The candidate was validated inside the caddy container BEFORE reload.
+    // Both blocks go into ONE candidate: one validate, then one reload. The
+    // captured candidate is the complete final file, not a staging-only draft.
     assertInOrder(dockerLog, ["caddy validate", "caddy reload --config /etc/caddy/Caddyfile"]);
+    expect(dockerLog.match(/caddy validate/g)).toHaveLength(1);
+    expect(dockerLog.match(/caddy reload/g)).toHaveLength(1);
     const captured = readFileSync(`${fx.dockerLog}.validate`, "utf8");
-    expect(captured).toContain("# BEGIN staging.portal.nare.am");
-    expect(captured).toContain("reverse_proxy portal-staging:3000");
+    expect(captured).toBe(content);
   });
 
   it("idempotent: a second run regenerates a byte-identical Caddyfile and makes no new backup", () => {
@@ -623,6 +720,8 @@ describe("deploy/provision-server.sh live layout", () => {
     expect(afterSecond).toBe(afterFirst);
     expect(afterSecond.match(/^# BEGIN staging\.portal\.nare\.am/gm)).toHaveLength(1);
     expect(afterSecond.match(/^# END staging\.portal\.nare\.am$/gm)).toHaveLength(1);
+    expect(afterSecond.match(/^# BEGIN dev\.portal\.nare\.am/gm)).toHaveLength(1);
+    expect(afterSecond.match(/^# END dev\.portal\.nare\.am$/gm)).toHaveLength(1);
     expect(caddyBackups(fx)).toHaveLength(1);
   });
 
@@ -673,29 +772,29 @@ describe("deploy/provision-server.sh live layout", () => {
     expect(caddyBackups(fx)).toHaveLength(1);
   });
 
-  it("preset PORTAL_NETWORK: skips discovery and records the given network", () => {
+  it("preset PORTAL_NETWORK: skips discovery and records the given network in staging and dev", () => {
     const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
     withDockerStub(fx);
 
     const res = runProvision(fx, { extraEnv: { PORTAL_NETWORK: "custom_net" } });
     expect(res.status, res.stdout + res.stderr).toBe(0);
     expect(readDockerLog(fx)).not.toContain("inspect");
-    expect(readFileSync(path.join(fx.root, "opt", "stack", "staging", ".env.staging"), "utf8")).toContain(
-      "PORTAL_NETWORK=custom_net"
-    );
+    expect(readFileSync(stagingPath(fx, ".env.staging"), "utf8")).toContain("PORTAL_NETWORK=custom_net");
+    expect(readFileSync(devPath(fx, ".env.dev"), "utf8")).toContain("PORTAL_NETWORK=custom_net");
   });
 
-  it("docker unavailable: warns, records an empty network and installs the block without validation", () => {
+  it("docker unavailable: warns, records empty networks and installs both blocks without validation", () => {
     const fx = makeProvisionFixture({ caddyfile: CADDYFILE_FIXTURE });
     // Deliberately no docker stub on PATH.
 
     const res = runProvision(fx);
     expect(res.status, res.stdout + res.stderr).toBe(0);
     expect(res.stderr).toContain("[warn]");
-    expect(readFileSync(path.join(fx.root, "opt", "stack", "staging", ".env.staging"), "utf8")).toMatch(
-      /^PORTAL_NETWORK=$/m
-    );
-    expect(readFileSync(fx.caddyfilePath, "utf8")).toContain(BEGIN_MARKER);
+    expect(readFileSync(stagingPath(fx, ".env.staging"), "utf8")).toMatch(/^PORTAL_NETWORK=$/m);
+    expect(readFileSync(devPath(fx, ".env.dev"), "utf8")).toMatch(/^PORTAL_NETWORK=$/m);
+    const caddyfile = readFileSync(fx.caddyfilePath, "utf8");
+    expect(caddyfile).toContain(BEGIN_MARKER);
+    expect(caddyfile).toContain(DEV_BEGIN_MARKER);
   });
 });
 
@@ -942,6 +1041,20 @@ describe("provisioning static checks", () => {
     expect(src).toContain("${PORTAL_NETWORK");
     expect(src).toContain("./portal/data");
     expect(src).not.toContain("portal-web");
+  });
+
+  it("deploy/dev/docker-compose.yml guards every required value and matches the isolated dev layout", () => {
+    const src = readFileSync(path.join(REPO_ROOT, "deploy", "dev", "docker-compose.yml"), "utf8");
+    expect(src).toMatch(/^  portal-dev:$/m);
+    expect(src).toContain("container_name: portal-dev");
+    expect(src).toContain("image: portal-dev:latest");
+    expect(src).toContain("mem_limit: 1g");
+    expect(src).toContain("${PORTAL_NEXTAUTH_SECRET:?");
+    expect(src).toContain("${PORTAL_ADMIN_EMAIL:?");
+    expect(src).toContain("${PORTAL_ADMIN_PASSWORD:?");
+    expect(src).toContain("${PORTAL_NETWORK:?");
+    expect(src).toContain("external: true");
+    expect(src).toContain("NEXTAUTH_URL=https://dev.portal.nare.am");
   });
 
   it("deploy/portal/docker-compose.yml matches the live production layout", () => {
