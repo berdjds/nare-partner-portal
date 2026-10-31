@@ -109,9 +109,9 @@ describe("rendered markup", () => {
     const html = renderLogin();
 
     expect(html).toContain("lg:grid-cols-2");
-    // Brand panel hidden below lg; the wordmark variant is the phone-only one.
+    // Brand panel hidden below lg, with no separate phone-only wordmark.
     expect(html).toContain("lg:flex");
-    expect(html).toContain("lg:hidden");
+    expect(html).not.toContain("lg:hidden");
   });
 
   it("carries the autocomplete hints and the password show/hide toggle", () => {
@@ -210,7 +210,7 @@ describe("design and wording guards (source-level)", () => {
     const source = readSource("app/login/page.tsx");
     expect(source).toContain("bg-gradient-to-br");
     expect(source).toContain("from-primary");
-    expect(source).toContain("to-brand");
+    expect(source).toContain("to-gradient-end");
     // The Nare icon comes from the shared BrandMark (W4 asset on main).
     expect(source).toContain("<BrandMark />");
     expect(renderLogin()).toContain("/brand/nare-icon.webp");

@@ -44,7 +44,7 @@ export default function PartnerApplyPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <PublicHeader active="apply" />
-      <header className="bg-gradient-to-br from-primary to-brand text-primary-foreground">
+      <header className="bg-gradient-to-br from-primary to-gradient-end text-primary-foreground">
         <div className="mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-12">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             {PARTNER_APPLY.headline}

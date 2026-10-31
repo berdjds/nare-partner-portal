@@ -21,10 +21,12 @@ function readRepoFile(relativePath: string): string {
 }
 
 describe("W4 branded login page", () => {
-  it("renders the shared BrandMark instead of the WAControl tile and title", () => {
+  it("renders exactly one shared BrandMark without the old wordmark or WAControl tile", () => {
     const page = readRepoFile("app/login/page.tsx");
     expect(page).toContain('import { BrandMark } from "@/components/app/BrandMark"');
-    expect(page).toContain("<BrandMark />");
+    expect(page.match(/<BrandMark \/>/g)).toHaveLength(1);
+    expect(page).not.toContain("PRODUCT_NAME");
+    expect(page).not.toContain("uppercase tracking-[0.2em]");
     expect(page).not.toContain("WAControl");
     // The old hand-rolled "W" tile is gone.
     expect(page).not.toContain("mx-auto mb-3 flex h-11 w-11");

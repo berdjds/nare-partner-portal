@@ -14,7 +14,7 @@ import { friendlyLoginError } from "@/lib/login-errors";
 import { BrandMark } from "@/components/app/BrandMark";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
-import { FORGOT_ACCESS, LOGIN_PANEL, PARTNER_APPLY, PRODUCT_NAME } from "@/lib/portal-content";
+import { FORGOT_ACCESS, LOGIN_PANEL, PARTNER_APPLY } from "@/lib/portal-content";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -61,12 +61,7 @@ function LoginForm() {
     <div className="flex min-h-screen flex-col">
       <PublicHeader active="login" />
       <div className="grid flex-1 lg:grid-cols-2">
-      {/* Brand panel: second column on large screens, hidden on phones. Text
-          wordmark until the real logo asset ships; no image file exists yet. */}
-      <aside className="hidden bg-gradient-to-br from-primary to-brand text-primary-foreground lg:flex lg:flex-col lg:justify-center lg:gap-10 lg:px-16">
-        <span className="text-2xl font-bold uppercase tracking-[0.2em]">
-          {PRODUCT_NAME}
-        </span>
+      <aside className="hidden bg-gradient-to-br from-primary to-gradient-end text-primary-foreground lg:flex lg:flex-col lg:justify-center lg:gap-10 lg:px-16">
         <h1 className="max-w-md text-4xl font-semibold tracking-tight">
           {LOGIN_PANEL.headline}
         </h1>
@@ -81,10 +76,6 @@ function LoginForm() {
       </aside>
 
       <div className="flex flex-col items-center justify-center bg-background p-4">
-        {/* Wordmark for phones, where the brand panel is hidden. */}
-        <span className="mb-6 text-lg font-bold uppercase tracking-[0.2em] text-primary lg:hidden">
-          {PRODUCT_NAME}
-        </span>
         <div className="mb-6">
           <BrandMark />
         </div>
