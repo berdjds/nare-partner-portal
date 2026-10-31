@@ -120,7 +120,7 @@ function LoginForm() {
                     aria-pressed={showPassword}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     onClick={() => setShowPassword((visible) => !visible)}
-                    className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                    className="absolute inset-y-0 right-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -158,15 +158,6 @@ function LoginForm() {
         >
           {PARTNER_APPLY.linkLabel}
         </Link>
-        <Link
-          href="/"
-          className="mt-2 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
-        >
-          Back to home
-        </Link>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Developed by <span className="font-medium text-foreground/70">Hayk FZC</span>
-        </p>
       </div>
       </div>
       <PublicFooter />

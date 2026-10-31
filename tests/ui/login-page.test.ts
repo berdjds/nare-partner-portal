@@ -3,9 +3,10 @@
  *
  * Covers the redesigned app/login/page.tsx: the two-column brand panel copy
  * from lib/portal-content.ts, the accessibility attributes (autocomplete
- * hints, the show/hide password toggle with aria-pressed and an accessible
- * name), the forgot-password link and the back-to-home link, and the
- * metadata layout app/login/layout.tsx (login title, always noindex).
+ * hints, the show/hide password toggle with aria-pressed, an accessible
+ * name, a 40px hit area and visible focus), the forgot-password link, the
+ * single footer credit, and the metadata layout app/login/layout.tsx (login
+ * title, always noindex).
  *
  * The page is a client component whose error and caps-lock states only appear
  * after user interaction, and the submit path only runs in a browser, so
@@ -114,7 +115,7 @@ describe("rendered markup", () => {
     expect(html).not.toContain("lg:hidden");
   });
 
-  it("carries the autocomplete hints and the password show/hide toggle", () => {
+  it("carries the autocomplete hints and an accessible password show/hide toggle", () => {
     const html = renderLogin();
 
     // React 19's server renderer emits the autoComplete prop name verbatim
@@ -123,19 +124,24 @@ describe("rendered markup", () => {
     expect(html).toMatch(/autocomplete="username"/i);
     expect(html).toMatch(/autocomplete="current-password"/i);
     // Password starts hidden; the toggle is a real button with an accessible
-    // name and the pressed state exposed to assistive technology.
+    // name, pressed state, 40px hit area and visible keyboard focus.
     expect(html).toContain('type="password"');
-    expect(html).toContain('aria-pressed="false"');
-    expect(html).toContain('aria-label="Show password"');
+    const toggle = html.match(/<button[^>]*aria-label="Show password"[^>]*>/);
+    expect(toggle, "the password visibility toggle").not.toBeNull();
+    expect(toggle![0]).toContain('aria-pressed="false"');
+    expect(toggle![0]).toContain("h-10");
+    expect(toggle![0]).toContain("w-10");
+    expect(toggle![0]).toContain("focus-visible:ring-2");
+    expect(toggle![0]).toContain("focus-visible:ring-ring");
   });
 
-  it("links the forgot-password page and the back-to-home link", () => {
+  it("links forgot access without a duplicate home link or local credit", () => {
     const html = renderLogin();
 
     expect(html).toContain('href="/forgot-password"');
     expect(html).toContain(escapeHtml(FORGOT_ACCESS.label));
-    expect(html).toContain('href="/"');
-    expect(html).toContain("Back to home");
+    expect(html).not.toContain("Back to home");
+    expect(html.match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
   });
 
   it("shows no error before the first submit attempt", () => {

@@ -17,7 +17,7 @@
  *   tests/ui/login-page.test.ts.
  * - PublicFooter renders the legal nav (Terms, Privacy), the contact mailto
  *   and one tel link per phone (spaces stripped), the office address and the
- *   copyright line with the current year.
+ *   copyright line with the current year and developer attribution.
  * - Both components use token colours only (no hex, no Tailwind palette
  *   utilities) and take all copy from "@/lib/portal-content".
  * - All three public pages import and render both chrome components; each
@@ -253,14 +253,19 @@ describe("PublicFooter rendered", () => {
     }
   });
 
-  it("renders the office address, the product name and the copyright line", () => {
+  it("renders the office address and copyright line with developer attribution", () => {
     const html = renderToStaticMarkup(createElement(PublicFooter));
 
     expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
     expect(html).toContain(escapeHtml(PRODUCT_NAME));
-    expect(html).toContain("©");
     expect(html).toContain("All rights reserved");
     expect(html).toContain(String(new Date().getFullYear()));
+
+    const copyright = html.match(/<p[^>]*>[^<]*©[^<]*<\/p>/);
+    expect(copyright, "the copyright line").not.toBeNull();
+    expect(copyright![0].match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
+    expect(copyright![0]).toContain("text-[13px]");
+    expect(copyright![0]).toContain("text-muted-foreground");
   });
 });
 
@@ -297,12 +302,13 @@ describe("shared chrome on the three public pages", () => {
     expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
   });
 
-  it("the sign-in page renders the header nav and the footer content", () => {
+  it("the sign-in page renders shared chrome with developer attribution once", () => {
     const html = renderLogin();
 
     expect(html).toContain('id="public-header-nav"');
     expect(html).toContain('href="/terms"');
     expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
+    expect(html.match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
   });
 });
 
