@@ -252,25 +252,27 @@ assert_dev_resources() {
   local mem_stats mem_total mem_available mem_pct
   local disk_stats disk_total disk_available disk_pct
 
-  [[ "$min_mem" =~ ^[0-9]+$ ]] && [ "$min_mem" -le 100 ] \
-    || die "PORTAL_DEV_MIN_MEM_PCT must be an integer from 0 to 100"
-  [[ "$min_disk" =~ ^[0-9]+$ ]] && [ "$min_disk" -le 100 ] \
-    || die "PORTAL_DEV_MIN_DISK_PCT must be an integer from 0 to 100"
+  if ! [[ "$min_mem" =~ ^[0-9]+$ ]] || [ "$min_mem" -gt 100 ]; then
+    die "PORTAL_DEV_MIN_MEM_PCT must be an integer from 0 to 100"
+  fi
+  if ! [[ "$min_disk" =~ ^[0-9]+$ ]] || [ "$min_disk" -gt 100 ]; then
+    die "PORTAL_DEV_MIN_DISK_PCT must be an integer from 0 to 100"
+  fi
 
   mem_stats="$(free | awk 'NR == 2 { print $2, $7 }')" \
     || die "dev resource guard: could not read memory usage"
   read -r mem_total mem_available <<< "$mem_stats"
-  [[ "$mem_total" =~ ^[0-9]+$ ]] && [ "$mem_total" -gt 0 ] \
-    && [[ "$mem_available" =~ ^[0-9]+$ ]] \
-    || die "dev resource guard: could not parse memory usage"
+  if ! [[ "$mem_total" =~ ^[0-9]+$ && "$mem_available" =~ ^[0-9]+$ ]] || [ "$mem_total" -eq 0 ]; then
+    die "dev resource guard: could not parse memory usage"
+  fi
   mem_pct=$((mem_available * 100 / mem_total))
 
   disk_stats="$(df -P "$ROOT" | awk 'NR == 2 { print $2, $4 }')" \
     || die "dev resource guard: could not read disk usage for $ROOT"
   read -r disk_total disk_available <<< "$disk_stats"
-  [[ "$disk_total" =~ ^[0-9]+$ ]] && [ "$disk_total" -gt 0 ] \
-    && [[ "$disk_available" =~ ^[0-9]+$ ]] \
-    || die "dev resource guard: could not parse disk usage for $ROOT"
+  if ! [[ "$disk_total" =~ ^[0-9]+$ && "$disk_available" =~ ^[0-9]+$ ]] || [ "$disk_total" -eq 0 ]; then
+    die "dev resource guard: could not parse disk usage for $ROOT"
+  fi
   disk_pct=$((disk_available * 100 / disk_total))
 
   [ "$mem_pct" -ge "$min_mem" ] \
