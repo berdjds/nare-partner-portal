@@ -16,7 +16,7 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
       ) : (
         <span className="leading-tight">
           <span className="block text-sm font-semibold tracking-tight text-sidebar-foreground">Nare Travel and Tours</span>
-          <span className="block text-xs text-sidebar-foreground/60">Portal</span>
+          <span className="block text-xs text-muted-foreground">Portal</span>
         </span>
       )}
     </Link>
