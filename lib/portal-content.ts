@@ -415,10 +415,6 @@ export const DMC_STRENGTHS: readonly TitledContentItem[] = [
     body: "Licensed and insured services",
   },
   {
-    title: "Professional Team",
-    body: "Experienced multilingual staff",
-  },
-  {
     title: "Armenia and Georgia",
     body: "Your trusted Destination Management Company in Armenia and Georgia",
   },
