@@ -6,9 +6,9 @@
  *
  * Contract under test:
  *
- * - PublicHeader renders the text wordmark (no image asset, no /brand/
- *   reference — same rule as the landing hero), the three primary links
- *   (Home, PARTNER_APPLY.linkLabel, Sign in) and a menu button wired to the
+ * - PublicHeader renders the shared BrandMark image beside the text wordmark,
+ *   the three primary links (Home, PARTNER_APPLY.linkLabel, Sign in) and a
+ *   menu button wired to the
  *   nav via aria-expanded / aria-controls. The active page is exposed with
  *   aria-current="page" on exactly that link.
  * - The mobile menu toggle (useState flip, Escape-to-close, the sm:hidden
@@ -187,10 +187,11 @@ describe("PublicHeader rendered (initial closed state)", () => {
     expect(html).not.toContain("aria-current");
   });
 
-  it("references no /brand/ assets (text wordmark only)", () => {
+  it("renders the shared BrandMark image as a decorative mark", () => {
     const html = renderToStaticMarkup(createElement(PublicHeader, { active: "home" }));
 
-    expect(html).not.toContain("/brand/");
+    expect(html).toContain("url=%2Fbrand%2Fnare-icon.webp");
+    expect(html).toMatch(/<img[^>]*alt=""[^>]*>/);
   });
 });
 
@@ -216,6 +217,18 @@ describe("PublicHeader menu toggle (source-level)", () => {
     expect(button, "the menu button").not.toBeNull();
     expect(button![0]).toContain("sm:hidden");
     expect(source).toContain("sm:flex");
+  });
+
+  it("keeps the BrandMark and menu button in one non-wrapping row on phones", () => {
+    const row = source.match(
+      /<div className="(flex items-center justify-between[^"]*)">([\s\S]*?)<\/div>/,
+    );
+
+    expect(row, "the mobile header row").not.toBeNull();
+    expect(row![1]).not.toContain("flex-wrap");
+    expect(row![2]).toContain("<BrandMark markOnly />");
+    expect(row![2]).toContain("<button");
+    expect(source).toContain("whitespace-nowrap");
   });
 });
 
