@@ -68,12 +68,14 @@ const PAGES = [
     page: TermsPage,
     metadata: termsMetadata,
     document: TERMS_OF_USE,
+    relatedHref: "/privacy",
   },
   {
     name: "Privacy Notice (/privacy)",
     page: PrivacyPage,
     metadata: privacyMetadata,
     document: PRIVACY_NOTICE,
+    relatedHref: "/terms",
   },
 ] as const;
 
@@ -81,7 +83,14 @@ function render(page: (typeof PAGES)[number]["page"]): string {
   return renderToStaticMarkup(createElement(page));
 }
 
-describe.each(PAGES)("$name — rendered document", ({ page, document: doc }) => {
+function sectionId(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+describe.each(PAGES)("$name — rendered document", ({ page, document: doc, relatedHref }) => {
   const html = render(page);
 
   it("renders the h1 title, the subtitle and the intro", () => {
@@ -96,10 +105,21 @@ describe.each(PAGES)("$name — rendered document", ({ page, document: doc }) =>
     expect(html).toContain(escapeHtml(LEGAL_LAST_UPDATED));
   });
 
-  it("renders every section title as a numbered heading", () => {
+  it("renders every section title as a numbered heading with an anchor", () => {
     doc.sections.forEach((section, index) => {
+      const id = sectionId(section.title);
+      expect(html).toContain(`<h2 id="${id}" class="scroll-mt-24`);
       expect(html).toContain(escapeHtml(`${index + 1}. ${section.title}`));
     });
+  });
+
+  it("links to every section and the other legal document from the page nav", () => {
+    const nav = html.match(/<nav aria-label="On this page"[\s\S]*?<\/nav>/)?.[0];
+    expect(nav).toBeDefined();
+    doc.sections.forEach((section) => {
+      expect(nav).toContain(`href="#${sectionId(section.title)}"`);
+    });
+    expect(nav).toContain(`href="${relatedHref}"`);
   });
 
   it("renders the contact block from the shared contact content", () => {
