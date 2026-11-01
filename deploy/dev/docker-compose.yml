@@ -1,0 +1,60 @@
+# Development compose project (portal-dev) — installed VERBATIM by
+# provisioning to /opt/stack/dev/docker-compose.yml.
+#
+# Dev is a fully isolated compose project with its own data directories
+# (/opt/stack/dev/portal/{data,uploads,auth}), image (portal-dev:latest) and
+# public URL (https://dev.portal.nare.am). It holds test data only.
+#
+# Caddy terminates TLS and reaches this container over the PRODUCTION project's
+# compose-managed network. Provisioning records its project-prefixed name as
+# PORTAL_NETWORK in /opt/stack/dev/.env.dev. Compose reads interpolation values
+# from /opt/stack/dev/.env, which provisioning symlinks to .env.dev.
+#
+# Dev NEVER starts the WhatsApp Web client: WHATSAPP_DISABLED defaults to 1
+# here AND the deploy gate adds its own override file on every dev deploy.
+# E-mail goes to a sink through the SMTP settings in .env.dev.
+
+services:
+  # The service name MUST stay `portal-dev`, never `portal`: joining the
+  # production network with a `portal` service alias could route production
+  # traffic to this container.
+  portal-dev:
+    image: portal-dev:latest
+    container_name: portal-dev
+    restart: always
+    mem_limit: 1g
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - DATABASE_URL=file:/app/data/dev.db
+      - NEXTAUTH_URL=https://dev.portal.nare.am
+      - NEXTAUTH_SECRET=${PORTAL_NEXTAUTH_SECRET:?PORTAL_NEXTAUTH_SECRET must be set in /opt/stack/dev/.env}
+      - ADMIN_EMAIL=${PORTAL_ADMIN_EMAIL:?PORTAL_ADMIN_EMAIL must be set in /opt/stack/dev/.env}
+      - ADMIN_PASSWORD=${PORTAL_ADMIN_PASSWORD:?PORTAL_ADMIN_PASSWORD must be set in /opt/stack/dev/.env}
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - WHATSAPP_DISABLED=${WHATSAPP_DISABLED:-1}
+      # Unset mail-sink values keep the app bootable while flagging
+      # notification deliveries FAILED.
+      - SMTP_HOST=${PORTAL_SMTP_HOST:-}
+      - SMTP_PORT=${PORTAL_SMTP_PORT:-}
+      - SMTP_USER=${PORTAL_SMTP_USER:-}
+      - SMTP_PASS=${PORTAL_SMTP_PASS:-}
+      - SMTP_FROM=${PORTAL_SMTP_FROM:-}
+    volumes:
+      - ./portal/data:/app/data
+      - ./portal/uploads:/app/public/uploads
+      - ./portal/auth:/app/.wwebjs_auth
+    # No published host port: caddy proxies to portal-dev:3000 over the
+    # production network named by PORTAL_NETWORK.
+    expose:
+      - "3000"
+    networks:
+      - portal
+
+networks:
+  portal:
+    # Dev only joins the production network, so `docker compose down` here can
+    # never tear down the network used by production.
+    external: true
+    name: ${PORTAL_NETWORK:?PORTAL_NETWORK must name the production network (run deploy/provision-server.sh first or set it in /opt/stack/dev/.env.dev)}

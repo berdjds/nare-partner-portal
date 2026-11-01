@@ -5,20 +5,24 @@
 # and the CI pipeline can only invoke it through the forced-command dispatcher
 # (/usr/local/sbin/portal-deploy-entry) as `deploy <env> <tarball>` — the
 # pipeline cannot modify this script, so it cannot widen the deploy authority.
-# <env> is `staging` or `production`; anything else is rejected.
+# <env> is `dev`, `staging` or `production`; anything else is rejected.
 #
 # Server layout (fixed defaults; every path overridable via PORTAL_* for tests):
 #   /opt/stack/docker-compose.yml        caddy + portal compose project
 #   /opt/stack/portal/{data,uploads,auth}  live data dirs
 #   /opt/stack/portal/src                build context
 #   /opt/stack/backups                   verified backups
-# Staging is a second compose project under /opt/stack/staging with the same
-# relative layout, container portal-staging, URL https://staging.portal.nare.am.
+# Staging and dev use the same relative layout under /opt/stack/staging and
+# /opt/stack/dev, with portal-staging / portal-dev containers and their own
+# URLs and image repositories. Dev holds test data only.
 #
 # The compose file belongs to provisioning: the deploy gate REFUSES to
 # continue when it is missing and never creates, syncs or modifies it.
+# Before changing anything, a dev deploy also refuses when available memory is
+# below 20 percent or free disk is below 15 percent (test overrides:
+# PORTAL_DEV_MIN_MEM_PCT and PORTAL_DEV_MIN_DISK_PCT).
 #
-# Sequence (production and staging alike):
+# Sequence (all environments alike):
 #   1. extract the uploaded source into the build context, build
 #      $CANDIDATE_IMAGE WHILE the app keeps serving
 #   2. tag the running image $PREVIOUS_IMAGE — skipped on a FIRST DEPLOY (a
@@ -60,16 +64,15 @@
 #      recovery procedure (export-since, then fix forward or restore-backup),
 #      exit 1
 #
-# Override: in BOTH environments the app is ALWAYS started through a
+# Override: in every environment the app is ALWAYS started through a
 # deploy-managed override compose file (portal-<env>.overrides.yml next to the
 # compose file) that pins the app service image to $LATEST_IMAGE, so
 # `compose up` runs the candidate even when the provisioning-owned compose
 # pins a dated image (the live production compose pins portal:2026-09-30).
-# The staging override additionally sets WHATSAPP_DISABLED=1, so the WhatsApp
-# Web client never starts in staging — including on rollback. Rollback merges
-# its own image override AFTER this file, so it wins the merge. Staging e-mail
-# goes to a sink through the staging project's SMTP_* settings (provisioned
-# with the compose file, not managed here).
+# The staging and dev overrides additionally set WHATSAPP_DISABLED=1, including
+# on rollback. Rollback merges its own image override AFTER this file, so it
+# wins the merge. Non-production e-mail goes to a sink through each project's
+# SMTP_* settings (provisioned with the compose file, not managed here).
 #
 # Hard rule: two containers never mount the same auth dir or data dir at the
 # same time — the app is frozen before any trial runs, and each trial runs
@@ -82,10 +85,11 @@
 # PORTAL_UPLOADS_DIR, PORTAL_AUTH_DIR, PORTAL_SRC_DIR, PORTAL_BACKUP_DIR,
 # PORTAL_PUBLIC_URL, PORTAL_ENV_NAME, PORTAL_ENV_FILE, PORTAL_SOURCE_TARBALL,
 # PORTAL_*_IMAGE (defaults are per-env: portal:* for production,
-# portal-staging:* for staging; PORTAL_APP_SERVICE likewise defaults to
-# portal for production and portal-staging for staging), PORTAL_BACKUP_KEEP_DAYS,
+# portal-staging:* for staging, portal-dev:* for dev; PORTAL_APP_SERVICE
+# likewise defaults per environment), PORTAL_BACKUP_KEEP_DAYS,
 # PORTAL_HEALTH_RETRIES, PORTAL_HEALTH_INTERVAL_SECONDS, PORTAL_TRIAL_A_PORT,
-# PORTAL_TRIAL_B_PORT, PORTAL_STAGING_OVERRIDE_FILE, PORTAL_OVERRIDE_FILE.
+# PORTAL_TRIAL_B_PORT, PORTAL_STAGING_OVERRIDE_FILE, PORTAL_DEV_OVERRIDE_FILE,
+# PORTAL_OVERRIDE_FILE, PORTAL_DEV_MIN_MEM_PCT, PORTAL_DEV_MIN_DISK_PCT.
 # W3c staging drill hook: PORTAL_DRILL_FAIL_HEALTH=1 fails the post-cutover health check on purpose; honoured only when the target env is staging.
 
 set -euo pipefail
@@ -103,7 +107,7 @@ usage() {
   cat >&2 <<'EOF'
 usage: portal-deploy [<env> [<tarball>]]
 
-  <env>      staging | production (default: $PORTAL_ENV_NAME or production)
+  <env>      dev | staging | production (default: $PORTAL_ENV_NAME or production)
   <tarball>  source tarball to deploy (default: $PORTAL_SOURCE_TARBALL or
              $PORTAL_ROOT/portal-source.tar.gz)
 EOF
@@ -134,18 +138,25 @@ case "$ENV_NAME" in
     DEFAULT_PUBLIC_URL="https://staging.portal.nare.am"
     DEFAULT_IMAGE_REPO="portal-staging"
     ;;
+  dev)
+    DEFAULT_ROOT="/opt/stack/dev"
+    DEFAULT_CONTAINER="portal-dev"
+    DEFAULT_SERVICE="portal-dev"
+    DEFAULT_PUBLIC_URL="https://dev.portal.nare.am"
+    DEFAULT_IMAGE_REPO="portal-dev"
+    ;;
   *)
     usage
-    die "environment must be 'staging' or 'production' (got '$ENV_NAME')"
+    die "environment must be 'dev', 'staging' or 'production' (got '$ENV_NAME')"
     ;;
 esac
 
 ROOT="${PORTAL_ROOT:-$DEFAULT_ROOT}"
 COMPOSE_FILE="${PORTAL_COMPOSE_FILE:-$ROOT/docker-compose.yml}"
 # The compose service name is per-environment (portal for production,
-# portal-staging for staging): compose registers it as a DNS alias on every
-# network the service joins, and staging joins the production network where
-# `portal` already resolves to the production app.
+# portal-staging for staging, portal-dev for dev): compose registers it as a
+# DNS alias on every network the service joins, and the non-production projects
+# join the production network where `portal` already resolves to production.
 APP_SERVICE="${PORTAL_APP_SERVICE:-$DEFAULT_SERVICE}"
 APP_CONTAINER="${PORTAL_APP_CONTAINER:-$DEFAULT_CONTAINER}"
 DATA_DIR="${PORTAL_DATA_DIR:-$ROOT/portal/data}"
@@ -157,11 +168,13 @@ PUBLIC_URL="${PORTAL_PUBLIC_URL:-$DEFAULT_PUBLIC_URL}"
 ENV_FILE="${PORTAL_ENV_FILE:-$ROOT/.env}"
 SOURCE_TARBALL="${ARG_TARBALL:-${PORTAL_SOURCE_TARBALL:-$ROOT/portal-source.tar.gz}}"
 STAGING_OVERRIDE_FILE="${PORTAL_STAGING_OVERRIDE_FILE:-$(dirname "$COMPOSE_FILE")/portal-staging.overrides.yml}"
-# Deploy-managed override that pins the app service image to $LATEST_IMAGE in
-# BOTH environments (staging keeps its historical file name and adds
-# WHATSAPP_DISABLED=1 — see ensure_app_override below).
+DEV_OVERRIDE_FILE="${PORTAL_DEV_OVERRIDE_FILE:-$(dirname "$COMPOSE_FILE")/portal-dev.overrides.yml}"
+# Deploy-managed override that pins the app service image to $LATEST_IMAGE.
+# Staging and dev also add WHATSAPP_DISABLED=1 (see ensure_app_override below).
 if [ "$ENV_NAME" = "staging" ]; then
   OVERRIDE_FILE="$STAGING_OVERRIDE_FILE"
+elif [ "$ENV_NAME" = "dev" ]; then
+  OVERRIDE_FILE="$DEV_OVERRIDE_FILE"
 else
   OVERRIDE_FILE="${PORTAL_OVERRIDE_FILE:-$(dirname "$COMPOSE_FILE")/portal-production.overrides.yml}"
 fi
@@ -208,8 +221,8 @@ WORK_DIR=""
 
 # compose file set merged for every `compose up` of the real app: the
 # provisioning-owned compose file, plus the deploy-managed override (image
-# pinned to $LATEST_IMAGE; staging also WHATSAPP_DISABLED=1). Never written by
-# merge — the override is generated by ensure_app_override() below.
+# pinned to $LATEST_IMAGE; staging and dev also WHATSAPP_DISABLED=1). Never
+# written by merge — the override is generated by ensure_app_override() below.
 COMPOSE_ARGS=(-f "$COMPOSE_FILE")
 
 compose() {
@@ -233,6 +246,42 @@ assert_distinct_dir_names() {
   [ -z "$dupes" ] || die "data, uploads and auth dirs must have distinct names to be archivable (duplicate: $dupes)"
 }
 
+assert_dev_resources() {
+  local min_mem="${PORTAL_DEV_MIN_MEM_PCT:-20}"
+  local min_disk="${PORTAL_DEV_MIN_DISK_PCT:-15}"
+  local mem_stats mem_total mem_available mem_pct
+  local disk_stats disk_total disk_available disk_pct
+
+  if ! [[ "$min_mem" =~ ^[0-9]+$ ]] || [ "$min_mem" -gt 100 ]; then
+    die "PORTAL_DEV_MIN_MEM_PCT must be an integer from 0 to 100"
+  fi
+  if ! [[ "$min_disk" =~ ^[0-9]+$ ]] || [ "$min_disk" -gt 100 ]; then
+    die "PORTAL_DEV_MIN_DISK_PCT must be an integer from 0 to 100"
+  fi
+
+  mem_stats="$(free | awk 'NR == 2 { print $2, $7 }')" \
+    || die "dev resource guard: could not read memory usage"
+  read -r mem_total mem_available <<< "$mem_stats"
+  if ! [[ "$mem_total" =~ ^[0-9]+$ && "$mem_available" =~ ^[0-9]+$ ]] || [ "$mem_total" -eq 0 ]; then
+    die "dev resource guard: could not parse memory usage"
+  fi
+  mem_pct=$((mem_available * 100 / mem_total))
+
+  disk_stats="$(df -P "$ROOT" | awk 'NR == 2 { print $2, $4 }')" \
+    || die "dev resource guard: could not read disk usage for $ROOT"
+  read -r disk_total disk_available <<< "$disk_stats"
+  if ! [[ "$disk_total" =~ ^[0-9]+$ && "$disk_available" =~ ^[0-9]+$ ]] || [ "$disk_total" -eq 0 ]; then
+    die "dev resource guard: could not parse disk usage for $ROOT"
+  fi
+  disk_pct=$((disk_available * 100 / disk_total))
+
+  [ "$mem_pct" -ge "$min_mem" ] \
+    || die "dev resource guard: free memory ${mem_pct}% is below required ${min_mem}%"
+  [ "$disk_pct" -ge "$min_disk" ] \
+    || die "dev resource guard: free disk ${disk_pct}% is below required ${min_disk}%"
+  log "dev resource guard passed: free memory ${mem_pct}% (minimum ${min_mem}%), free disk ${disk_pct}% (minimum ${min_disk}%)"
+}
+
 ensure_app_override() {
   # The server compose file is provisioning-owned and never touched, and it
   # may pin a dated image (the live production compose pins
@@ -240,9 +289,9 @@ ensure_app_override() {
   # deploy-managed override that pins the app service image to $LATEST_IMAGE
   # (tagged to the candidate at cutover, retagged to $PREVIOUS_IMAGE on
   # rollback) so `compose up` always runs the gated image — cutover, rollback
-  # and any later restart through this tooling, in BOTH environments.
-  # Staging must additionally NEVER start the WhatsApp Web client, so its
-  # override also pins WHATSAPP_DISABLED=1.
+  # and any later restart through this tooling, in every environment.
+  # Staging and dev must additionally NEVER start the WhatsApp Web client, so
+  # their overrides also pin WHATSAPP_DISABLED=1.
   {
     cat <<EOF
 # Managed by the deploy gate (scripts/vps-deploy.sh, installed as
@@ -254,18 +303,18 @@ services:
   $APP_SERVICE:
     image: $LATEST_IMAGE
 EOF
-    if [ "$ENV_NAME" = "staging" ]; then
+    if [ "$ENV_NAME" = "staging" ] || [ "$ENV_NAME" = "dev" ]; then
       cat <<EOF
-    # Staging runs WITHOUT the WhatsApp Web client; staging e-mail goes to a
-    # sink via the staging project's SMTP_* settings.
+    # This non-production environment runs WITHOUT the WhatsApp Web client;
+    # e-mail goes to a sink via the project's SMTP_* settings.
     environment:
       - WHATSAPP_DISABLED=1
 EOF
     fi
   } > "$OVERRIDE_FILE"
   COMPOSE_ARGS+=(-f "$OVERRIDE_FILE")
-  if [ "$ENV_NAME" = "staging" ]; then
-    log "staging mode: $APP_SERVICE is started with WHATSAPP_DISABLED=1 via $OVERRIDE_FILE"
+  if [ "$ENV_NAME" = "staging" ] || [ "$ENV_NAME" = "dev" ]; then
+    log "$ENV_NAME mode: $APP_SERVICE is started with WHATSAPP_DISABLED=1 via $OVERRIDE_FILE"
   fi
   log "$APP_SERVICE image pinned to $LATEST_IMAGE via $OVERRIDE_FILE"
 }
@@ -530,6 +579,11 @@ main() {
   [ -f "$COMPOSE_FILE" ] || die "compose file not found: $COMPOSE_FILE — provisioning installs it; the deploy gate never creates or modifies it"
   [ -n "$PUBLIC_URL" ] || die "PORTAL_PUBLIC_URL must be set (public health check)"
   assert_distinct_dir_names
+  # Dev capacity is checked before creating directories, inspecting or tagging
+  # images, extracting source, or touching the running service.
+  if [ "$ENV_NAME" = "dev" ]; then
+    assert_dev_resources
+  fi
   mkdir -p "$DATA_DIR" "$UPLOADS_DIR" "$AUTH_DIR" || die "failed to create the data dirs"
 
   if [ "$DRILL_FAIL_HEALTH" = "true" ]; then

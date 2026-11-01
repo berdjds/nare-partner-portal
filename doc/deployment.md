@@ -3,6 +3,9 @@
 Release path for the portal at **https://portal.nare.am** (staging:
 **https://staging.portal.nare.am**).
 
+See [Portal environments](environments.md) for the dev, staging and production
+layout, dev configuration and branch-deployment instructions.
+
 ## Important disclaimer
 
 WhatsApp Web automation through `whatsapp-web.js` is not an official WhatsApp

@@ -157,8 +157,8 @@ for the owner and must be reviewed by Nare's legal advisor before the portal
 is promoted to the public — the same warning sits in a comment at the top of
 `lib/legal-content.ts`. The draft's retention promise (documents of
 applications that are not approved are deleted within 90 days of the
-decision) is honoured manually for now; see "Retention decisions still open"
-below.
+decision) is honoured by the scheduled sweep for rejected applications and by
+the manual delete-documents action; see "Scheduled retention" below.
 
 ## Data model
 
@@ -238,7 +238,8 @@ never under `public/`. Rules:
 - **Audit log actions:** `PARTNER_APPLICATION_SUBMITTED` (userId null),
   `PARTNER_APPLICATION_APPROVED`, `PARTNER_APPLICATION_REJECTED`,
   `PARTNER_APPLICATION_INFO_REQUESTED`, `PARTNER_KYC_DOCUMENT_DOWNLOADED`,
-  `PARTNER_KYC_DOCUMENTS_DELETED`.
+  `PARTNER_KYC_DOCUMENTS_DELETED` (manual deletion),
+  `PARTNER_DOCUMENTS_EXPIRED` (scheduled retention, userId null).
 - **What applicants see.** Only their reference and generic wording. Error
   messages never reveal internals or whether a company or email address is
   already known to us.
@@ -290,30 +291,40 @@ the same generic messages so bots learn nothing:
 6. Every decision emails the applicant automatically and is audit logged with
    the reviewer's identity.
 7. **Delete documents** (button on the detail page, behind a confirmation
-   dialog) removes all KYC files and document rows for the application — the
-   manual tool for honouring erasure requests and, until the scheduled
-   cleanup job exists, the 90-day deletion of documents for applications
-   that are not approved (see "Retention decisions still open"). The
-   deletion is audit logged.
+   dialog) removes all KYC files and document rows for the application. This
+   is the manual tool for honouring erasure requests and for deleting documents
+   before the scheduled retention sweep runs. The application row is kept and
+   the deletion is audit logged.
+
+## Scheduled retention
+
+`lib/partners/retention.ts` implements the 90-day promise in the Privacy
+Notice. In normal server mode, `server.ts` runs the sweep once five minutes
+after startup and then every 24 hours. Set
+`WACONTROL_RETENTION_SWEEP_DISABLED=1` to disable it; trial mode never starts
+it. Each run logs a one-line summary, and a failure is logged without stopping
+later runs.
+
+The sweep selects only `REJECTED` applications whose `reviewedAt` is at least
+90 days old and which still have documents. It uses the same deletion helper
+as the manual action: files and document rows are removed, while the
+application row is kept. Every cleaned application gets a
+`PARTNER_DOCUMENTS_EXPIRED` audit row with a null user, its reference and the
+file/row counts, but no personal data. One failure does not stop other
+applications, and an already cleaned application is not selected again.
+`APPROVED`, `SUBMITTED` and `INFO_REQUESTED` applications are never selected.
+The parity test `tests/partners/retention-promise.test.ts` keeps the legal
+notice's day count equal to `RETENTION_DAYS`.
 
 ## Retention decisions still open (owner: Nare)
 
 These still need a product-owner decision:
 
-- The exact retention mechanics for KYC documents of **rejected** (and
-  otherwise not approved) applications. The draft Privacy Notice already
-  promises applicants deletion **within 90 days of the decision** (or
-  earlier on request), so this is now a commitment to honour, not an open
-  question — but no scheduled cleanup job exists yet.
 - Whether documents of **approved** applications are retained for the life of
   the agency or deleted once onboarding completes (the draft Privacy Notice
   says they are kept while the partnership is active).
 - The standard handling and target turnaround of applicant **erasure
   requests** (today: manual, via the delete-documents action).
-
-Until a cleanup job is built, all removals — including the 90-day deletion
-promised in the Privacy Notice — are done manually with the audit-logged
-delete-documents action on the application detail page.
 
 ## What W5c and W5d add
 

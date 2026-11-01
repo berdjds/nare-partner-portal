@@ -56,6 +56,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 - The first startup downloads a Chromium browser for Puppeteer. On Linux servers you may need to install additional system dependencies.
 - Keep `.wwebjs_auth/`, `.wwebjs_cache/`, `.env`, and the SQLite database secret — they contain the WhatsApp session and admin credentials.
 - **Security headers and start-up checks.** Every route sends the standard protective headers (HSTS, `nosniff`, frame denial, referrer/permissions policy, a baseline CSP) and the production server refuses to boot with a missing, placeholder or shorter-than-16-character `NEXTAUTH_SECRET` — see `doc/security.md` for the full list and the CSP roadmap.
+- **Partner KYC retention.** In normal server mode, a sweep runs five minutes after startup and every 24 hours to delete documents from `REJECTED` applications whose `reviewedAt` is at least 90 days old. It never touches `APPROVED`, `SUBMITTED` or `INFO_REQUESTED` applications, and it keeps the application row. Each cleaned application writes a `PARTNER_DOCUMENTS_EXPIRED` audit event with a null user, the application reference and deletion counts, without personal data. Reviewers can also use **Delete documents** on the admin application detail page (`DELETE /api/admin/partners/[id]`); this keeps the application and writes `PARTNER_KYC_DOCUMENTS_DELETED` with the reviewer's identity. Set `WACONTROL_RETENTION_SWEEP_DISABLED=1` to disable the scheduled sweep; trial mode never runs it. See [doc/partners.md](doc/partners.md).
 
 ## Environment variables
 
@@ -70,6 +71,7 @@ A web dashboard to read and send WhatsApp messages using WhatsApp Web (QR-code l
 | `SMTP_PORT` | `587` | SMTP port (`465` uses implicit TLS) |
 | `SMTP_USER` / `SMTP_PASS` | — | SMTP credentials, if the server requires auth |
 | `SMTP_FROM` | SMTP user | Sender address for outgoing mail |
+| `WACONTROL_RETENTION_SWEEP_DISABLED` | — | Set to `1` to disable the partner KYC retention sweep; it is enabled by default in normal mode and never runs in trial mode |
 
 `NEXTAUTH_URL` must be the canonical public origin in production: password
 reset links are built from it. The full operator checklist for email delivery
