@@ -135,7 +135,10 @@ function stepText(index: number): string {
 export function ApplyStepper({ stageIndex }: { stageIndex: number }) {
   return (
     <nav aria-label={PARTNER_APPLY.progressLabel} className="space-y-3">
-      <ol className="flex flex-nowrap gap-2 overflow-x-auto">
+      <p className="text-sm font-medium min-[480px]:hidden">
+        {stepText(stageIndex)} · {PARTNER_APPLY.sections[STAGES[stageIndex].key]}
+      </p>
+      <ol className="flex flex-nowrap gap-1 overflow-x-auto min-[480px]:gap-2">
         {STAGES.map((stage, index) => {
           const isComplete = index < stageIndex;
           const isCurrent = index === stageIndex;
@@ -144,22 +147,26 @@ export function ApplyStepper({ stageIndex }: { stageIndex: number }) {
             <li
               key={stage.key}
               aria-current={isCurrent ? "step" : undefined}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-sm ${
+              className={`inline-flex h-1.5 min-w-0 flex-1 items-center gap-1 rounded-full min-[480px]:h-auto min-[480px]:shrink-0 min-[480px]:flex-initial min-[480px]:px-3 min-[480px]:py-1 min-[480px]:text-sm ${
                 isCurrent
                   ? "bg-primary font-medium text-primary-foreground"
                   : isComplete
-                    ? "border border-border"
-                    : "text-muted-foreground"
+                    ? "border border-border bg-primary min-[480px]:bg-transparent"
+                    : "bg-muted text-muted-foreground min-[480px]:bg-transparent"
               }`}
             >
-              {isComplete && <Check className="h-4 w-4" aria-hidden="true" />}
-              <span>{PARTNER_APPLY.sections[stage.key]}</span>
+              {isComplete && (
+                <Check className="hidden h-4 w-4 min-[480px]:block" aria-hidden="true" />
+              )}
+              <span className="sr-only min-[480px]:not-sr-only">
+                {PARTNER_APPLY.sections[stage.key]}
+              </span>
               {isComplete && <span className="sr-only">completed</span>}
             </li>
           );
         })}
       </ol>
-      <p className="text-sm text-muted-foreground">{stepText(stageIndex)}</p>
+      <p className="text-sm text-muted-foreground max-[479px]:hidden">{stepText(stageIndex)}</p>
     </nav>
   );
 }

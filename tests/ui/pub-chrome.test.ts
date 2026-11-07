@@ -225,10 +225,36 @@ describe("PublicHeader menu toggle (source-level)", () => {
     );
 
     expect(row, "the mobile header row").not.toBeNull();
+    expect(row![1]).toContain("gap-3");
     expect(row![1]).not.toContain("flex-wrap");
     expect(row![2]).toContain("<BrandMark markOnly />");
     expect(row![2]).toContain("<button");
-    expect(source).toContain("whitespace-nowrap");
+  });
+
+  it("shrinks and truncates the wordmark below 400px without changing larger screens", () => {
+    const wordmark = source.match(/<Link\s+href="\/"[\s\S]*?<\/Link>/);
+    const wordmarkText = source.match(
+      /<span className="([^"]*)">\{PRODUCT_NAME\}<\/span>/,
+    );
+
+    expect(wordmark, "the wordmark link").not.toBeNull();
+    expect(wordmark![0]).toContain("text-[13px]");
+    expect(wordmark![0]).toContain("tracking-[0.08em]");
+    expect(wordmark![0]).toContain("min-[400px]:text-sm");
+    expect(wordmark![0]).toContain("min-[400px]:tracking-[0.2em]");
+    expect(wordmark![0]).toContain("sm:text-lg");
+    expect(wordmarkText, "the wordmark text").not.toBeNull();
+    expect(wordmarkText![1]).toContain("min-w-0");
+    expect(wordmarkText![1]).toContain("truncate");
+  });
+
+  it("gives the phone menu button a 44px tap area", () => {
+    const button = source.match(/<button[\s\S]*?\/>|<button[\s\S]*?<\/button>/);
+
+    expect(button, "the menu button").not.toBeNull();
+    expect(button![0]).toContain("h-11");
+    expect(button![0]).toContain("w-11");
+    expect(button![0]).toContain("shrink-0");
   });
 });
 

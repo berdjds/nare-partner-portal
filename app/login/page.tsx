@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { friendlyLoginError } from "@/lib/login-errors";
-import { BrandMark } from "@/components/app/BrandMark";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { FORGOT_ACCESS, LOGIN_PANEL, PARTNER_APPLY } from "@/lib/portal-content";
@@ -76,12 +75,9 @@ function LoginForm() {
       </aside>
 
       <div className="flex flex-col items-center justify-center bg-background p-4">
-        <div className="mb-6">
-          <BrandMark />
-        </div>
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Sign in</CardTitle>
+            <CardTitle className="text-xl">Sign in to the partner portal</CardTitle>
             <CardDescription>
               Use the account provided by the Nare team.
             </CardDescription>
