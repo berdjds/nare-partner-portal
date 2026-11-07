@@ -24,12 +24,13 @@ function classNames(markup: string): string[] {
   return openingTag.match(/\bclass="([^"]*)"/)?.[1].split(/\s+/).filter(Boolean) ?? [];
 }
 
-function renderStepper() {
-  const html = renderToStaticMarkup(createElement(ApplyStepper, { stageIndex: 1 }));
+function renderStepper(stageIndex = 1) {
+  const html = renderToStaticMarkup(createElement(ApplyStepper, { stageIndex }));
   const nav = extract(html, /<nav\b[^>]*>[\s\S]*?<\/nav>/, "the stepper nav");
   const list = extract(nav, /<ol\b[^>]*>[\s\S]*?<\/ol>/, "the stepper list");
   const items = list.match(/<li\b[^>]*>[\s\S]*?<\/li>/g) ?? [];
-  return { nav, list, items };
+  const compactText = extract(nav, /<p\b[^>]*>[\s\S]*?<\/p>/, "the compact step text");
+  return { nav, list, items, compactText };
 }
 
 describe("ApplyStepper", () => {
@@ -77,5 +78,36 @@ describe("ApplyStepper", () => {
       expect(upcoming).not.toContain("<svg");
       expect(upcoming).not.toContain("completed");
     }
+  });
+
+  it("shows the compact step text for every step below 480px", () => {
+    (["company", "licence", "contacts", "review"] as const).forEach((key, index) => {
+      const { compactText } = renderStepper(index);
+      const position = PARTNER_APPLY.stepLabel
+        .replace("{step}", String(index + 1))
+        .replace("{total}", "4");
+
+      expect(compactText).toContain(
+        escapeHtml(`${position} · ${PARTNER_APPLY.sections[key]}`),
+      );
+      expect(classNames(compactText)).toContain("min-[480px]:hidden");
+    });
+  });
+
+  it("renders four segments with finished and current segments filled", () => {
+    const { items } = renderStepper(2);
+
+    expect(items).toHaveLength(4);
+    for (const segment of items) {
+      expect(classNames(segment)).toEqual(
+        expect.arrayContaining(["h-1.5", "min-w-0", "flex-1", "rounded-full"]),
+      );
+    }
+    for (const segment of items.slice(0, 3)) {
+      expect(classNames(segment)).toContain("bg-primary");
+    }
+    expect(items[2]).toContain('aria-current="step"');
+    expect(classNames(items[3]!)).toContain("bg-muted");
+    expect(classNames(items[3]!)).not.toContain("bg-primary");
   });
 });
