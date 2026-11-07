@@ -103,7 +103,7 @@ describe("rendered markup", () => {
     for (const bullet of LOGIN_PANEL.bullets) {
       expect(html).toContain(escapeHtml(bullet));
     }
-    expect(html).toContain("Sign in");
+    expect(html).toContain("Sign in to the partner portal");
   });
 
   it("uses the two-column layout only on large screens", () => {
@@ -212,14 +212,18 @@ describe("design and wording guards (source-level)", () => {
     }
   });
 
-  it("uses the approved brand gradient and no image assets that do not exist", () => {
+  it("uses the approved gradient and only the site header brand image", () => {
     const source = readSource("app/login/page.tsx");
     expect(source).toContain("bg-gradient-to-br");
     expect(source).toContain("from-primary");
     expect(source).toContain("to-gradient-end");
-    // The Nare icon comes from the shared BrandMark (W4 asset on main).
-    expect(source).toContain("<BrandMark />");
-    expect(renderLogin()).toContain("/brand/nare-icon.webp");
+    expect(source).not.toContain("BrandMark");
+
+    const html = renderLogin();
+    const images = html.match(/<img\b[^>]*>/g) ?? [];
+    expect(images).toHaveLength(1);
+    expect(images[0]).toMatch(/(?:\/brand\/nare-icon\.webp|%2Fbrand%2Fnare-icon\.webp)/);
+    expect(html).toContain("Sign in to the partner portal");
   });
 
   it("takes its copy from the content file and the error mapper", () => {

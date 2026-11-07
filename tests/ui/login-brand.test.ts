@@ -1,10 +1,10 @@
 /**
- * Tests for the W4 "branded login page" change. app/login/page.tsx drops the
- * WAControl "W" tile in favour of the shared BrandMark (components/app/
- * BrandMark.tsx — "Nare Travel and Tours" / "Portal" on brand tokens) and
- * keeps the credentials sign-in form and error toast byte-for-byte in
- * behaviour. The page stays outside the AppShell and carries no raw palette
- * values — colours come from the CSS-variable tokens in app/globals.css.
+ * Tests for the branded login page. The shared PublicHeader owns the only
+ * BrandMark; app/login/page.tsx has no second lockup above its card and uses
+ * the partner-portal sign-in heading. The credentials form and error toast
+ * stay unchanged. The page remains outside the AppShell and carries no raw
+ * palette values — colours come from the CSS-variable tokens in
+ * app/globals.css.
  *
  * These are source-text assertions via readFileSync — the same pattern as
  * tests/ui/chat-shell.test.ts (the suite runs in node, no DOM).
@@ -20,11 +20,13 @@ function readRepoFile(relativePath: string): string {
   return readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
 }
 
-describe("W4 branded login page", () => {
-  it("renders exactly one shared BrandMark without the old wordmark or WAControl tile", () => {
+describe("branded login page", () => {
+  it("removes the duplicate BrandMark lockup and uses the partner portal heading", () => {
     const page = readRepoFile("app/login/page.tsx");
-    expect(page).toContain('import { BrandMark } from "@/components/app/BrandMark"');
-    expect(page.match(/<BrandMark \/>/g)).toHaveLength(1);
+    expect(page).not.toContain("BrandMark");
+    expect(page).toContain(
+      '<CardTitle className="text-xl">Sign in to the partner portal</CardTitle>'
+    );
     expect(page).not.toContain("PRODUCT_NAME");
     expect(page).not.toContain("uppercase tracking-[0.2em]");
     expect(page).not.toContain("WAControl");
