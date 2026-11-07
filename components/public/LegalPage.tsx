@@ -11,7 +11,19 @@
 import { LEGAL_LAST_UPDATED, type LegalDocument } from "@/lib/legal-content";
 import { CONTACT, OFFICE_ADDRESS } from "@/lib/portal-content";
 
+function sectionId(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export function LegalPage({ document }: { document: LegalDocument }) {
+  const relatedDocument =
+    document.title === "Terms of Use"
+      ? { title: "Privacy Notice", href: "/privacy" }
+      : { title: "Terms of Use", href: "/terms" };
+
   return (
     <article className="mx-auto max-w-3xl px-6 py-12">
       <header className="space-y-3 border-b border-border pb-8">
@@ -25,19 +37,46 @@ export function LegalPage({ document }: { document: LegalDocument }) {
         <p className="leading-relaxed text-foreground">{document.intro}</p>
       </header>
 
+      <nav aria-label="On this page" className="mt-8 space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">On this page</h2>
+        <ul className="list-disc space-y-2 pl-6 text-foreground">
+          {document.sections.map((section) => (
+            <li key={section.title}>
+              <a
+                href={`#${sectionId(section.title)}`}
+                className="underline-offset-4 hover:underline"
+              >
+                {section.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p>
+          <a
+            href={relatedDocument.href}
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Read the {relatedDocument.title}
+          </a>
+        </p>
+      </nav>
+
       <div className="flex flex-col gap-10 pt-10">
         {document.sections.map((section, index) => (
           <section key={section.title} className="space-y-3">
-            <h2 className="text-xl font-semibold text-foreground">
+            <h2
+              id={sectionId(section.title)}
+              className="scroll-mt-24 text-xl font-semibold text-foreground"
+            >
               {index + 1}. {section.title}
             </h2>
             {section.paragraphs?.map((paragraph) => (
-              <p key={paragraph.slice(0, 48)} className="leading-relaxed text-muted-foreground">
+              <p key={paragraph.slice(0, 48)} className="leading-relaxed text-foreground">
                 {paragraph}
               </p>
             ))}
             {section.items && (
-              <ul className="list-disc space-y-2 pl-6 leading-relaxed text-muted-foreground">
+              <ul className="list-disc space-y-2 pl-6 leading-relaxed text-foreground">
                 {section.items.map((item) => (
                   <li key={item.slice(0, 48)}>{item}</li>
                 ))}
@@ -53,7 +92,7 @@ export function LegalPage({ document }: { document: LegalDocument }) {
           <h2 id="legal-contact-heading" className="text-xl font-semibold text-foreground">
             Contact us
           </h2>
-          <p className="leading-relaxed text-muted-foreground">{OFFICE_ADDRESS}</p>
+          <p className="leading-relaxed text-foreground">{OFFICE_ADDRESS}</p>
           <p>
             <a
               href={`mailto:${CONTACT.email}`}

@@ -158,8 +158,8 @@ describe("portal content: W5e approved B2B copy shape", () => {
     expect(WHY_NARE).toHaveLength(4);
   });
 
-  it("lists exactly four DMC strengths", () => {
-    expect(DMC_STRENGTHS).toHaveLength(4);
+  it("lists exactly three DMC strengths after removing the repeated title", () => {
+    expect(DMC_STRENGTHS).toHaveLength(3);
   });
 
   it("lists exactly three Armenia at a glance items", () => {
@@ -179,6 +179,33 @@ describe("portal content: W5e approved B2B copy shape", () => {
     for (const value of strings) {
       expect(value.trim()).not.toBe("");
     }
+  });
+});
+
+describe("portal content: landing card de-duplication", () => {
+  it("keeps every landing section and heading unchanged", () => {
+    expect(LANDING_SECTION_TITLES).toEqual({
+      services: {
+        title: "Our B2B Services",
+        subtitle: "Comprehensive solutions for business travel and events",
+      },
+      whyNare: { title: "Why choose us" },
+      dmc: { title: "DMC strengths" },
+      armenia: { title: "Armenia at a glance" },
+    });
+    expect(ABOUT_NARE.title).toBe("Our Story");
+  });
+
+  it("has unique card titles across all landing sections", () => {
+    const titles = [
+      ...B2B_SERVICES,
+      ...WHY_NARE,
+      ...DMC_STRENGTHS,
+      ...ARMENIA_GLANCE.items,
+    ].map((item) => item.title);
+    const normalizedTitles = titles.map((title) => title.toLocaleLowerCase());
+
+    expect(new Set(normalizedTitles).size).toBe(titles.length);
   });
 });
 
@@ -205,7 +232,7 @@ describe("portal content: W5e approved wording", () => {
     expect(ARMENIA_GLANCE.intro).toBe(
       "Experience the rich history and stunning landscapes of our ancient land",
     );
-    expect(DMC_STRENGTHS[3]).toEqual({
+    expect(DMC_STRENGTHS[2]).toEqual({
       title: "Armenia and Georgia",
       body: "Your trusted Destination Management Company in Armenia and Georgia",
     });

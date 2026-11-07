@@ -48,6 +48,7 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
         brand: "hsl(var(--brand))",
+        "gradient-end": "hsl(var(--gradient-end))",
         warm: "hsl(var(--warm))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",

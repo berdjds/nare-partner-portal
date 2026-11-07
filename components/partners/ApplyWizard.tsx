@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { Check } from "lucide-react";
 import type { ZodTypeAny } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,6 +130,38 @@ function stepText(index: number): string {
   return PARTNER_APPLY.stepLabel
     .replace("{step}", String(index + 1))
     .replace("{total}", String(STAGES.length));
+}
+
+export function ApplyStepper({ stageIndex }: { stageIndex: number }) {
+  return (
+    <nav aria-label={PARTNER_APPLY.progressLabel} className="space-y-3">
+      <ol className="flex flex-nowrap gap-2 overflow-x-auto">
+        {STAGES.map((stage, index) => {
+          const isComplete = index < stageIndex;
+          const isCurrent = index === stageIndex;
+
+          return (
+            <li
+              key={stage.key}
+              aria-current={isCurrent ? "step" : undefined}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-sm ${
+                isCurrent
+                  ? "bg-primary font-medium text-primary-foreground"
+                  : isComplete
+                    ? "border border-border"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {isComplete && <Check className="h-4 w-4" aria-hidden="true" />}
+              <span>{PARTNER_APPLY.sections[stage.key]}</span>
+              {isComplete && <span className="sr-only">completed</span>}
+            </li>
+          );
+        })}
+      </ol>
+      <p className="text-sm text-muted-foreground">{stepText(stageIndex)}</p>
+    </nav>
+  );
 }
 
 export function ApplyWizard({ formToken }: { formToken: string }) {
@@ -759,25 +792,7 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
         <Input id={HONEYPOT_FIELD_NAME} name={HONEYPOT_FIELD_NAME} type="text" tabIndex={-1} autoComplete="off" />
       </div>
 
-      <nav aria-label={PARTNER_APPLY.progressLabel} className="space-y-3">
-        <ol className="flex flex-wrap gap-2">
-          {STAGES.map((stage, index) => (
-            <li
-              key={stage.key}
-              aria-current={index === stageIndex ? "step" : undefined}
-              className={
-                index === stageIndex
-                  ? "rounded-full border border-border px-3 py-1 text-sm font-medium text-primary"
-                  : "rounded-full border border-border px-3 py-1 text-sm text-muted-foreground"
-              }
-            >
-              {index < stageIndex ? "✓ " : ""}
-              {PARTNER_APPLY.sections[stage.key]}
-            </li>
-          ))}
-        </ol>
-        <p className="text-sm text-muted-foreground">{stepText(stageIndex)}</p>
-      </nav>
+      <ApplyStepper stageIndex={stageIndex} />
 
       {/* Polite announcements of stage changes and validation failures; the
           assertive role="status" is reserved for the success view. */}

@@ -51,6 +51,10 @@ The rule for any change:
    office address was confirmed by the owner, and any change to it or to the
    phone numbers and email needs owner confirmation too.
 
+Landing card titles are unique across sections. Where the source copy repeats
+a title, only its first occurrence is retained; no wording is invented or
+rewritten, and every landing section and heading remains unchanged.
+
 ## Left-out claims
 
 The public pages deliberately do **not** mention any of the following. Do not

@@ -159,9 +159,8 @@ describe("signed-out visitors get the landing page", () => {
   it("links the sign-in CTA, the mailto and every phone, with no dangling assets", async () => {
     const html = await renderLanding();
 
-    // The hero uses a text wordmark until real logo assets ship; nothing may
-    // reference files under /brand/ that do not exist in this repository.
-    expect(html).not.toContain("/brand/");
+    // The hero shows one existing Nare brand asset and no dangling references.
+    expect(html.match(/\/brand\/nare-(?:icon|logo)\.webp/g) ?? []).toHaveLength(1);
     expect(html).toContain('href="/login"');
     expect(html).toContain(
       `href="mailto:${CONTACT.email}?subject=${encodeURIComponent(MAILTO_SUBJECTS.contact)}"`
@@ -219,13 +218,26 @@ describe("no raw colours in the landing sources", () => {
     }
   });
 
-  it("Hero uses the approved brand gradient and a text wordmark (no image asset)", () => {
+  it("Hero uses the approved gradient, one existing brand asset, portal eyebrow and outlined secondary link", () => {
     const hero = readSource("components/landing/Hero.tsx");
     expect(hero).toContain("bg-gradient-to-br");
     expect(hero).toContain("from-primary");
-    expect(hero).toContain("to-brand");
-    expect(hero).toContain("{PRODUCT_NAME}");
-    expect(hero).not.toContain("/brand/");
+    expect(hero).toContain("to-gradient-end");
+    expect(hero).toContain("Partner portal");
+    expect(hero).not.toContain("uppercase");
+    expect(hero).not.toContain("{PRODUCT_NAME}");
+    expect(hero).toContain("border-2 border-primary-foreground");
+    expect(hero.match(/\/brand\/nare-icon\.webp/g) ?? []).toHaveLength(1);
+  });
+
+  it("public heroes do not use the retired to-brand gradient stop", () => {
+    for (const rel of [
+      "components/landing/Hero.tsx",
+      "app/login/page.tsx",
+      "app/partners/apply/page.tsx",
+    ]) {
+      expect(readSource(rel), rel).not.toContain("to-brand");
+    }
   });
 });
 

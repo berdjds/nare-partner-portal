@@ -26,7 +26,7 @@ export function ArmeniaGlanceSection() {
         <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-relaxed text-muted-foreground">
           {ARMENIA_GLANCE.intro}
         </p>
-        <ul className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-12 grid gap-6 sm:grid-cols-2 md:grid-cols-3">
           {ARMENIA_GLANCE.items.map((item) => (
             <li key={item.title}>
               <Card className="h-full">

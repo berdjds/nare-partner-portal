@@ -6,9 +6,9 @@
  *
  * Contract under test:
  *
- * - PublicHeader renders the text wordmark (no image asset, no /brand/
- *   reference — same rule as the landing hero), the three primary links
- *   (Home, PARTNER_APPLY.linkLabel, Sign in) and a menu button wired to the
+ * - PublicHeader renders the shared BrandMark image beside the text wordmark,
+ *   the three primary links (Home, PARTNER_APPLY.linkLabel, Sign in) and a
+ *   menu button wired to the
  *   nav via aria-expanded / aria-controls. The active page is exposed with
  *   aria-current="page" on exactly that link.
  * - The mobile menu toggle (useState flip, Escape-to-close, the sm:hidden
@@ -17,7 +17,7 @@
  *   tests/ui/login-page.test.ts.
  * - PublicFooter renders the legal nav (Terms, Privacy), the contact mailto
  *   and one tel link per phone (spaces stripped), the office address and the
- *   copyright line with the current year.
+ *   copyright line with the current year and developer attribution.
  * - Both components use token colours only (no hex, no Tailwind palette
  *   utilities) and take all copy from "@/lib/portal-content".
  * - All three public pages import and render both chrome components; each
@@ -187,10 +187,11 @@ describe("PublicHeader rendered (initial closed state)", () => {
     expect(html).not.toContain("aria-current");
   });
 
-  it("references no /brand/ assets (text wordmark only)", () => {
+  it("renders the shared BrandMark image as a decorative mark", () => {
     const html = renderToStaticMarkup(createElement(PublicHeader, { active: "home" }));
 
-    expect(html).not.toContain("/brand/");
+    expect(html).toContain("url=%2Fbrand%2Fnare-icon.webp");
+    expect(html).toMatch(/<img[^>]*alt=""[^>]*>/);
   });
 });
 
@@ -217,6 +218,18 @@ describe("PublicHeader menu toggle (source-level)", () => {
     expect(button![0]).toContain("sm:hidden");
     expect(source).toContain("sm:flex");
   });
+
+  it("keeps the BrandMark and menu button in one non-wrapping row on phones", () => {
+    const row = source.match(
+      /<div className="(flex items-center justify-between[^"]*)">([\s\S]*?)<\/div>/,
+    );
+
+    expect(row, "the mobile header row").not.toBeNull();
+    expect(row![1]).not.toContain("flex-wrap");
+    expect(row![2]).toContain("<BrandMark markOnly />");
+    expect(row![2]).toContain("<button");
+    expect(source).toContain("whitespace-nowrap");
+  });
 });
 
 describe("PublicFooter rendered", () => {
@@ -240,14 +253,19 @@ describe("PublicFooter rendered", () => {
     }
   });
 
-  it("renders the office address, the product name and the copyright line", () => {
+  it("renders the office address and copyright line with developer attribution", () => {
     const html = renderToStaticMarkup(createElement(PublicFooter));
 
     expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
     expect(html).toContain(escapeHtml(PRODUCT_NAME));
-    expect(html).toContain("©");
     expect(html).toContain("All rights reserved");
     expect(html).toContain(String(new Date().getFullYear()));
+
+    const copyright = html.match(/<p[^>]*>[^<]*©[^<]*<\/p>/);
+    expect(copyright, "the copyright line").not.toBeNull();
+    expect(copyright![0].match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
+    expect(copyright![0]).toContain("text-[13px]");
+    expect(copyright![0]).toContain("text-muted-foreground");
   });
 });
 
@@ -284,12 +302,13 @@ describe("shared chrome on the three public pages", () => {
     expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
   });
 
-  it("the sign-in page renders the header nav and the footer content", () => {
+  it("the sign-in page renders shared chrome with developer attribution once", () => {
     const html = renderLogin();
 
     expect(html).toContain('id="public-header-nav"');
     expect(html).toContain('href="/terms"');
     expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
+    expect(html.match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
   });
 });
 

@@ -49,8 +49,10 @@ describe("W4 brand tokens", () => {
     const expected: Record<string, string> = {
       "--brand": "203 89% 53%", // exact Nare brand blue (mark and accents)
       "--warm": "27 96% 61%", // Nare brand orange
-      "--primary": "203 89% 40%", // deepened brand blue, AA with white text
-      "--ring": "203 89% 40%",
+      "--primary": "203 89% 35%", // deepened brand blue, AA with white text
+      "--primary-foreground": "0 0% 100%",
+      "--gradient-end": "203 89% 38%",
+      "--ring": "203 89% 35%",
       "--foreground": "0 0% 10%",
       "--accent": "203 87% 95%", // light brand-blue tint
       "--accent-foreground": "203 89% 28%",
@@ -61,7 +63,7 @@ describe("W4 brand tokens", () => {
       "--destructive-foreground": "0 0% 98%",
       "--sidebar-background": "0 0% 100%",
       "--sidebar-foreground": "0 0% 10%",
-      "--sidebar-primary": "203 89% 40%",
+      "--sidebar-primary": "203 89% 35%",
       "--sidebar-primary-foreground": "0 0% 100%",
       "--sidebar-accent": "203 87% 95%",
       "--sidebar-accent-foreground": "203 89% 28%",
@@ -81,8 +83,9 @@ describe("W4 brand tokens", () => {
     expect(tokenValue(globalsCss, "--ring")).toBe(tokenValue(globalsCss, "--primary"));
   });
 
-  it("tailwind.config.ts maps the sidebar color scale to the --sidebar-* variables", () => {
+  it("tailwind.config.ts maps gradient-end and the sidebar color scale to CSS variables", () => {
     const config = readRepoFile("tailwind.config.ts");
+    expect(config).toContain('"gradient-end": "hsl(var(--gradient-end))"');
     expect(config).toContain("hsl(var(--sidebar-background))");
     expect(config).toContain("--sidebar-primary");
     expect(config).toContain("--sidebar-accent");
@@ -128,11 +131,13 @@ describe("W4 brand tokens", () => {
     expect(toast).toContain("info: badgeStatusStyles.info");
   });
 
-  it('BrandMark.tsx renders "Nare Travel and Tours" with a "Portal" subtitle on sidebar tokens', () => {
+  it('BrandMark.tsx renders "Nare Travel and Tours" with an accessible "Portal" subtitle', () => {
     const brandMark = readRepoFile("components/app/BrandMark.tsx");
     expect(brandMark).toContain("Nare Travel and Tours");
     expect(brandMark).toContain("Portal");
     expect(brandMark).toContain("text-sidebar-foreground");
+    expect(brandMark).toContain("text-muted-foreground");
+    expect(brandMark).not.toContain("text-sidebar-foreground/60");
     // The mark is the real Nare icon from the brand repository.
     expect(brandMark).toContain("/brand/nare-icon.webp");
     expect(existsSync(path.join(REPO_ROOT, "public", "brand", "nare-icon.webp"))).toBe(true);

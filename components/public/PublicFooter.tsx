@@ -1,7 +1,8 @@
 /**
  * Shared public site footer (W5f, task pub-chrome) — legal links (Terms,
  * Privacy), the contact email and phones from CONTACT, the office address
- * from OFFICE_ADDRESS and the copyright line. Token-only colours; no
+ * from OFFICE_ADDRESS and the copyright line with developer attribution.
+ * Token-only colours; no
  * client-side interactivity, so it can render from server and client pages.
  */
 
@@ -59,8 +60,8 @@ export function PublicFooter() {
       </div>
 
       <div className="border-t border-border">
-        <p className="mx-auto max-w-5xl px-6 py-4 text-xs text-muted-foreground">
-          © {year} {PRODUCT_NAME}. All rights reserved.
+        <p className="mx-auto max-w-5xl px-6 py-4 text-[13px] text-muted-foreground">
+          © {year} {PRODUCT_NAME}. All rights reserved. Developed by Hayk FZC
         </p>
       </div>
     </footer>

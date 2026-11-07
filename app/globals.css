@@ -6,9 +6,9 @@
   /* Nare Travel and Tours brand (W4), taken from the Nare Travel and Tours
      website repository (blue primary, warm orange secondary, lucide icons).
      The whole palette lives in these CSS variables — a palette change touches
-     this file only. --brand is the exact brand blue (203 89% 53%) for the mark
-     and decorative accents; --primary is a deepened blue of the same hue
-     (203 89% 40%) so white text on buttons and link text meet WCAG AA contrast.
+     this file only. --brand is the exact brand blue (203 89% 53%) for decorative
+     accents; --primary (203 89% 35%) and --gradient-end (203 89% 38%) are
+     deepened blues of the same hue so white text and link text meet WCAG AA.
      --warm is the brand orange, for rare highlights. Destructive keeps its own
      red, visibly distinct from the blue. Badges, pills and status tints carry
      their own hues (see the badge status map) so the accent stays rare. */
@@ -21,8 +21,9 @@
     --popover-foreground: 0 0% 10%;
     --brand: 203 89% 53%; /* exact Nare brand blue */
     --warm: 27 96% 61%; /* Nare brand orange */
-    --primary: 203 89% 40%; /* deepened brand blue, AA with white text */
+    --primary: 203 89% 35%; /* deepened brand blue, AA with white text */
     --primary-foreground: 0 0% 100%;
+    --gradient-end: 203 89% 38%;
     --secondary: 0 0% 93%;
     --secondary-foreground: 0 0% 10%;
     --muted: 0 0% 93%;
@@ -33,12 +34,12 @@
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 88%;
     --input: 0 0% 78%;
-    --ring: 203 89% 40%;
+    --ring: 203 89% 35%;
     --radius: 0.75rem;
     /* Sidebar: slim white rail; the active item is tinted in brand blue. */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 10%;
-    --sidebar-primary: 203 89% 40%;
+    --sidebar-primary: 203 89% 35%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 203 87% 95%;
     --sidebar-accent-foreground: 203 89% 28%;
