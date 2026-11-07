@@ -38,13 +38,13 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
       }}
     >
       <div className="mx-auto max-w-5xl px-6 py-4 sm:flex sm:items-center sm:justify-between sm:gap-6">
-        <div className="flex items-center justify-between gap-x-3">
+        <div className="flex items-center justify-between gap-3">
           <Link
             href="/"
-            className="flex min-w-0 items-center gap-2.5 text-sm font-bold uppercase tracking-[0.2em] text-foreground sm:text-lg"
+            className="flex min-w-0 items-center gap-2.5 text-[13px] font-bold uppercase tracking-[0.08em] text-foreground min-[400px]:text-sm min-[400px]:tracking-[0.2em] sm:text-lg"
           >
             <BrandMark markOnly />
-            <span className="whitespace-nowrap">{PRODUCT_NAME}</span>
+            <span className="min-w-0 truncate">{PRODUCT_NAME}</span>
           </Link>
 
           <button
@@ -53,7 +53,7 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
             aria-controls="public-header-nav"
             aria-label={open ? "Close menu" : "Open menu"}
             onClick={() => setOpen((visible) => !visible)}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted sm:hidden"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted sm:hidden"
           >
             {open ? (
               <X className="h-5 w-5" aria-hidden="true" />
