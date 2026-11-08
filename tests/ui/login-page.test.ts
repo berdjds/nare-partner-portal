@@ -108,11 +108,44 @@ describe("rendered markup", () => {
 
   it("uses the two-column layout only on large screens", () => {
     const html = renderLogin();
+    const aside = html.match(/<aside\b[\s\S]*?<\/aside>/)?.[0];
+    const asideClasses = aside
+      ?.match(/^<aside\b[^>]*class="([^"]*)"/)?.[1]
+      .split(/\s+/) ?? [];
+    const cardColumnClasses = html
+      .match(/<div class="([^"]*bg-background[^"]*)">/)?.[1]
+      .split(/\s+/) ?? [];
 
     expect(html).toContain("lg:grid-cols-2");
-    // Brand panel hidden below lg, with no separate phone-only wordmark.
-    expect(html).toContain("lg:flex");
-    expect(html).not.toContain("lg:hidden");
+    // below lg the band row takes its own height and the card column takes the rest (the band stays compact)
+    expect(html).toMatch(/class="grid flex-1 grid-rows-\[auto_1fr\] lg:grid-cols-2 lg:grid-rows-1"/);
+    expect(html.match(/<aside\b/g) ?? []).toHaveLength(1);
+    expect(html.split(escapeHtml(LOGIN_PANEL.headline))).toHaveLength(2);
+    expect(asideClasses).not.toContain("hidden");
+    expect(asideClasses).toEqual(
+      expect.arrayContaining([
+        "flex",
+        "flex-col",
+        "gap-4",
+        "px-6",
+        "py-8",
+        "lg:justify-center",
+        "lg:gap-10",
+        "lg:px-16",
+      ])
+    );
+    expect(aside).toContain("text-2xl");
+    expect(aside).toContain("lg:text-4xl");
+    expect(aside).toContain("space-y-2");
+    expect(aside).toContain("text-base");
+    expect(aside).toContain("lg:space-y-4");
+    expect(aside).toContain("lg:text-lg");
+    expect(aside?.match(/<li\b/g) ?? []).toHaveLength(LOGIN_PANEL.bullets.length);
+    expect(aside?.match(/lucide-check/g) ?? []).toHaveLength(LOGIN_PANEL.bullets.length);
+    expect(cardColumnClasses).toEqual(
+      expect.arrayContaining(["justify-start", "pt-12", "lg:justify-center", "lg:pt-4"])
+    );
+    expect(readSource("app/login/page.tsx")).not.toContain("lg:hidden");
   });
 
   it("carries the autocomplete hints and an accessible password show/hide toggle", () => {

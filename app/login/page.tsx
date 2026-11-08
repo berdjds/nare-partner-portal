@@ -59,12 +59,12 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader active="login" />
-      <div className="grid flex-1 lg:grid-cols-2">
-      <aside className="hidden bg-gradient-to-br from-primary to-gradient-end text-primary-foreground lg:flex lg:flex-col lg:justify-center lg:gap-10 lg:px-16">
-        <h1 className="max-w-md text-4xl font-semibold tracking-tight">
+      <div className="grid flex-1 grid-rows-[auto_1fr] lg:grid-cols-2 lg:grid-rows-1">
+      <aside className="flex flex-col gap-4 bg-gradient-to-br from-primary to-gradient-end px-6 py-8 text-primary-foreground lg:justify-center lg:gap-10 lg:px-16">
+        <h1 className="max-w-md text-2xl font-semibold tracking-tight lg:text-4xl">
           {LOGIN_PANEL.headline}
         </h1>
-        <ul className="max-w-md space-y-4 text-lg leading-relaxed text-primary-foreground/90">
+        <ul className="max-w-md space-y-2 text-base leading-relaxed text-primary-foreground/90 lg:space-y-4 lg:text-lg">
           {LOGIN_PANEL.bullets.map((bullet) => (
             <li key={bullet} className="flex items-start gap-3">
               <Check className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />
@@ -74,7 +74,7 @@ function LoginForm() {
         </ul>
       </aside>
 
-      <div className="flex flex-col items-center justify-center bg-background p-4">
+      <div className="flex flex-col items-center justify-start bg-background p-4 pt-12 lg:justify-center lg:pt-4">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             <CardTitle className="text-xl">Sign in to the partner portal</CardTitle>
