@@ -117,6 +117,8 @@ describe("rendered markup", () => {
       .split(/\s+/) ?? [];
 
     expect(html).toContain("lg:grid-cols-2");
+    // below lg the band row takes its own height and the card column takes the rest (the band stays compact)
+    expect(html).toMatch(/class="grid flex-1 grid-rows-\[auto_1fr\] lg:grid-cols-2 lg:grid-rows-1"/);
     expect(html.match(/<aside\b/g) ?? []).toHaveLength(1);
     expect(html.split(escapeHtml(LOGIN_PANEL.headline))).toHaveLength(2);
     expect(asideClasses).not.toContain("hidden");

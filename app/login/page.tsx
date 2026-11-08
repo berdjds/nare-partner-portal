@@ -59,7 +59,7 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader active="login" />
-      <div className="grid flex-1 lg:grid-cols-2">
+      <div className="grid flex-1 grid-rows-[auto_1fr] lg:grid-cols-2 lg:grid-rows-1">
       <aside className="flex flex-col gap-4 bg-gradient-to-br from-primary to-gradient-end px-6 py-8 text-primary-foreground lg:justify-center lg:gap-10 lg:px-16">
         <h1 className="max-w-md text-2xl font-semibold tracking-tight lg:text-4xl">
           {LOGIN_PANEL.headline}
