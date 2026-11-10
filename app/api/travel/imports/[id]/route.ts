@@ -1,3 +1,4 @@
+import { canViewInternal } from "@/lib/travel/redact";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTravelActor, travelError, unauthorized } from "../../guard";
@@ -7,6 +8,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
+  if (!canViewInternal(actor)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
     const batch = await prisma.importBatch.findUnique({

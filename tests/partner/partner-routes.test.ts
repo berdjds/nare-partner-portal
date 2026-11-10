@@ -135,6 +135,23 @@ describe("PARTNER isolation and client-safe projection", () => {
     }
   });
 
+  it("with an ISSUED client quotation: sell price and itinerary only, never a cost or margin key; unissued versions are invisible", async () => {
+    const a = await submittedRequest();
+    session(partnerA);
+    const before = await (await getReq(a.request.id)).json();
+    expect(before.versions).toEqual([]); // nothing issued yet: no workflow state leaks
+    await addDoc(a.version.id, "CLIENT", true);
+    const res = await getReq(a.request.id);
+    const body = await res.json();
+    expect(body.versions).toHaveLength(1);
+    expect(body.versions[0].scenarios[0]).toHaveProperty("sell");
+    expect(body.versions[0]).not.toHaveProperty("status"); // version workflow state is internal
+    const text = JSON.stringify(body);
+    for (const k of ["costQuote", "profit", "margin", "markup", "unitRate", "totals", "traceRows", "lines", "issues"]) {
+      expect(text, k).not.toContain(`"${k}"`);
+    }
+  });
+
   it("partners cannot call calculate, even for their own request", async () => {
     const a = await submittedRequest();
     session(partnerA);
@@ -166,7 +183,11 @@ describe("D3: internal calculation only for ADMIN or the request's assigned vali
     const internal = await addDoc(a.version.id, "INTERNAL", true);
     session(fx.validator2);
     const res = await getReq(a.request.id);
-    if (res.status === 200) expect(JSON.stringify(await res.json())).not.toContain("costQuote");
+    expect(res.status).toBe(200);
+    const text = JSON.stringify(await res.json());
+    expect(text).not.toContain("costQuote");
+    expect(text).not.toContain("traceRows");
+    expect(text).not.toContain('"kind":"INTERNAL"');
     expect([403, 404]).toContain((await getDoc(internal.id)).status);
   });
 
@@ -192,5 +213,6 @@ describe("export audit", () => {
     expect(details.some((d) => d.documentId === doc.id && d.outcome === "allowed" && d.actorId === partnerA.id)).toBe(true);
     expect(details.some((d) => d.documentId === internal.id && d.outcome === "denied")).toBe(true);
     expect(JSON.stringify(details)).not.toContain("filePath");
+    expect(JSON.stringify(details)).not.toContain(doc.filePath); // the real path value never reaches the log
   });
 });

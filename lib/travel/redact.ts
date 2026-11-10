@@ -139,3 +139,23 @@ export function publicDocumentView(d: {
     renderMessage: renderState === "FAILED" ? DOCUMENT_RENDER_FAILED_MESSAGE : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Catalog / policy redaction (D3: supplier rates, costs and markups need the
+// dedicated permission). Actors without travel.internal.view still see WHAT is
+// in the catalog (names, occupancy, validity, whether a rate exists) but never
+// the net amounts, evidence references or pricing-policy fractions.
+// ---------------------------------------------------------------------------
+
+export function redactRate<T extends { amount?: string | null; evidenceRef?: string | null }>(rate: T): Omit<T, "amount" | "evidenceRef"> & { amount: null; evidenceRef: null; hasRate: boolean } {
+  return { ...(rate as object), amount: null, evidenceRef: null, hasRate: rate.amount != null } as never;
+}
+
+export function redactCatalogRates<T extends { rates?: Array<{ amount?: string | null; evidenceRef?: string | null }> }>(product: T): T {
+  return product.rates ? ({ ...product, rates: product.rates.map(redactRate) } as T) : product;
+}
+
+/** Pricing policy as an actor without the internal key may see it: identity and currency only. */
+export function redactPolicy(p: { id: string; name: string; quoteCurrency: string; active: boolean; createdAt?: Date }) {
+  return { id: p.id, name: p.name, quoteCurrency: p.quoteCurrency, active: p.active, createdAt: p.createdAt };
+}

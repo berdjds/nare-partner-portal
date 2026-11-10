@@ -1,3 +1,4 @@
+import { canViewInternal } from "@/lib/travel/redact";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +15,11 @@ export async function GET() {
       orderBy: { code: "asc" },
       include: { versions: { orderBy: { versionNo: "desc" } } },
     });
-    return NextResponse.json(templates);
+    // legacyMarkup is an imported margin figure: internal permission only (D3).
+    const view = canViewInternal(actor)
+      ? templates
+      : templates.map((t) => ({ ...t, versions: t.versions.map((v) => ({ ...v, legacyMarkup: null })) }));
+    return NextResponse.json(view);
   } catch (err) {
     return travelError(err, "[API /travel/templates]");
   }

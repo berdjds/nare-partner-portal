@@ -517,7 +517,11 @@ async function validatorGroupIds(): Promise<string[]> {
   const settings = await getTravelSettings();
   try {
     const ids: unknown = JSON.parse(settings.validatorUserIds);
-    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+    const list = Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+    if (list.length === 0) return list;
+    const partners = await prisma.user.findMany({ where: { id: { in: list }, role: "PARTNER" }, select: { id: true } });
+    const banned = new Set(partners.map((p) => p.id));
+    return list.filter((id) => !banned.has(id));
   } catch {
     return [];
   }
@@ -1623,7 +1627,12 @@ async function assertAssignableValidator(targetId: string): Promise<User> {
     throw new WorkflowError("VALIDATOR_INVALID", `user ${targetId} does not exist or is inactive`, 400);
   }
   // Any active user may be assigned as validator (v0.10.0) — assignment is
-  // what grants review rights, not the VALIDATOR role.
+  // what grants review rights, not the VALIDATOR role. Exception: an agency
+  // (PARTNER) account is never a validator: it could not act (the guard rejects
+  // it) and would be sent other agencies' notifications and documents.
+  if (target.role === "PARTNER") {
+    throw new WorkflowError("VALIDATOR_INVALID", "partner accounts cannot be validators", 400);
+  }
   return target;
 }
 

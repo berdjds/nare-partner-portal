@@ -1,3 +1,4 @@
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -63,6 +64,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const results = await sendQuoteDocument(id, parsed.data, actor.id);
+    await writeAuditLog(
+      "travel.export",
+      actor.id,
+      JSON.stringify({ documentId: id, kind: doc.kind, requestId: doc.version.requestId, actorId: actor.id, actorRole: actor.role, channel: "whatsapp", outcome: "allowed", recipients: results.length, delivered: results.filter((r) => r.ok).length }),
+    );
     return NextResponse.json({ results });
   } catch (err) {
     return travelError(err, "[API /travel/documents/[id]/send]");

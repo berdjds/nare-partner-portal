@@ -20,7 +20,10 @@ import { getTravelOrPartnerActor, travelError, unauthorized } from "../../guard"
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const actor = await getTravelOrPartnerActor();
-  if (!actor) return unauthorized();
+  if (!actor) {
+    await writeAuditLog("travel.export", null, JSON.stringify({ documentId: id, actorId: null, outcome: "denied", reason: "unauthenticated" }));
+    return unauthorized();
+  }
 
   let kind: string | null = null;
   let requestId: string | null = null;
@@ -53,7 +56,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (doc.kind === "INTERNAL") {
       if (actor.role === ROLE_PARTNER) return deny(403, "partner");
       if (!(await canDownloadInternalFor(actor, doc.version.requestId))) return deny(403, "internal_permission");
-      if (actor.role !== ROLE_ADMIN && !(await assignedHere())) return deny(403, "not_assigned");
     } else {
       if (!hasPermission(actor, "travel.client_docs.download")) return deny(403, "client_permission");
       if (actor.role === ROLE_PARTNER) {

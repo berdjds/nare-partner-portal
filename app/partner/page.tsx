@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { getActiveUser } from "@/lib/access-policy";
+import { hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import AppShell from "@/components/app/AppShell";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -16,6 +17,9 @@ export default async function PartnerPage() {
   const user = await getActiveUser(session);
   if (!user) redirect("/login");
   if (user.role !== "PARTNER") redirect("/");
+  // Same rules as the API guard: an admin deny of travel.access locks the page too.
+  if (!hasPermission(user, "travel.access")) redirect("/login");
+  const canDownload = hasPermission(user, "travel.client_docs.download");
   const agency = user.agencyId
     ? await prisma.agency.findFirst({ where: { id: user.agencyId, active: true }, select: { id: true, name: true } })
     : null;
@@ -40,7 +44,7 @@ export default async function PartnerPage() {
                   <span className="text-xs text-muted-foreground">{r.packageCode}</span>
                 </div>
                 <p className="text-sm text-muted-foreground">{r.startDate} to {r.endDate} · {r.status.replaceAll("_", " ").toLowerCase()}</p>
-                {docs.length > 0 ? (
+                {canDownload && docs.length > 0 ? (
                   <ul className="mt-2 flex flex-wrap gap-2">
                     {docs.map((d) => (
                       <li key={d.id}>

@@ -1,3 +1,4 @@
+import { canViewInternal, redactRate } from "@/lib/travel/redact";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
       },
       take: 500,
     });
-    return NextResponse.json(rates);
+    return NextResponse.json(canViewInternal(actor) ? rates : rates.map(redactRate));
   } catch (err) {
     return travelError(err, "[API /travel/catalog/rates]");
   }

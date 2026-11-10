@@ -66,7 +66,8 @@ export async function queueWorkflowEvent(
 
   const uniqueRecipients = new Map<string, User>();
   for (const r of recipients) {
-    if (r && !uniqueRecipients.has(r.id)) uniqueRecipients.set(r.id, r);
+    // Agency (PARTNER) accounts never receive workflow notifications: they carry other agencies' data.
+    if (r && r.role !== "PARTNER" && !uniqueRecipients.has(r.id)) uniqueRecipients.set(r.id, r);
   }
 
   // W3 (wa-multi): every WHATSAPP delivery of this event sends through the

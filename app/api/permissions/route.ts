@@ -8,6 +8,7 @@ import { requirePermission, revokeAllSessions } from "@/lib/access-policy";
 import {
   PERMISSION_KEYS,
   INTERNAL_PERMISSION_KEYS,
+  PARTNER_CEILING,
   isPermissionKey,
   presetForRole,
   effectivePermissions,
@@ -108,6 +109,13 @@ export async function PUT(req: NextRequest) {
   });
   if (!target) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  // PARTNER is capped at the client-facing keys: stored grants beyond the
+  // ceiling would be inert now but live if the role later changed.
+  if (target.role === "PARTNER") {
+    const beyond = Array.from(incoming.entries()).some(([key, allowed]) => allowed === true && !PARTNER_CEILING.has(key as PermissionKey));
+    if (beyond) return NextResponse.json({ error: "Partner accounts cannot be granted this permission" }, { status: 400 });
   }
 
   // Self-edits go through neither this endpoint nor /api/users role/active

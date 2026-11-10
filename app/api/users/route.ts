@@ -74,7 +74,7 @@ export async function GET() {
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
-    select: { id: true, email: true, name: true, role: true, active: true, phone: true, createdAt: true, updatedAt: true },
+    select: { id: true, email: true, name: true, role: true, active: true, phone: true, agencyId: true, createdAt: true, updatedAt: true },
   });
 
   return NextResponse.json(users);
@@ -239,6 +239,11 @@ export async function PATCH(req: NextRequest) {
       data,
       select: { id: true, email: true, name: true, role: true, active: true, phone: true, agencyId: true, createdAt: true },
     });
+
+    if (updated.role === "PARTNER" && current && current.role !== "PARTNER") {
+      // A user who becomes a PARTNER must not keep validating other agencies' requests.
+      await prisma.validationAssignment.updateMany({ where: { validatorId: updated.id, active: true }, data: { active: false } });
+    }
 
     await writeAuditLog("USER_UPDATED", user.id, `Updated ${updated.email}`);
 

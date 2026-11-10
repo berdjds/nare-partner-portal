@@ -48,23 +48,21 @@ export async function partnerRequestDetail(agencyId: string, requestId: string) 
   if (!request) return null;
   return {
     ...request,
-    versions: request.versions.map((v) => {
-      const issued = v.documents.length > 0;
-      return {
+    // Only versions with an ISSUED client quotation are visible; drafts, validation and
+    // change-request states of other versions are internal workflow and never shown.
+    versions: request.versions
+      .filter((v) => v.documents.length > 0)
+      .map((v) => ({
         id: v.id,
         versionNo: v.versionNo,
-        status: v.status,
         validUntil: v.validUntil,
         documents: v.documents,
-        itineraryDays: issued ? v.itineraryDays : [],
-        // sell-side fields only (ref, label, sell, perPayingPerson, validity, nights/days); issues are dropped.
-        scenarios: issued
-          ? v.scenarios.map((s) => {
-              const r = JSON.parse(redactScenarioResultJson(s.resultJson) ?? "{}");
-              return { label: s.label, nights: r.nights, days: r.days, sell: r.sell, perPayingPerson: r.perPayingPerson };
-            })
-          : [],
-      };
-    }),
+        itineraryDays: v.itineraryDays,
+        // sell-side fields only (label, sell, perPayingPerson, nights/days); issues are dropped.
+        scenarios: v.scenarios.map((s) => {
+          const r = JSON.parse(redactScenarioResultJson(s.resultJson) ?? "{}");
+          return { label: s.label, nights: r.nights, days: r.days, sell: r.sell, perPayingPerson: r.perPayingPerson };
+        }),
+      })),
   };
 }
