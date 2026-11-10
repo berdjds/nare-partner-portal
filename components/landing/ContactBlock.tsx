@@ -1,16 +1,18 @@
 "use client";
 
 import { MAILTO_SUBJECTS } from "@/lib/portal-content";
+import { useT } from "@/lib/i18n/react";
 import { primaryEmail, telHref, usePublicContact } from "@/lib/contact/react";
 
 export function ContactBlock() {
   const contact = usePublicContact();
+  const t = useT();
   const email = primaryEmail(contact);
   return (
     <section className="bg-muted">
       <div className="mx-auto max-w-4xl px-6 py-20 text-center sm:py-24">
         <h2 className="text-3xl font-semibold tracking-tight text-foreground">
-          Contact
+          {t("landing.title.contact")}
         </h2>
         <div className="mt-8 space-y-4 text-base">
           {email && (

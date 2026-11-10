@@ -28,6 +28,7 @@ import {
   HERO,
   HOW_IT_WORKS_STEPS,
   INDEXABLE,
+  LANDING_TITLES,
   MAILTO_SUBJECTS,
   PAGE_TITLES,
   PRODUCT_NAME,
@@ -119,7 +120,8 @@ const LANDING_COMPONENT_SOURCES = [
   "components/landing/HowItWorks.tsx",
   "components/landing/Benefits.tsx",
   "components/landing/ContactBlock.tsx",
-  "components/landing/Footer.tsx",
+  "components/landing/ServicesSection.tsx",
+  "components/landing/TrustStrip.tsx",
 ];
 
 describe("redirect branches kept", () => {
@@ -148,9 +150,7 @@ describe("signed-out visitors get the landing page", () => {
       CONTACT.email,
       ...CONTACT.phones,
       PRODUCT_NAME,
-      "How it works",
-      "Why the partner portal",
-      "Contact",
+      ...Object.values(LANDING_TITLES),
     ]) {
       expect(html).toContain(escapeHtml(copy));
     }
@@ -210,7 +210,7 @@ describe("no raw colours in the landing sources", () => {
   const paletteUtility =
     /\b(?:bg|text|border|ring|from|via|to)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d/;
 
-  it("app/page.tsx and the five landing components use neither hex colours nor palette utilities", () => {
+  it("app/page.tsx and the landing components use neither hex colours nor palette utilities", () => {
     for (const rel of ["app/page.tsx", ...LANDING_COMPONENT_SOURCES]) {
       const source = readSource(rel);
       expect(source, rel).not.toMatch(hexColour);
@@ -223,7 +223,7 @@ describe("no raw colours in the landing sources", () => {
     expect(hero).toContain("bg-gradient-to-br");
     expect(hero).toContain("from-primary");
     expect(hero).toContain("to-gradient-end");
-    expect(hero).toContain("Partner portal");
+    expect(hero).toContain('t("landing.eyebrow")');
     expect(hero).not.toContain("uppercase");
     expect(hero).not.toContain("{PRODUCT_NAME}");
     expect(hero).toContain("border-2 border-primary-foreground");
@@ -241,10 +241,10 @@ describe("no raw colours in the landing sources", () => {
   });
 });
 
-describe("copy comes from the content file", () => {
-  it("every landing component imports from @/lib/portal-content", () => {
-    for (const rel of LANDING_COMPONENT_SOURCES) {
-      expect(readSource(rel), rel).toMatch(/from "@\/lib\/portal-content"/);
+describe("copy comes from the catalogue", () => {
+  it("landing components read their text through the i18n catalogue (English text lives in lib/portal-content via lib/i18n/messages/en.ts)", () => {
+    for (const rel of ["components/landing/Hero.tsx", "components/landing/Benefits.tsx", "components/landing/ServicesSection.tsx", "components/landing/HowItWorks.tsx", "components/landing/TrustStrip.tsx"]) {
+      expect(readSource(rel), rel).toContain("useT()");
     }
   });
 });

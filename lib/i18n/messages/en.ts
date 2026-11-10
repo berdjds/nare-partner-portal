@@ -3,7 +3,7 @@
  * locale. Values that already live in lib/portal-content.ts are imported, not copied, so the
  * English text has exactly one home.
  */
-import { FORGOT_ACCESS, LOGIN_PANEL, PARTNER_APPLY, PRODUCT_NAME } from "@/lib/portal-content";
+import { B2B_SERVICES, BENEFITS, FORGOT_ACCESS, HERO, HOW_IT_WORKS_STEPS, LANDING_TITLES, LOGIN_PANEL, PARTNER_APPLY, PRODUCT_NAME } from "@/lib/portal-content";
 import { FRIENDLY_CREDENTIALS_ERROR } from "@/lib/login-errors";
 
 export const en = {
@@ -31,6 +31,37 @@ export const en = {
   "login.submitting": "Signing in...",
   "login.forgot": FORGOT_ACCESS.label,
   "login.error": FRIENDLY_CREDENTIALS_ERROR,
+  "landing.eyebrow": "Partner portal",
+  "landing.headline": HERO.headline,
+  "landing.subline": HERO.subline,
+  "landing.title.benefits": LANDING_TITLES.benefits,
+  "landing.title.services": LANDING_TITLES.services,
+  "landing.title.steps": LANDING_TITLES.steps,
+  "landing.title.trust": LANDING_TITLES.trust,
+  "landing.title.contact": LANDING_TITLES.contact,
+  "landing.benefit1": BENEFITS[0],
+  "landing.benefit2": BENEFITS[1],
+  "landing.benefit3": BENEFITS[2],
+  "landing.benefit4": BENEFITS[3],
+  "landing.service1.title": B2B_SERVICES[0].title,
+  "landing.service1.body": B2B_SERVICES[0].body,
+  "landing.service2.title": B2B_SERVICES[1].title,
+  "landing.service2.body": B2B_SERVICES[1].body,
+  "landing.service3.title": B2B_SERVICES[2].title,
+  "landing.service3.body": B2B_SERVICES[2].body,
+  "landing.step1.title": HOW_IT_WORKS_STEPS[0].title,
+  "landing.step1.body": HOW_IT_WORKS_STEPS[0].body,
+  "landing.step2.title": HOW_IT_WORKS_STEPS[1].title,
+  "landing.step2.body": HOW_IT_WORKS_STEPS[1].body,
+  "landing.step3.title": HOW_IT_WORKS_STEPS[2].title,
+  "landing.step3.body": HOW_IT_WORKS_STEPS[2].body,
+  "landing.step4.title": HOW_IT_WORKS_STEPS[3].title,
+  "landing.step4.body": HOW_IT_WORKS_STEPS[3].body,
+  "trust.email": "B2B portal email",
+  "trust.general": "General email",
+  "trust.phone": "Phone",
+  "trust.address": "Office",
+  "trust.hours": "Business hours",
   "footer.terms": "Terms",
   "footer.privacy": "Privacy",
   "footer.legalNav": "Legal",

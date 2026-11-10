@@ -6,6 +6,7 @@ import { CONTACT, OFFICE_ADDRESS } from "@/lib/portal-content";
 
 /** Without a provider (tests, previews) the static portal content is shown, exactly as before. */
 const DEFAULT_PUBLIC_CONTACT: PublicContact = {
+  foundedYear: 2019, // owner-confirmed; the published contact configuration may override it
   generalEmail: "info@nare.am",
   b2bEmail: CONTACT.email,
   phones: CONTACT.phones.map((number) => ({ number })),

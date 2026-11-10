@@ -1,29 +1,28 @@
-import { HOW_IT_WORKS_STEPS } from "@/lib/portal-content";
+"use client";
 
+import { useT } from "@/lib/i18n/react";
+
+const STEPS = [
+  ["landing.step1.title", "landing.step1.body"],
+  ["landing.step2.title", "landing.step2.body"],
+  ["landing.step3.title", "landing.step3.body"],
+  ["landing.step4.title", "landing.step4.body"],
+] as const;
+
+/** The four-step process, as an ordered list so the sequence is announced. */
 export function HowItWorks() {
+  const t = useT();
   return (
-    <section className="bg-background">
-      <div className="mx-auto max-w-4xl px-6 py-20 sm:py-24">
-        <h2 className="text-center text-3xl font-semibold tracking-tight text-foreground">
-          How it works
-        </h2>
-        <ol className="mt-12 space-y-10">
-          {HOW_IT_WORKS_STEPS.map((step, index) => (
-            <li key={step.title} className="flex gap-6">
-              <span
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground"
-              >
-                {index + 1}
-              </span>
-              <div>
-                <h3 className="text-xl font-semibold text-foreground">
-                  {step.title}
-                </h3>
-                <p className="mt-2 text-base leading-relaxed text-muted-foreground">
-                  {step.body}
-                </p>
-              </div>
+    <section id="how-it-works" aria-labelledby="how-heading" className="bg-background">
+      <div className="mx-auto max-w-5xl px-6 py-16 sm:py-20">
+        <h2 id="how-heading" className="text-center text-3xl font-semibold tracking-tight text-foreground">{t("landing.title.steps")}</h2>
+        <span aria-hidden="true" className="mx-auto mt-4 block h-1 w-12 rounded-full bg-warm" />
+        <ol className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {STEPS.map(([title, body], i) => (
+            <li key={title} className="rounded-xl border border-border bg-card p-6">
+              <span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{i + 1}</span>
+              <p className="mt-4 text-lg font-semibold text-foreground">{t(title)}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t(body)}</p>
             </li>
           ))}
         </ol>

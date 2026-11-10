@@ -8,6 +8,7 @@ import { LocaleProvider } from "@/lib/i18n/react";
 import { PublicContactProvider } from "@/lib/contact/react";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { dirOf } from "@/lib/i18n/locales";
+import { BRAND_THEME_COLOR } from "@/lib/brand";
 import { getPublicContact } from "@/lib/contact/service";
 
 // Geist has no Armenian glyphs. Noto Sans Armenian is self-hosted by next/font at build time (the
@@ -17,11 +18,21 @@ const notoArmenian = Noto_Sans_Armenian({ subsets: ["armenian"], display: "swap"
 
 export const metadata: Metadata = {
   title: "Nare Travel and Tours — Portal",
+  // Same icon asset as staging.nare.am (public/brand/nare-icon.webp); PNG sizes are derived from it
+  // by scripts/gen-brand-icons.mjs, and app/favicon.ico covers the default /favicon.ico request.
+  icons: {
+    icon: [
+      { url: "/brand/icon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/brand/nare-icon.webp", type: "image/webp" },
+    ],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   description:
     "One Nare Travel and Tours portal: travel requests, quotes, catalog, and the WhatsApp inbox in a single shared shell.",
 };
 
 export const viewport: Viewport = {
+  themeColor: BRAND_THEME_COLOR, // brand blue (--primary)
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

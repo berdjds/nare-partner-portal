@@ -8,24 +8,20 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  ABOUT_NARE,
-  ARMENIA_GLANCE,
   B2B_SERVICES,
   BENEFITS,
   CONTACT,
-  DMC_STRENGTHS,
   FORGOT_ACCESS,
   FORGOT_PAGE,
   HERO,
   HOW_IT_WORKS_STEPS,
   INDEXABLE,
-  LANDING_SECTION_TITLES,
+  LANDING_TITLES,
   LOGIN_PANEL,
   MAILTO_SUBJECTS,
   PAGE_TITLES,
   PRODUCT_NAME,
   RESET_PAGE,
-  WHY_NARE,
   robotsDirective,
 } from "@/lib/portal-content";
 
@@ -51,8 +47,8 @@ describe("portal content: hero", () => {
 });
 
 describe("portal content: how-it-works steps", () => {
-  it("has exactly three steps, each with a non-empty title and body", () => {
-    expect(HOW_IT_WORKS_STEPS).toHaveLength(3);
+  it("has exactly four steps, each with a non-empty title and body", () => {
+    expect(HOW_IT_WORKS_STEPS).toHaveLength(4);
     for (const step of HOW_IT_WORKS_STEPS) {
       expect(step.title.trim()).not.toBe("");
       expect(step.body.trim()).not.toBe("");
@@ -149,114 +145,33 @@ describe("portal content: wording guards", () => {
   });
 });
 
-describe("portal content: W5e approved B2B copy shape", () => {
-  it("lists exactly four B2B services", () => {
-    expect(B2B_SERVICES).toHaveLength(4);
+describe("portal content: Phase 5 landing copy", () => {
+  it("lists exactly three core service groups with the approved wording", () => {
+    expect(B2B_SERVICES.map((s) => s.title)).toEqual(["DMC Services", "MICE Solutions", "Group Bookings"]);
+    expect(B2B_SERVICES[0].body).toBe("Comprehensive Destination Management Company services in Armenia");
   });
-
-  it("lists exactly four reasons to choose Nare", () => {
-    expect(WHY_NARE).toHaveLength(4);
+  it("has the section titles and no empty string anywhere", () => {
+    expect(Object.keys(LANDING_TITLES).sort()).toEqual(["benefits", "contact", "services", "steps", "trust"]);
+    for (const s of collectStrings([B2B_SERVICES, LANDING_TITLES, HOW_IT_WORKS_STEPS, BENEFITS])) expect(s.trim()).not.toBe("");
   });
-
-  it("lists exactly three DMC strengths after removing the repeated title", () => {
-    expect(DMC_STRENGTHS).toHaveLength(3);
-  });
-
-  it("lists exactly three Armenia at a glance items", () => {
-    expect(ARMENIA_GLANCE.items).toHaveLength(3);
-  });
-
-  it("has no empty string anywhere in the W5e exports", () => {
-    const strings = collectStrings([
-      B2B_SERVICES,
-      WHY_NARE,
-      DMC_STRENGTHS,
-      ABOUT_NARE,
-      ARMENIA_GLANCE,
-      LANDING_SECTION_TITLES,
-    ]);
-    expect(strings.length).toBeGreaterThan(0);
-    for (const value of strings) {
-      expect(value.trim()).not.toBe("");
-    }
+  it("has unique card titles", () => {
+    const titles = [...B2B_SERVICES, ...HOW_IT_WORKS_STEPS].map((i) => i.title);
+    expect(new Set(titles).size).toBe(titles.length);
   });
 });
 
-describe("portal content: landing card de-duplication", () => {
-  it("keeps every landing section and heading unchanged", () => {
-    expect(LANDING_SECTION_TITLES).toEqual({
-      services: {
-        title: "Our B2B Services",
-        subtitle: "Comprehensive solutions for business travel and events",
-      },
-      whyNare: { title: "Why choose us" },
-      dmc: { title: "DMC strengths" },
-      armenia: { title: "Armenia at a glance" },
-    });
-    expect(ABOUT_NARE.title).toBe("Our Story");
+describe("portal content: retired and banned claims", () => {
+  const userFacing = collectStrings([B2B_SERVICES, LANDING_TITLES, HOW_IT_WORKS_STEPS, BENEFITS, HERO]).join("\n");
+
+  it("no longer states a founding year (it comes from the contact configuration, 2019), nor 2014", () => {
+    expect(userFacing).not.toMatch(/\b(19|20)\d{2}\b/);
   });
-
-  it("has unique card titles across all landing sections", () => {
-    const titles = [
-      ...B2B_SERVICES,
-      ...WHY_NARE,
-      ...DMC_STRENGTHS,
-      ...ARMENIA_GLANCE.items,
-    ].map((item) => item.title);
-    const normalizedTitles = titles.map((title) => title.toLocaleLowerCase());
-
-    expect(new Set(normalizedTitles).size).toBe(titles.length);
-  });
-});
-
-describe("portal content: W5e approved wording", () => {
-  it("exposes the exact B2B services section heading and first service", () => {
-    expect(LANDING_SECTION_TITLES.services).toEqual({
-      title: "Our B2B Services",
-      subtitle: "Comprehensive solutions for business travel and events",
-    });
-    expect(B2B_SERVICES[0]).toEqual({
-      title: "DMC Services",
-      body: "Comprehensive Destination Management Company services in Armenia",
-    });
-  });
-
-  it("exposes the exact story title and body", () => {
-    expect(ABOUT_NARE.title).toBe("Our Story");
-    expect(ABOUT_NARE.body).toBe(
-      "Founded in 2014, Nare Travel and Tours has grown from a small local agency to one of Armenia's leading travel companies. We began with a simple mission: to share Armenia's rich cultural heritage with the world while providing exceptional travel experiences. Today, we're proud to serve thousands of travelers each year, offering both local and international travel solutions with the same dedication to quality and personal attention that has been our hallmark since day one.",
-    );
-  });
-
-  it("exposes the exact Armenia intro and DMC coverage line", () => {
-    expect(ARMENIA_GLANCE.intro).toBe(
-      "Experience the rich history and stunning landscapes of our ancient land",
-    );
-    expect(DMC_STRENGTHS[2]).toEqual({
-      title: "Armenia and Georgia",
-      body: "Your trusted Destination Management Company in Armenia and Georgia",
-    });
-  });
-});
-
-describe("portal content: W5e banned claims", () => {
-  const userFacing = collectStrings([
-    B2B_SERVICES,
-    WHY_NARE,
-    DMC_STRENGTHS,
-    ABOUT_NARE,
-    ARMENIA_GLANCE,
-    LANDING_SECTION_TITLES,
-  ]).join("\n");
-
-  it("contains no numeric claims such as 500+ or 99%", () => {
+  it("contains no numeric claims such as 500+ or 99%, and no 24/7", () => {
     expect(userFacing).not.toMatch(/\d\s*[+%]/);
+    expect(userFacing).not.toMatch(/24\s*\/\s*7/);
   });
-
-  it("contains no price, speed, award or superlative claims", () => {
-    expect(userFacing).not.toMatch(
-      /\b(prices?|cheap|fastest|awards?|instant(ly)?|best)\b/i,
-    );
+  it("contains no price, speed, award, superlative, licence, scale or network claims", () => {
+    expect(userFacing).not.toMatch(/\b(prices?|cheap|fastest|awards?|instant(ly)?|best|leading|thousands|licensed|insured|global|worldwide)\b/i);
   });
 });
 

@@ -75,6 +75,10 @@ const COLOR_ALLOWLIST: { file: string; reason: string }[] = [
     reason: "maps the CSS variables into the Tailwind color scale",
   },
   {
+    file: "lib/brand.ts",
+    reason: "the one hex value platform APIs need (theme colour); a test keeps it equal to --primary",
+  },
+  {
     file: "components/ui/badge.tsx",
     reason: "badgeStatusStyles is the single sanctioned home of raw status palette classes (semantic status hues, badges only)",
   },
