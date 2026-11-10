@@ -81,6 +81,10 @@ export const PERMISSION_KEYS = [
   "travel.internal.download",
   /** Review B2B partner applications and download their KYC documents (W5b). */
   "partners.review",
+  /** Write translation drafts (human or AI-assisted) for admin-managed content. */
+  "content.translate",
+  /** Approve or reject translation drafts; only approved text is published. */
+  "content.approve",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
