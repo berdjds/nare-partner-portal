@@ -100,10 +100,10 @@ describe("recalculateFromTemplate", () => {
     await wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) });
     const price = async () => {
       const input = await resolve.buildEngineInputForVersion(version.id);
-      const leader = input.scenarios[0].services.find((s: any) => s.label === "Leader meal")!;
-      return { leader, included: leader.includedElsewhere };
+      const leader = input.scenarios[0].services.find((s: any) => s.label === "Leader meal");
+      return { leader, included: leader?.includedElsewhere };
     };
-    expect((await price()).included).toBe(true); // inactive: not charged
+    expect((await price()).leader).toBeUndefined(); // inactive: not in the quotation at all (not charged, not listed)
     as(fx.advisor);
     const res = await patch(request.id, { expectedRevision: await rev(request.id), patch: { travelers: { adults: 2, children: 0, infants: 0, paying: 2, complimentary: 0, leaders: 1, staff: 0 } } });
     expect(res.status).toBe(200);
@@ -111,7 +111,7 @@ describe("recalculateFromTemplate", () => {
     expect(body.recalculation).toMatchObject({ changed: true, linesUpdated: 1 });
     const { leader, included } = await price();
     expect(included).toBe(false);
-    expect(leader.participants).toBe(1);
+    expect(leader!.participants).toBe(1);
   });
 
   it("zero travellers: lines for absent categories are inactive and nothing throws", async () => {
@@ -132,7 +132,7 @@ describe("recalculateFromTemplate", () => {
     ]);
     const ok = settled.filter((s) => s.status === "fulfilled");
     const bad = settled.filter((s) => s.status === "rejected") as PromiseRejectedResult[];
-    expect(ok.length).toBeGreaterThanOrEqual(1);
+    expect(ok.length).toBe(1); // exactly one winner; the other is a clean 409
     for (const b of bad) expect(b.reason).toMatchObject({ code: "CONFLICT" });
     expect((await lines(version.id)).map((l) => l.label)).toEqual(["Group tour", "Leader meal", "Museum ticket"]); // no duplicates
   });
@@ -193,7 +193,7 @@ describe("recalculateFromTemplate", () => {
     const mine = await newRequest();
     await expect(wf.recalculateFromTemplate(actorOf(otherAdvisor), mine.request.id, { expectedRevision: await rev(mine.request.id) })).rejects.toMatchObject({ httpStatus: 403 });
     await prisma.quoteVersion.update({ where: { id: mine.version.id }, data: { status: "ISSUED" } });
-    await expect(wf.recalculateFromTemplate(actorOf(fx.advisor), mine.request.id, { expectedRevision: await rev(mine.request.id) })).rejects.toBeTruthy();
+    await expect(wf.recalculateFromTemplate(actorOf(fx.advisor), mine.request.id, { expectedRevision: await rev(mine.request.id) })).rejects.toMatchObject({ code: "INVALID_STATE", httpStatus: 409 });
   });
 });
 
@@ -208,19 +208,21 @@ describe("recalculate route: authorization and the advisor guidance leak guard",
 
   it("an advisor receives a sell-side figure only: no cost, rate, margin or markup keys or values anywhere in the payload", async () => {
     const { request, version } = await newRequest();
-    await prisma.scenario.deleteMany({ where: { versionId: version.id } });
+    const { saveContent, scenarioContent } = await import("../workflow/fixtures");
+    await saveContent(prisma, actorOf(fx.advisor), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
     as(fx.advisor);
     const res = await post(request.id, { expectedRevision: await rev(request.id) });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.guidance).toBeTruthy();
+    expect(body.guidance.available).toBe(true);
+    expect(body.guidance.scenarios[0].sell).toBeTruthy(); // the walk below runs over real figures, not an empty payload
     const keys = new Set<string>();
     (function walk(v: unknown) { if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { keys.add(k); walk(x); } })(body);
     for (const bad of ["unitRate", "overrideRate", "costQuote", "costAmd", "profit", "margin", "markup", "totals", "lines", "trace", "traceRows", "rate", "feeFraction", "minProfit", "evidenceRef", "sourceRef", "amount", "message"]) {
       expect(keys.has(bad), `leaked key ${bad}`).toBe(false);
     }
     const text = JSON.stringify(body);
-    for (const secret of ["0.14", "Tour Calculator", "T!1", "MARKUP_ON_COST"]) expect(text).not.toContain(secret);
+    for (const secret of ["0.14", "Tour Calculator", "T!1", "MARKUP_ON_COST", "Test!A1"]) expect(text).not.toContain(secret);
   });
 
   it("guidance with a healthy scenario returns sell and per-person figures and issue codes only", async () => {
@@ -233,5 +235,86 @@ describe("recalculate route: authorization and the advisor guidance leak guard",
     const sc = body.guidance.scenarios[0];
     expect(Object.keys(sc).sort()).toEqual(["days", "issues", "label", "nights", "perPayingPerson", "ref", "sell", "valid"]);
     for (const i of sc.issues) expect(Object.keys(i).sort()).toEqual(["code", "severity"]);
+  });
+});
+
+describe("review fixes", () => {
+  it("H1: a version submitted while the recalculation runs is never written or stripped of its snapshot", async () => {
+    const { request, version } = await newRequest({ travelers: { adults: 2, children: 0, infants: 0, paying: 2, complimentary: 0, leaders: 1, staff: 0 } });
+    const orig = prisma.scenario.findMany.bind(prisma.scenario);
+    const spy = vi.spyOn(prisma.scenario, "findMany").mockImplementationOnce(((args: any) => {
+      // what submit() does at this instant: freeze a snapshot and leave DRAFT
+      return prisma.quoteVersion.update({ where: { id: version.id }, data: { status: "PENDING_VALIDATION" } })
+        .then(() => prisma.calculationSnapshot.create({ data: { versionId: version.id, inputsJson: "{}", resultJson: "{}", engineVersion: "t", hash: `h-${version.id}` } }))
+        .then(() => orig(args));
+    }) as any);
+    await expect(wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) })).rejects.toMatchObject({ code: "CONFLICT" });
+    spy.mockRestore();
+    expect(await prisma.calculationSnapshot.count({ where: { versionId: version.id } })).toBe(1);
+    expect((await lines(version.id)).every((l) => l.origin === null)).toBe(true); // no stamp written
+    expect((await prisma.quoteVersion.findUniqueOrThrow({ where: { id: version.id } })).status).toBe("PENDING_VALIDATION");
+  });
+
+  it("H2: a legacy line with hand-set participants is kept on the first recalculation", async () => {
+    const { request, version } = await newRequest();
+    await wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) });
+    await prisma.serviceLine.updateMany({ where: { versionId: version.id, label: "Leader meal" }, data: { origin: null, templateKey: null, derivedJson: null, ruleInactive: false, participants: 3 } });
+    const out = await wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) });
+    expect(out.conflicts.map((c) => c.code)).toContain("MANUAL_OVERRIDE_KEPT");
+    expect(byLabel(await lines(version.id), "Leader meal").participants).toBe(3);
+    const again = await wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) });
+    expect(again.changed).toBe(false);
+    expect(byLabel(await lines(version.id), "Leader meal").participants).toBe(3); // still kept on every later run
+  });
+
+  it("M1: a product repeated on several days keeps each line's own key after a re-date", async () => {
+    const guide = await prisma.serviceProduct.create({ data: { name: "Guide", category: "GUIDES", basis: "PER_PERSON" } });
+    await prisma.rateVersion.create({ data: { productType: "SERVICE", serviceProductId: guide.id, amount: "3", currency: "USD", status: "VERIFIED", evidenceRef: "T!2" } });
+    const t = await prisma.packageTemplate.create({ data: { code: "TPL-G", name: "G" } });
+    const tv = await prisma.templateVersion.create({ data: { templateId: t.id, nights: 3, days: 4, daysJson: JSON.stringify([0, 1, 2].map((d) => ({ dayOffset: d, services: [{ serviceProductId: guide.id, label: "Guide", quantity: 1, rule: { weekdays: d === 1 ? [4] : [1, 2, 3, 4, 5, 6, 7] } }] }))) } });
+    const { request, version } = await newRequest({ templateVersionId: tv.id });
+    await wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) });
+    await wf.updateDraft(actorOf(fx.advisor), request.id, await rev(request.id), { startDate: "2026-10-05", endDate: "2026-10-09" } as any);
+    await wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) });
+    const ls = await prisma.serviceLine.findMany({ where: { versionId: version.id, serviceProductId: guide.id }, orderBy: { date: "asc" } });
+    expect(ls.map((l) => [l.date, l.templateKey])).toEqual([["2026-10-05", `0|${guide.id}|`], ["2026-10-06", `1|${guide.id}|`], ["2026-10-07", `2|${guide.id}|`]]);
+    // day 1 is Tuesday 2026-10-06; its rule allows Thursday only => flagged on that very line, and only that one
+    expect(ls.map((l) => l.reviewFlag)).toEqual([null, "WEEKDAY_UNAVAILABLE", null]);
+  });
+
+  it("M2: an inactive line is absent from the engine input and from the frozen client itinerary", async () => {
+    const { request, version } = await newRequest();
+    const { saveContent, scenarioContent } = await import("../workflow/fixtures");
+    await saveContent(prisma, actorOf(fx.advisor), request.id, version.id, scenarioContent(fx.hotel.id, fx.hotel.name));
+    await wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) });
+    const input = await resolve.buildEngineInputForVersion(version.id);
+    expect(input.scenarios[0].services.map((s: any) => s.label)).not.toContain("Leader meal");
+    expect(input.scenarios[0].services.map((s: any) => s.label)).toContain("Museum ticket");
+    await wf.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
+    await wf.submit(actorOf(fx.advisor), request.id);
+    const snap = await prisma.calculationSnapshot.findUniqueOrThrow({ where: { versionId: version.id } });
+    expect(snap.displayJson).not.toContain("Leader meal");
+    expect(snap.displayJson).toContain("Museum ticket");
+  });
+
+  it("M5: an advisor does not receive supplier provenance, catalog unit rates or another user's override, and a save keeps them", async () => {
+    const { request, version } = await newRequest();
+    await wf.recalculateFromTemplate(actorOf(fx.advisor), request.id, { expectedRevision: await rev(request.id) });
+    await prisma.serviceLine.updateMany({ where: { versionId: version.id, label: "Museum ticket" }, data: { sourceRef: "Tour Calculator!C58", unitRate: "11", overrideRate: "9", overrideReason: "negotiated with supplier", overrideById: fx.admin.id } });
+    as(fx.advisor);
+    const res = await requestRoute.GET(new NextRequest("http://t/r"), { params: Promise.resolve({ id: request.id }) });
+    const body = await res.json();
+    const line = body.versions[0].serviceLines.find((l: any) => l.label === "Museum ticket");
+    expect(line).toMatchObject({ sourceRef: null, unitRate: null, overrideRate: null, overrideReason: null, overrideById: null });
+    expect(JSON.stringify(body)).not.toContain("negotiated with supplier");
+    // the editor saves back exactly what it was shown
+    await wf.saveVersionContent(actorOf(fx.advisor), version.id, {
+      expectedRevision: await rev(request.id),
+      serviceLines: body.versions[0].serviceLines.map((l: any) => ({ category: l.category, label: l.label, basis: l.basis, currency: l.currency, unitRate: l.unitRate, quantity: l.quantity, participants: l.participants, capacity: l.capacity, includedElsewhere: l.includedElsewhere, isStaffCost: l.isStaffCost, overrideRate: l.overrideRate, overrideReason: l.overrideReason, sourceRef: l.sourceRef, serviceProductId: l.serviceProductId, date: l.date, vehicleTypeId: l.vehicleTypeId })),
+    });
+    expect(byLabel(await lines(version.id), "Museum ticket")).toMatchObject({ sourceRef: "Tour Calculator!C58", unitRate: "11", overrideRate: "9", overrideById: fx.admin.id });
+    as(fx.admin);
+    const adminBody = await (await requestRoute.GET(new NextRequest("http://t/r"), { params: Promise.resolve({ id: request.id }) })).json();
+    expect(JSON.stringify(adminBody)).toContain("negotiated with supplier");
   });
 });

@@ -154,7 +154,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           ...v,
           quoteCurrency,
           snapshot: snapshotPublic,
-          serviceLines: redactCostFields ? v.serviceLines.map(redactServiceLine) : v.serviceLines,
+          serviceLines: redactCostFields
+            ? v.serviceLines.map(redactServiceLine)
+            : redactResults
+              ? // Editable draft of an actor without internal access (advisor): keep what they entered themselves,
+                // hide supplier provenance, catalog-priced unit rates and overrides set by someone else.
+                v.serviceLines.map((l) => {
+                  const foreign = Boolean(l.overrideById) && l.overrideById !== actor.id;
+                  return {
+                    ...l,
+                    sourceRef: l.serviceProductId ? null : l.sourceRef,
+                    unitRate: l.serviceProductId ? null : l.unitRate,
+                    ...(foreign ? { overrideRate: null, overrideReason: null, overrideById: null } : {}),
+                  };
+                })
+              : v.serviceLines,
           scenarios: v.scenarios.map((sc) => {
             // traceRows (v0.15.0): the frozen calculation breakdown, rebuilt
             // from the snapshot's inputs + this scenario's frozen result —

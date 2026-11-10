@@ -180,6 +180,7 @@ export interface LineState {
   derivedJson: string | null;
   reviewFlag: string | null;
   overrideRate: string | null;
+  unitRate?: string | null;
 }
 
 export interface LineUpdate {
@@ -212,12 +213,16 @@ function parseDerived(json: string | null): { participants: number | null; inact
 }
 
 /** A line was edited by hand when it no longer matches what the last derivation wrote. */
-export function lineEditInfo(line: Pick<LineState, "participants" | "ruleInactive" | "derivedJson" | "origin" | "overrideRate">): LineEditInfo {
+export function lineEditInfo(line: Pick<LineState, "participants" | "ruleInactive" | "derivedJson" | "origin" | "overrideRate"> & { unitRate?: string | null }): LineEditInfo {
   const derived = parseDerived(line.derivedJson);
   if (line.origin === "TEMPLATE" && derived) {
     return { edited: line.participants !== derived.participants || line.ruleInactive !== derived.inactive };
   }
-  return { edited: false }; // legacy / unstamped: first derivation adopts it
+  // Legacy / unstamped line: nothing records who set its values, so a participants value (which a
+  // catalog-linked line only has when a person set it) is treated as a hand edit and kept. Rates are
+  // never derived here, so a typed or overridden rate does not block participants derivation; the
+  // orchestrator separately protects rate-bearing lines from being removed on a template switch.
+  return { edited: line.participants !== null };
 }
 
 export function planLines(input: { items: TemplateItem[]; lines: LineState[]; travelers: TravelerSetup; startDate: string }): LinePlan {
@@ -229,11 +234,13 @@ export function planLines(input: { items: TemplateItem[]; lines: LineState[]; tr
 
   for (const item of items) {
     const date = addDays(startDate, item.dayOffset);
+    // The line's DATE is the truth after a re-date (the line sync moves lines between days that
+    // share a product), so match on the date first; an older key stamp is restamped below.
+    const sameSlot = (l: LineState) => l.serviceProductId === item.serviceProductId && l.date === date && (l.vehicleTypeId ?? null) === item.vehicleTypeId;
     const line =
-      lines.find((l) => !used.has(l.id) && l.templateKey === item.key) ??
-      lines.find(
-        (l) => !used.has(l.id) && l.templateKey === null && l.serviceProductId === item.serviceProductId && l.date === date && (l.vehicleTypeId ?? null) === item.vehicleTypeId,
-      );
+      lines.find((l) => !used.has(l.id) && l.templateKey === item.key && sameSlot(l)) ??
+      lines.find((l) => !used.has(l.id) && (l.templateKey === null || l.templateKey !== item.key) && sameSlot(l)) ??
+      lines.find((l) => !used.has(l.id) && l.templateKey === item.key);
     if (!line) continue;
     used.add(line.id);
     governed += 1;
@@ -244,10 +251,12 @@ export function planLines(input: { items: TemplateItem[]; lines: LineState[]; tr
 
     const edit = lineEditInfo(line);
     if (edit.edited) {
+      // Stamp what the rule WOULD derive, so the difference to the hand-set value stays visible on every run.
+      const wouldDerive = JSON.stringify({ participants: ev.participants, inactive: !ev.active });
       conflicts.push({ key: item.key, label: item.label, code: "MANUAL_OVERRIDE_KEPT", detail: "participants were edited by hand; the template rule was not applied" });
       const wantFlag = [flag, "MANUAL_OVERRIDE_KEPT"].filter(Boolean).join(",") || null;
       if (line.reviewFlag !== wantFlag || line.templateKey !== item.key || line.origin !== "TEMPLATE") {
-        updates.push({ id: line.id, data: { origin: "TEMPLATE", templateKey: item.key, participants: line.participants, ruleInactive: line.ruleInactive, derivedJson: line.derivedJson ?? JSON.stringify({ participants: line.participants, inactive: line.ruleInactive }), reviewFlag: wantFlag } });
+        updates.push({ id: line.id, data: { origin: "TEMPLATE", templateKey: item.key, participants: line.participants, ruleInactive: line.ruleInactive, derivedJson: line.origin === "TEMPLATE" && line.derivedJson ? line.derivedJson : wouldDerive, reviewFlag: wantFlag } });
       }
       continue;
     }
