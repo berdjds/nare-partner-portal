@@ -1,0 +1,191 @@
+{
+  "passed": 37,
+  "failed": 0,
+  "results": [
+    {
+      "name": "desktop: page is a routed page, not a modal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: wording \"Client messages and notes\" present, plain \"Notes\" label absent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop: error summary and field errors appear",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: focus moves to the first invalid field",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: invalid control exposes aria-invalid",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "axe new request (errors shown): no serious/critical violations",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "desktop: entered values survive a reload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: restored banner shown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: double click creates exactly one request",
+      "ok": true,
+      "detail": "before=4 after=5"
+    },
+    {
+      "name": "desktop: detail page lists template review items (departure day / minimum / not applicable)",
+      "ok": true,
+      "detail": "1 template item needs review Leader meal (2026-11-18): not applicable for the current travellers, so it is not charged. Group tour (2026-11-19): fewer participants than the minimum for this item; the "
+    },
+    {
+      "name": "axe request detail: no serious/critical violations",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "desktop: client and internal notes stored separately",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: draft cleared after a successful create",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: cancel with unsaved input asks for confirmation and stays on dismiss",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: cancel confirmed returns to the list",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: list has a New request link (no modal)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: page is a routed page, not a modal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: wording \"Client messages and notes\" present, plain \"Notes\" label absent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet: error summary and field errors appear",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: focus moves to the first invalid field",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: invalid control exposes aria-invalid",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: entered values survive a reload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: restored banner shown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: page is a routed page, not a modal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: wording \"Client messages and notes\" present, plain \"Notes\" label absent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone: error summary and field errors appear",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: focus moves to the first invalid field",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: invalid control exposes aria-invalid",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: entered values survive a reload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: restored banner shown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "partner: staff request page redirects to /partner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "partner: API list works and carries no internal notes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "partner: own-agency detail shows client messages, never internal notes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "partner: recalculate endpoint refused",
+      "ok": true,
+      "detail": "status=401"
+    }
+  ]
+}

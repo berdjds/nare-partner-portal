@@ -93,7 +93,7 @@ export default function RequestsList({ role, userId, permissions }: RequestsList
             className="max-w-xs"
           />
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-56" aria-label="Filter by status">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

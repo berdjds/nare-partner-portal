@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { badgeStatusTextStyles } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { nightsBetween, formatDisplayDateRange } from "@/lib/travel/engine/dates";
 import { EMPTY_NEW_REQUEST, firstErrorId, hasErrors, validateNewRequest, type FieldErrors, type NewRequestForm } from "@/lib/travel/new-request-form";
@@ -31,7 +32,7 @@ const STEPS = [
 /** Error text under a field, announced to assistive technology and linked from the control. */
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
-  return <p id={`${id}-error`} role="alert" className="mt-1 text-xs font-medium text-destructive">{message}</p>;
+  return <p id={`${id}-error`} role="alert" className={`mt-1 text-xs font-medium ${badgeStatusTextStyles.danger}`}>{message}</p>;
 }
 const describedBy = (id: string, message?: string) => (message ? { "aria-invalid": true as const, "aria-describedby": `${id}-error` } : {});
 

@@ -116,7 +116,7 @@ export default function TravelerSetupEditor({ value, onChange }: TravelerSetupEd
             <span className="text-xs text-muted-foreground">
               {k === "infants" ? `infants (auto ≤ age ${infantMaxAge})` : k}
             </span>
-            <Input type="number" min={0} value={value[k]} onChange={(e) => setExtra(k, e.target.value)} />
+            <Input type="number" min={0} value={value[k]} aria-label={k === "infants" ? "Infants" : k[0].toUpperCase() + k.slice(1)} onChange={(e) => setExtra(k, e.target.value)} />
           </div>
         ))}
       </div>
@@ -129,11 +129,11 @@ function StepperRow({ label, count, onStep }: { label: string; count: number; on
     <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-1.5">
       <span className="text-sm">{label}</span>
       <div className="flex items-center gap-2">
-        <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => onStep(-1)}>
+        <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0" aria-label={`Decrease ${label.toLowerCase()}`} onClick={() => onStep(-1)}>
           −
         </Button>
         <span className="w-6 text-center text-sm tabular-nums">{count}</span>
-        <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => onStep(1)}>
+        <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0" aria-label={`Increase ${label.toLowerCase()}`} onClick={() => onStep(1)}>
           +
         </Button>
       </div>
