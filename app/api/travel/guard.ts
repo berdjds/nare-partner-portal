@@ -24,20 +24,45 @@ import { hasPermission } from "@/lib/permissions";
 import { canAccessTravel } from "@/lib/travel/access";
 import { WorkflowError, type WorkflowActor } from "@/lib/travel/workflow";
 import { ResolutionError } from "@/lib/travel/resolve";
+import { ROLE_PARTNER } from "@/lib/travel/contracts";
+import { prisma } from "@/lib/prisma";
 
-export async function getTravelActor(): Promise<WorkflowActor | null> {
+async function resolveActor(allowPartner: boolean): Promise<WorkflowActor | null> {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
   if (!user) return null;
   if (!hasPermission(user, "travel.access")) return null;
-  if (!(await canAccessTravel(user.id, user.role))) return null;
+  if (user.role === ROLE_PARTNER) {
+    // Default-deny: a PARTNER only passes on routes that explicitly opt in, and
+    // only while bound to an ACTIVE agency.
+    if (!allowPartner || !user.agencyId) return null;
+    const agency = await prisma.agency.findUnique({ where: { id: user.agencyId }, select: { active: true } });
+    if (!agency?.active) return null;
+  } else if (!(await canAccessTravel(user.id, user.role))) {
+    return null;
+  }
   return {
     id: user.id,
     role: user.role,
+    agencyId: user.role === ROLE_PARTNER ? user.agencyId : null,
     name: user.name,
     email: user.email,
     permissions: user.permissions,
   };
+}
+
+/** Staff actor. PARTNER accounts are always rejected here (default-deny). */
+export function getTravelActor(): Promise<WorkflowActor | null> {
+  return resolveActor(false);
+}
+
+/**
+ * Staff OR PARTNER actor. Only the three read routes that serve partners use
+ * this (own-agency request list/detail and issued client documents); each must
+ * scope by actor.agencyId itself.
+ */
+export function getTravelOrPartnerActor(): Promise<WorkflowActor | null> {
+  return resolveActor(true);
 }
 
 export function unauthorized(): NextResponse {

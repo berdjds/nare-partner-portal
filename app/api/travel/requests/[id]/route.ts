@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { unlink } from "node:fs/promises";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { ROLE_ADMIN, ROLE_ADVISOR, ROLE_VALIDATOR } from "@/lib/travel/contracts";
+import { ROLE_ADMIN, ROLE_ADVISOR, ROLE_PARTNER, ROLE_VALIDATOR } from "@/lib/travel/contracts";
+import { canViewInternalFor } from "@/lib/travel/internal-access";
+import { partnerRequestDetail } from "@/lib/travel/partner-view";
 import type { EngineInput, ScenarioResult } from "@/lib/travel/contracts";
 import {
-  canViewInternal,
   publicDocumentView,
   redactScenarioResultJson,
   redactServiceLine,
@@ -14,7 +15,7 @@ import {
 import { buildTraceRows, type TraceRow } from "@/lib/travel/trace-table";
 import { updateDraft, updateDraftSchema } from "@/lib/travel/workflow";
 import { writeAuditLog } from "@/lib/audit";
-import { getTravelActor, travelError, unauthorized } from "../../guard";
+import { getTravelActor, getTravelOrPartnerActor, travelError, unauthorized } from "../../guard";
 
 const patchBodySchema = z.object({
   expectedRevision: z.number().int().min(0),
@@ -29,10 +30,14 @@ const patchBodySchema = z.object({
 // (int-lock; D2: admin-only preset until the permissions migration).
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const actor = await getTravelActor();
+  const actor = await getTravelOrPartnerActor();
   if (!actor) return unauthorized();
 
   try {
+    if (actor.role === ROLE_PARTNER) {
+      const view = await partnerRequestDetail(actor.agencyId as string, id);
+      return view ? NextResponse.json(view) : NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const request = await prisma.travelRequest.findUnique({
       where: { id: id },
       include: {
@@ -88,7 +93,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // travel.internal.view permission, not on role or ownership (D2: only
     // ADMIN's preset carries the key; owners/validators need an explicit
     // UserPermission grant).
-    const redactResults = !canViewInternal(actor);
+    const redactResults = !(await canViewInternalFor(actor, request.id));
 
     // Fallback paying-pax for trace rows when a frozen scenario input lacks
     // its own traveler counts (mirrors the PDF renderer's request-level fallback).

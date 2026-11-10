@@ -20,6 +20,8 @@ export const ROLE_ADMIN = "ADMIN";
 export const ROLE_USER = "USER";
 export const ROLE_ADVISOR = "ADVISOR";
 export const ROLE_VALIDATOR = "VALIDATOR";
+/** Agency (B2B partner) login: bound to exactly one Agency, read-only client-facing access. */
+export const ROLE_PARTNER = "PARTNER";
 /** Roles allowed into the /travel area at all. ADMIN doubles as manager. */
 export const TRAVEL_ROLES = [ROLE_ADMIN, ROLE_ADVISOR, ROLE_VALIDATOR] as const;
 /** Roles that may grant a below-floor exception (manager authority). */

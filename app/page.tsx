@@ -36,6 +36,10 @@ export default async function HomePage() {
       redirect("/admin");
     }
 
+    if (user.role === "PARTNER") {
+      redirect("/partner");
+    }
+
     if (canUseInbox(user.role)) {
       redirect("/dashboard");
     }

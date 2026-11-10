@@ -92,10 +92,10 @@ describe("role presets", () => {
     for (const key of PERMISSION_KEYS) expect(ROLE_PRESETS.ADMIN.has(key)).toBe(true);
   });
 
-  it("internal-cost keys are in the ADMIN preset only (D2)", () => {
+  it("internal-cost keys are in the ADMIN and VALIDATOR presets only (D3; the validator is additionally scoped to assigned requests)", () => {
     for (const role of ALL_ROLES) {
       for (const key of Array.from(INTERNAL_PERMISSION_KEYS)) {
-        expect(ROLE_PRESETS[role].has(key), `${role} must not preset ${key}`).toBe(role === "ADMIN");
+        expect(ROLE_PRESETS[role].has(key), `${role} preset ${key}`).toBe(role === "ADMIN" || role === "VALIDATOR");
       }
     }
   });
@@ -122,6 +122,8 @@ describe("role presets", () => {
       "travel.access",
       "travel.client_docs.download",
       "travel.client_docs.send",
+      "travel.internal.download",
+      "travel.internal.view",
       "travel.review",
     ]);
   });

@@ -72,6 +72,8 @@ export class WorkflowError extends Error {
 export interface WorkflowActor {
   id: string;
   role: string;
+  /** PARTNER only: the one agency this actor may see. */
+  agencyId?: string | null;
   name?: string | null;
   email?: string | null;
   /**

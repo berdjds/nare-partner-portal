@@ -48,6 +48,17 @@ export interface NavUser {
 export function navGroupsForUser(user: NavUser | null | undefined): NavGroupModel[] {
   if (!user) return [];
 
+  // PARTNER (agency login): one item, nothing else. Never the staff nav, the
+  // calculator or any admin/travel-internal link.
+  if (user.role === "PARTNER") {
+    return [
+      {
+        label: "Quotations",
+        items: [{ href: "/partner", label: "My quotations", icon: "inbox", match: (p) => p === "/partner" || p.startsWith("/partner/") }],
+      },
+    ];
+  }
+
   const groups: NavGroupModel[] = [];
 
   // --- Inbox ---------------------------------------------------------------

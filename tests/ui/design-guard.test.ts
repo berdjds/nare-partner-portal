@@ -228,14 +228,19 @@ describe("W4 design guards", () => {
       const routes = topLevelAuthenticatedRoutes(listPages());
       // The known route map; a new top-level authenticated route must extend
       // the navigation model (this assertion fails either way it drifts).
-      expect(routes).toEqual(["/admin", "/calculator", "/dashboard", "/travel"]);
+      expect(routes).toEqual(["/admin", "/calculator", "/dashboard", "/partner", "/travel"]);
 
       const hrefs = navGroupsForUser({
         role: "ADMIN",
         permissions: effectivePermissions("ADMIN", []),
       }).flatMap((group) => group.items.map((item) => item.href));
 
-      for (const route of routes) {
+      // /partner is the agency (PARTNER) landing: it is deliberately absent from
+      // the staff navigation and covered by the PARTNER navigation instead.
+      const partnerHrefs = navGroupsForUser({ role: "PARTNER", permissions: effectivePermissions("PARTNER", []) }).flatMap((g) => g.items.map((i) => i.href));
+      expect(routeCoveredByNav("/partner", partnerHrefs)).toBe(true);
+      expect(routeCoveredByNav("/partner", hrefs)).toBe(false);
+      for (const route of routes.filter((r) => r !== "/partner")) {
         expect(
           routeCoveredByNav(route, hrefs),
           `no navigation entry covers ${route} (hrefs: ${hrefs.join(", ")})`,

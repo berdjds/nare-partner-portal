@@ -11,6 +11,8 @@ export default async function CalculatorPage() {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
   if (!user) redirect("/login");
+  // The package calculator is an internal costing tool: never for agency (PARTNER) accounts.
+  if (user.role === "PARTNER") redirect("/partner");
 
   const filePath = join(
     process.cwd(),

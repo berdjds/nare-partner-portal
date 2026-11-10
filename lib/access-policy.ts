@@ -61,6 +61,8 @@ export interface ActiveUser {
   sessionVersion: number;
   /** Effective W2 permissions: role preset + grants − denies, from the current DB row. */
   permissions: ReadonlySet<PermissionKey>;
+  /** PARTNER only: the single Agency this account is bound to (null for every other role). */
+  agencyId: string | null;
 }
 
 /**
@@ -101,6 +103,7 @@ export async function getActiveUserById(
       role: true,
       active: true,
       sessionVersion: true,
+      agencyId: true,
       // Per-user grant/deny overrides (UserPermission), fetched in the same
       // user read via the indexed (userId, key) relation.
       permissions: { select: { key: true, allowed: true } },
@@ -112,7 +115,7 @@ export async function getActiveUserById(
     return null;
   }
   const permissions = effectivePermissions(user.role, user.permissions);
-  return { id: user.id, email: user.email, name: user.name, role: user.role, sessionVersion, permissions };
+  return { id: user.id, email: user.email, name: user.name, role: user.role, sessionVersion, permissions, agencyId: user.agencyId ?? null };
 }
 
 /**

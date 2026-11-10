@@ -296,8 +296,9 @@ describe("stored service-line/stay internals (int-lock: unitRate, overrides, sou
     expect(serialized).not.toContain("Tour Calculator!C58");
   });
 
-  it("ungranted assigned validator (fx.validator2) gets them stripped", async () => {
+  it("an assigned validator whose internal key is explicitly DENIED (fx.validator2) gets them stripped", async () => {
     const { request } = await submittedRequestWithInternalFields(fx.advisor);
+    await prisma.userPermission.create({ data: { userId: fx.validator2.id, key: "travel.internal.view", allowed: false } });
     session(fx.validator2);
     const res = await getDetail(request.id);
     expect(res.status).toBe(200);

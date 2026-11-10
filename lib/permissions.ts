@@ -116,13 +116,28 @@ export const ROLE_PRESETS: Readonly<Record<string, ReadonlySet<PermissionKey>>> 
     "travel.client_docs.download",
     "travel.client_docs.send",
   ]),
+  // D3 (owner, B2B cycle 1): the VALIDATOR preset carries the internal keys, but
+  // every internal read/download additionally requires ADMIN or an ACTIVE
+  // assignment to that very request (lib/travel/internal-access.ts). The keys
+  // alone never open every request to a validator.
   VALIDATOR: new Set<PermissionKey>([
     "travel.access",
     "travel.review",
     "travel.client_docs.download",
     "travel.client_docs.send",
+    "travel.internal.view",
+    "travel.internal.download",
   ]),
+  // Agency login: read its own agency's requests and download issued client
+  // quotations. Nothing else, ever (see PARTNER_CEILING).
+  PARTNER: new Set<PermissionKey>(["travel.access", "travel.client_docs.download"]),
 };
+
+/** Hard ceiling for PARTNER: grants outside this set are ignored. */
+export const PARTNER_CEILING: ReadonlySet<PermissionKey> = new Set<PermissionKey>([
+  "travel.access",
+  "travel.client_docs.download",
+]);
 
 const EMPTY_PRESET: ReadonlySet<PermissionKey> = new Set();export function presetForRole(role: string | null | undefined): ReadonlySet<PermissionKey> {
   if (!role) return EMPTY_PRESET;
@@ -157,6 +172,9 @@ export function effectivePermissions(
   }
   for (const row of rows) {
     if (!row.allowed) effective.delete(row.key as PermissionKey);
+  }
+  if (role === "PARTNER") {
+    for (const key of Array.from(effective)) if (!PARTNER_CEILING.has(key)) effective.delete(key);
   }
   return effective;
 }

@@ -481,7 +481,7 @@ describe("GET /api/permissions/report", () => {
       sorted(["travel.access", "travel.create", "travel.issue", "travel.client_docs.download", "travel.client_docs.send"]),
     );
     expect(sorted(byId.get(repValidator.id)?.proposed ?? [])).toEqual(
-      sorted(["travel.access", "travel.review", "travel.client_docs.download", "travel.client_docs.send"]),
+      sorted(["travel.access", "travel.review", "travel.client_docs.download", "travel.client_docs.send", "travel.internal.view", "travel.internal.download"]),
     );
   });
 });

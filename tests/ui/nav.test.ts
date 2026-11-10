@@ -212,3 +212,10 @@ describe("navGroupsForUser", () => {
     expect(requests.match("/travel/review")).toBe(false);
   });
 });
+
+describe("PARTNER navigation (B2B cycle 1)", () => {
+  it("shows one item and never staff, calculator, admin or internal links", () => {
+    const groups = navGroupsForUser(user("PARTNER", [{ key: "travel.internal.view", allowed: true }]));
+    expect(groups.flatMap((g) => g.items.map((i) => i.href))).toEqual(["/partner"]);
+  });
+});

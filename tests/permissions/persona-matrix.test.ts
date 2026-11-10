@@ -592,20 +592,17 @@ describe("GET /api/travel/documents/[id] — CLIENT document (travel.client_docs
   });
 });
 
-describe("GET /api/travel/documents/[id] — INTERNAL document (travel.internal.download, admin-only preset D2)", () => {
-  it("200 for admin only; travelOnly & noInternal 403 (no internal keys); waOnly 401", async () => {
-    login(admin);
-    const res = await getDoc(internalDoc.id);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toBe("application/pdf");
-
-    // The permission check runs before the record rule, so even the assigned
-    // validator (whose role would otherwise pass the INTERNAL record rule) is
-    // denied without the travel.internal.download key.
-    for (const who of [travelOnly, noInternal]) {
+describe("GET /api/travel/documents/[id] — INTERNAL document (travel.internal.download, D3: ADMIN and the assigned validator)", () => {
+  it("200 for admin and the ASSIGNED validator; the advisor owner 403; waOnly 401", async () => {
+    for (const who of [admin, noInternal]) {
       login(who);
-      expect((await getDoc(internalDoc.id)).status).toBe(403);
+      const res = await getDoc(internalDoc.id);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toBe("application/pdf");
     }
+
+    login(travelOnly);
+    expect((await getDoc(internalDoc.id)).status).toBe(403);
 
     login(waOnly);
     expect((await getDoc(internalDoc.id)).status).toBe(401);

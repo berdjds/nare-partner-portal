@@ -323,19 +323,17 @@ describe("client document send: travel.client_docs.send is separate from inbox a
   });
 });
 
-describe("internal document download: travel.internal.download is admin-only by default (D2)", () => {
-  it("VALIDATOR default → 403; granted → 200; ADVISOR → 403; ADMIN → 200", async () => {
-    expect(presetForRole("VALIDATOR").has("travel.internal.download")).toBe(false);
+describe("internal document download: ADMIN and the request's assigned validator only (D3)", () => {
+  it("unassigned VALIDATOR → 403 even with the key; assigned → 200; ADVISOR → 403; ADMIN → 200", async () => {
+    expect(presetForRole("VALIDATOR").has("travel.internal.download")).toBe(true);
 
-    const { version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
+    const { request, version } = await workflow.createRequest(actorOf(fx.advisor), createRequestInput(fx.agency.id));
     const internal = await mkDoc(version.id, "INTERNAL", "perm-internal", tmpPdf("internal"));
 
     session(fx.validator);
-    expect((await getDoc(internal.id)).status).toBe(403);
+    expect((await getDoc(internal.id)).status).toBe(403); // key held, but not assigned to this request
 
-    await prisma.userPermission.create({
-      data: { userId: fx.validator.id, key: "travel.internal.download", allowed: true },
-    });
+    await workflow.assignValidator(actorOf(fx.advisor), request.id, { validatorId: fx.validator.id });
     session(fx.validator);
     expect((await getDoc(internal.id)).status).toBe(200);
 

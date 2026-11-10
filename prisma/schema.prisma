@@ -12,7 +12,10 @@ model User {
   email     String   @unique
   name      String?
   password  String
-  role      String   @default("USER") // ADMIN | USER | ADVISOR | VALIDATOR
+  role      String   @default("USER") // ADMIN | USER | ADVISOR | VALIDATOR | PARTNER
+  // B2B cycle 1 (additive, nullable, no FK on purpose — same no-FK precedent as accountId):
+  // set only for role PARTNER; a partner belongs to exactly one Agency.
+  agencyId  String?
   active    Boolean  @default(true)
   sessionVersion Int @default(0) // W1b session version; bump with { increment: 1 } to revoke all issued tokens
   phone     String? // WhatsApp notification destination (international format, no +)
@@ -28,6 +31,8 @@ model User {
   validationAssignments    ValidationAssignment[] @relation("AssignmentValidator")
   reviewDecisions          ReviewDecision[]
   notificationDeliveries   NotificationDelivery[]
+
+  @@index([agencyId])
 }
 
 // W3: one row per WhatsApp business account (marhaba = existing account,
