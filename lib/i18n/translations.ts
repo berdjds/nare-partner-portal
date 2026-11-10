@@ -170,8 +170,7 @@ export async function reject(actor: Actor, translationId: string, reason?: strin
 // ---- the missing-translation check
 export interface MissingItem { entity: string; entityId: string; field: string; label: string; english: string }
 
-export async function missingTranslations(locale: string, limit = 500): Promise<MissingItem[]> {
-  const loc = checkKey({ entity: "ServiceProduct", entityId: "", field: "name", locale });
+async function candidatesFor(limit: number): Promise<MissingItem[]> {
   const candidates: MissingItem[] = [];
   for (const p of await prisma.serviceProduct.findMany({ where: { active: true }, select: { id: true, name: true, details: true }, take: limit })) {
     candidates.push({ entity: "ServiceProduct", entityId: p.id, field: "name", label: p.name, english: p.name });
@@ -185,7 +184,31 @@ export async function missingTranslations(locale: string, limit = 500): Promise<
       }
     } catch { /* malformed template JSON is reported elsewhere */ }
   }
+  return candidates;
+}
+
+export async function missingTranslations(locale: string, limit = 500): Promise<MissingItem[]> {
+  const loc = checkKey({ entity: "ServiceProduct", entityId: "", field: "name", locale });
+  const candidates = await candidatesFor(limit);
   const approved = await prisma.translation.findMany({ where: { locale: loc, status: "APPROVED" }, select: { entity: true, entityId: true, field: true } });
   const have = new Set(approved.map((a) => `${a.entity}|${a.entityId}|${a.field}`));
   return candidates.filter((c) => !have.has(`${c.entity}|${c.entityId}|${c.field}`)).slice(0, limit);
+}
+
+export type ItemState = "missing" | "draft" | "approved" | "stale";
+export interface OverviewItem extends MissingItem { state: ItemState; hasAiDraft: boolean }
+
+/** Every translatable item with its state for a locale (drives the admin screen). */
+export async function overview(locale: string, limit = 500): Promise<OverviewItem[]> {
+  const loc = checkKey({ entity: "ServiceProduct", entityId: "", field: "name", locale });
+  const candidates = await candidatesFor(limit);
+  const rows = await prisma.translation.findMany({ where: { locale: loc, status: { in: ["APPROVED", "DRAFT"] } }, select: { entity: true, entityId: true, field: true, status: true, sourceHash: true, source: true } });
+  const by = new Map<string, typeof rows>();
+  for (const r of rows) { const k = `${r.entity}|${r.entityId}|${r.field}`; by.set(k, [...(by.get(k) ?? []), r]); }
+  return candidates.map((c) => {
+    const rs = by.get(`${c.entity}|${c.entityId}|${c.field}`) ?? [];
+    const ap = rs.find((r) => r.status === "APPROVED"), dr = rs.find((r) => r.status === "DRAFT");
+    const state: ItemState = ap ? (ap.sourceHash !== sha(c.english) ? "stale" : "approved") : dr ? "draft" : "missing";
+    return { ...c, state, hasAiDraft: dr?.source === "AI" };
+  });
 }
