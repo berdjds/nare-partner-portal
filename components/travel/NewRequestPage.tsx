@@ -13,14 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { badgeStatusTextStyles } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { nightsBetween, formatDisplayDateRange } from "@/lib/travel/engine/dates";
-import { EMPTY_NEW_REQUEST, firstErrorId, hasErrors, validateNewRequest, type FieldErrors, type NewRequestForm } from "@/lib/travel/new-request-form";
+import { EMPTY_NEW_REQUEST, draftKey, firstErrorId, hasErrors, validateNewRequest, type FieldErrors, type NewRequestForm } from "@/lib/travel/new-request-form";
 import { PageHeader } from "./TravelShell";
 import DateField from "./DateField";
 import TravelerSetupEditor from "./TravelerSetupEditor";
 import { apiError } from "./utils";
 import type { Agency, TemplateView, TravelerSetupView } from "./types";
 
-const DRAFT_KEY = "travel:new-request:draft:v1";
 const STEPS = [
   { id: "nr-sec-context", label: "Agency" },
   { id: "nr-sec-trip", label: "Dates & template" },
@@ -32,17 +31,20 @@ const STEPS = [
 /** Error text under a field, announced to assistive technology and linked from the control. */
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
-  return <p id={`${id}-error`} role="alert" className={`mt-1 text-xs font-medium ${badgeStatusTextStyles.danger}`}>{message}</p>;
+  return <p id={`${id}-error`} className={`mt-1 text-xs font-medium ${badgeStatusTextStyles.danger}`}>{message}</p>;
 }
 const describedBy = (id: string, message?: string) => (message ? { "aria-invalid": true as const, "aria-describedby": `${id}-error` } : {});
 
-export default function NewRequestPage() {
+export default function NewRequestPage({ userId }: { userId: string }) {
   const { toast } = useToast();
+  const DRAFT_KEY = draftKey(userId);
+  const leaving = useRef(false); // set while we navigate away on purpose, so the unload prompt stays quiet
   const [form, setForm] = useState<NewRequestForm>({ ...EMPTY_NEW_REQUEST });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [templates, setTemplates] = useState<TemplateView[] | null>(null);
+  const [templatesFailed, setTemplatesFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [restored, setRestored] = useState(false);
@@ -66,14 +68,14 @@ export default function NewRequestPage() {
   }, [form, dirty]);
   useEffect(() => {
     if (!dirty || submitting) return;
-    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    const warn = (e: BeforeUnloadEvent) => { if (leaving.current) return; e.preventDefault(); e.returnValue = ""; };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty, submitting]);
 
   useEffect(() => {
     axios.get("/api/travel/agencies").then((r) => setAgencies(r.data)).catch(() => toast("Failed to load agencies", "error"));
-    axios.get("/api/travel/templates").then((r) => setTemplates(r.data)).catch(() => toast("Failed to load templates", "error"));
+    axios.get("/api/travel/templates").then((r) => setTemplates(r.data)).catch(() => { setTemplatesFailed(true); toast("Failed to load templates", "error"); });
   }, [toast]);
 
   const update = useCallback((patch: Partial<NewRequestForm>) => {
@@ -99,11 +101,16 @@ export default function NewRequestPage() {
   // A date change can invalidate the chosen template version: drop it visibly, never silently instantiate a mismatch.
   const [templateDropped, setTemplateDropped] = useState(false);
   useEffect(() => {
-    if (form.templateVersionId && templates && !matchingTemplates.some((m) => m.version.id === form.templateVersionId)) {
+    // Only judge the fit once the trip length is known: a half-entered date range must not drop the choice.
+    if (form.templateVersionId && templates && tripNights !== null && !matchingTemplates.some((m) => m.version.id === form.templateVersionId)) {
       setForm((f) => ({ ...f, templateVersionId: "" }));
       setTemplateDropped(true);
     }
-  }, [form.templateVersionId, matchingTemplates, templates]);
+    if (form.templateVersionId && templatesFailed) {
+      setForm((f) => ({ ...f, templateVersionId: "" }));
+      setTemplateDropped(true);
+    }
+  }, [form.templateVersionId, matchingTemplates, templates, templatesFailed, tripNights]);
 
   const chosen = matchingTemplates.find((m) => m.version.id === form.templateVersionId);
   const agency = agencies.find((a) => a.id === form.agencyId);
@@ -118,6 +125,7 @@ export default function NewRequestPage() {
   function leave() {
     if (dirty && !window.confirm("Discard this request? What you entered will be lost.")) return;
     try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+    leaving.current = true;
     setDirty(false);
     window.location.href = "/travel";
   }
@@ -149,9 +157,12 @@ export default function NewRequestPage() {
         ? await axios.post(`/api/travel/templates/${chosen.template.id}/instantiate`, { ...payload, templateVersionId: chosen.version.id })
         : await axios.post("/api/travel/requests", payload);
       try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+      leaving.current = true;
       setDirty(false);
       toast(`Created ${res.data.request.packageCode}`, "success");
-      window.location.href = `/travel/requests/${res.data.request.id}`;
+      // A failed rule application is reported on the request page, never swallowed.
+      const rulesFailed = Boolean(res.data.recalculation?.error);
+      window.location.href = `/travel/requests/${res.data.request.id}${rulesFailed ? "?templateRules=failed" : ""}`;
       // inFlight stays true: the page is navigating away, a second submit must not pass.
     } catch (err) {
       toast(apiError(err, "Failed to create request"), "error");
@@ -209,12 +220,12 @@ export default function NewRequestPage() {
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="nr-start">Start date</Label>
-              <DateField id="nr-start" value={form.startDate} onChange={(iso) => { update({ startDate: iso }); touch("startDate"); }} />
+              <DateField id="nr-start" value={form.startDate} invalid={Boolean(shown.startDate)} describedBy={shown.startDate ? "nr-start-error" : undefined} onChange={(iso) => { update({ startDate: iso }); touch("startDate"); }} />
               <FieldError id="nr-start" message={shown.startDate} />
             </div>
             <div>
               <Label htmlFor="nr-end">End date</Label>
-              <DateField id="nr-end" value={form.endDate} onChange={(iso) => { update({ endDate: iso }); touch("endDate"); }} min={form.startDate || undefined} />
+              <DateField id="nr-end" value={form.endDate} invalid={Boolean(shown.endDate)} describedBy={shown.endDate ? "nr-end-error" : undefined} onChange={(iso) => { update({ endDate: iso }); touch("endDate"); }} min={form.startDate || undefined} />
               <FieldError id="nr-end" message={shown.endDate} />
             </div>
             {templates !== null && (
@@ -229,7 +240,7 @@ export default function NewRequestPage() {
                 </Select>
                 {tripNights !== null && matchingTemplates.length === 0 && <p className="mt-1 text-xs text-muted-foreground">No active template covers {tripNights} nights.</p>}
                 {tripNights === null && matchingTemplates.length > 0 && <p className="mt-1 text-xs text-muted-foreground">The list is filtered to the trip length once both dates are set.</p>}
-                {templateDropped && <p role="status" className="mt-1 text-xs font-medium">The template was cleared because it no longer fits the new dates.</p>}
+                {templateDropped && <p role="status" className="mt-1 text-xs font-medium">The selected template was cleared ({templatesFailed ? "templates could not be loaded" : "it no longer fits the dates"}). The request will be created without it.</p>}
               </div>
             )}
             <div className="sm:col-span-2">
@@ -243,7 +254,7 @@ export default function NewRequestPage() {
         <Card id="nr-sec-travelers">
           <CardHeader><CardTitle>3. Travellers</CardTitle><CardDescription>Adults and children with each child&apos;s age, then paying, complimentary, leaders and staff.</CardDescription></CardHeader>
           <CardContent>
-            <div id="nr-travelers" tabIndex={-1}>
+            <div id="nr-travelers" role="group" aria-label="Traveller details" aria-describedby={shown.travelers ? "nr-travelers-error" : undefined} tabIndex={-1}>
               <TravelerSetupEditor value={form.travelers as TravelerSetupView} onChange={(t) => { update({ travelers: t as NewRequestForm["travelers"] }); touch("travelers"); }} />
             </div>
             <FieldError id="nr-travelers" message={shown.travelers} />
@@ -256,7 +267,7 @@ export default function NewRequestPage() {
             <div>
               <Label htmlFor="nr-client-notes">Client messages and notes</Label>
               <Textarea id="nr-client-notes" rows={3} value={form.clientNotes} onChange={(e) => update({ clientNotes: e.target.value })} onBlur={() => touch("clientNotes")} {...describedBy("nr-client-notes", shown.clientNotes)} />
-              <p className="mt-1 text-xs text-muted-foreground">Visible to the agency on its quotation request.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Shared with the agency on this request.</p>
               <FieldError id="nr-client-notes" message={shown.clientNotes} />
             </div>
             <div>

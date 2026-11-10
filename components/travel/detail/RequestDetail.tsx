@@ -301,7 +301,7 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
         )}
       </Card>
 
-      <TemplateReviewNotice lines={version.serviceLines} />
+      <TemplateReviewNotice lines={version.serviceLines} failed={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("templateRules") === "failed"} requestId={detail.id} revision={detail.revision} onRetried={load} />
 
       <QuoteSummaryBar ctx={ctx} />
 

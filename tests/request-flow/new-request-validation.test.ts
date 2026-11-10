@@ -19,9 +19,8 @@ describe("validateNewRequest", () => {
     expect(validateNewRequest(ok({ endDate: "2026-10-02" })).endDate).toBeUndefined();
   });
   it("rejects malformed dates", () => expect(validateNewRequest(ok({ startDate: "01/10/2026" })).startDate).toBeTruthy());
-  it("needs at least one traveller, child ages for every child, infants within children", () => {
+  it("child ages for every child, infants within children", () => {
     const t = (o: object) => ({ ...ok().travelers, ...o });
-    expect(validateNewRequest(ok({ travelers: t({ adults: 0, children: 0, paying: 0 }) })).travelers).toMatch(/at least one/i);
     expect(validateNewRequest(ok({ travelers: t({ children: 2, childAges: [5] }) })).travelers).toMatch(/age/i);
     expect(validateNewRequest(ok({ travelers: t({ children: 1, childAges: [5], infants: 2 }) })).travelers).toMatch(/infants/i);
     expect(validateNewRequest(ok({ travelers: t({ adults: -1 }) })).travelers).toBeTruthy();
@@ -38,5 +37,21 @@ describe("validateNewRequest", () => {
   it("firstErrorId points at the first invalid field in page order", () => {
     expect(firstErrorId(validateNewRequest(ok({ endDate: "", title: "" })))).toBe("nr-title");
     expect(firstErrorId({})).toBeNull();
+  });
+});
+
+import { draftKey, clearAllDrafts, DRAFT_PREFIX } from "@/lib/travel/new-request-form";
+import { vi } from "vitest";
+describe("draft storage", () => {
+  it("is scoped per user and clearAllDrafts removes every draft but nothing else", () => {
+    const store = new Map<string, string>([[draftKey("u1"), "a"], [draftKey("u2"), "b"], ["other", "keep"]]);
+    vi.stubGlobal("sessionStorage", { removeItem: (k: string) => store.delete(k), getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), get length() { return store.size; }, key: (i: number) => Array.from(store.keys())[i] ?? null, clear: () => store.clear() });
+    // Object.keys(sessionStorage) is how the helper enumerates; mimic a real Storage
+    vi.stubGlobal("sessionStorage", Object.assign(Object.create(null), Object.fromEntries(store), { removeItem: (k: string) => { store.delete(k); delete (globalThis as any).sessionStorage[k]; } }));
+    expect(draftKey("u1")).not.toBe(draftKey("u2"));
+    expect(draftKey("u1").startsWith(DRAFT_PREFIX)).toBe(true);
+    clearAllDrafts();
+    expect(Array.from(store.keys())).toEqual(["other"]);
+    vi.unstubAllGlobals();
   });
 });

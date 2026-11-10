@@ -12,7 +12,7 @@ Branch `feat/portal-b2b-cycle-1`. Not merged, pushed, deployed or migrated.
 
 ## Evidence
 * Tests: see the final report; new files `tests/request-flow/*`.
-* Chromium (isolated trial-mode server, throwaway database, no WhatsApp, no production data): `evidence/phase3/browser-results.json`, 37/37 checks at 1366, 820 and 390 px, screenshots in `evidence/phase3/`. `browser-phase3.mjs` and `seed-phase3.ts` reproduce it. The last one-line colour change to the error-summary box (token classes instead of raw palette classes, required by the design guard test) was not re-run in the browser.
+* Chromium (isolated trial-mode server, throwaway database, no WhatsApp, no production data): `evidence/phase3/browser-results.json`, 37/37 checks at 1366, 820 and 390 px, screenshots in `evidence/phase3/`. `browser-phase3.mjs` and `seed-phase3.ts` reproduce it. After the independent review the run was repeated: 43/43 checks (adds Enter-key submit on an invalid form, every invalid field linked and aria-invalid, touch target size, real cancel/draft-clear assertions).
 
 ## Migration and rollback
 Additive nullable column `TravelRequest.clientNotes`. Rolling the code back ignores it.
@@ -22,3 +22,9 @@ Additive nullable column `TravelRequest.clientNotes`. Rolling the code back igno
 * The pre-creation page shows no price (the sell-side figure appears after creation, on the detail page).
 * Translations and company/contact settings are Phase 4; visual redesign and favicon Phase 5. The new page uses the existing shell and tokens.
 * The worktree's installed packages were stale (Next 14.0.4); `npm install --ignore-scripts` aligned only this worktree's `node_modules` with `package.json` (no tracked file changed). The shared checkout still has the stale install.
+
+## Independent review (read-only) and what changed
+No high finding. Fixed: **M1** a failed rule application after instantiate is logged on the server, the client opens the request with a `templateRules=failed` banner and an "Apply template rules" retry (tested through the route with the recalculation forced to fail; only an error code reaches the client); **M3** the draft is stored per user and cleared on sign-out; **L1** no double leave prompt; **L2** a half-entered date range no longer clears the template and a template list that fails to load clears the choice visibly; **L3** date fields and the traveller group are linked to their errors, one summary alert only; **L4** touch targets are 44 px on phones; **L5** the client-only "at least one traveller" rule was removed; the partner page now shows the agency's own messages; the hint reads "Shared with the agency on this request."
+
+Open owner decision (from the review, M2): `clientNotes` are visible to the agency through the API as soon as the request exists, including while it is still a DRAFT. Decide whether draft-stage client messages should be hidden until the quotation is issued. Not changed, because it alters what the agency sees.
+Remaining low items: source-string UI tests cannot prove behaviour (the browser run covers it); no component-level unit tests exist for draft restore.

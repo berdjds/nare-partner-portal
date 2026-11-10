@@ -42,13 +42,22 @@ export function validateNewRequest(f: NewRequestForm): FieldErrors {
   const t = f.travelers;
   const nums = [t.adults, t.children, t.infants, t.paying, t.complimentary, t.leaders, t.staff];
   if (nums.some((n) => !Number.isInteger(n) || n < 0)) e.travelers = "Traveller counts must be whole numbers, zero or more.";
-  else if (t.adults + t.children + t.leaders + t.staff + t.complimentary === 0) e.travelers = "Add at least one traveller.";
   else if (t.childAges.length !== t.children) e.travelers = "Enter an age for every child.";
   else if (t.infants > t.children) e.travelers = "Infants cannot outnumber children.";
 
   if (f.clientNotes.length > MAX_TEXT) e.clientNotes = "Keep client messages under 4000 characters.";
   if (f.notes.length > MAX_TEXT) e.notes = "Keep internal notes under 4000 characters.";
   return e;
+}
+
+/** Per-user key: a draft restored in a shared browser tab can only ever be the same person's. */
+export const draftKey = (userId: string) => `travel:new-request:draft:v2:${userId}`;
+export const DRAFT_PREFIX = "travel:new-request:draft:";
+/** Removes every new-request draft held by this tab (called on sign-out). Never throws. */
+export function clearAllDrafts(): void {
+  try {
+    for (const k of Object.keys(sessionStorage)) if (k.startsWith(DRAFT_PREFIX)) sessionStorage.removeItem(k);
+  } catch { /* storage unavailable */ }
 }
 
 export const hasErrors = (e: FieldErrors) => Object.keys(e).length > 0;

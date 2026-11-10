@@ -17,5 +17,5 @@ export default async function NewTravelRequestRoute() {
   if (!hasPermission(user, "travel.access")) redirect("/dashboard");
   if (!(await canAccessTravel(user.id, user.role))) redirect("/dashboard");
   if (!(user.role === "ADMIN" || user.role === "ADVISOR") || !hasPermission(user, "travel.create")) redirect("/travel");
-  return <NewRequestPage />;
+  return <NewRequestPage userId={user.id} />;
 }

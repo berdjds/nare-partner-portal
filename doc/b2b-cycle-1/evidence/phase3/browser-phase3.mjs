@@ -47,9 +47,15 @@ for (const [vname, size] of Object.entries(VIEWS)) {
   // inline validation + error summary + focus
   await page.click('button[type="submit"]');
   await page.waitForSelector('[role="alert"]');
-  check(`${vname}: error summary and field errors appear`, (await page.locator('[role="alert"]').count()) >= 2);
+  check(`${vname}: one error summary alert and a message under each invalid field`, (await page.locator('form [role="alert"], main [role="alert"], [data-nr-summary]').count()) >= 1 && (await page.locator("p[role=alert]").count()) === 0 && (await page.locator("#nr-agency-error, #nr-title-error, #nr-start-error, #nr-end-error").count()) === 4);
   check(`${vname}: focus moves to the first invalid field`, (await page.evaluate(() => document.activeElement?.id)) === "nr-agency");
-  check(`${vname}: invalid control exposes aria-invalid`, (await page.locator("#nr-title[aria-invalid='true']").count()) === 1);
+  check(`${vname}: every invalid control exposes aria-invalid and is linked to its message`, (await page.locator("#nr-agency[aria-invalid='true'][aria-describedby='nr-agency-error'], #nr-title[aria-invalid='true'][aria-describedby='nr-title-error'], #nr-start[aria-invalid='true'][aria-describedby='nr-start-error'], #nr-end[aria-invalid='true'][aria-describedby='nr-end-error']").count()) === 4);
+  const enterBefore = await page.evaluate(async () => (await (await fetch("/api/travel/requests")).json()).length);
+  await page.focus("#nr-title"); await page.keyboard.press("Enter"); await page.waitForTimeout(600);
+  const enterAfter = await page.evaluate(async () => (await (await fetch("/api/travel/requests")).json()).length);
+  check(`${vname}: Enter on an invalid form creates nothing`, enterAfter === enterBefore && page.url().endsWith("/travel/requests/new"));
+  const target = await page.evaluate(() => { const b = document.querySelector('button[aria-label="Increase adults"]'); const r = b.getBoundingClientRect(); return Math.min(r.width, r.height); });
+  check(`${vname}: stepper touch target >= ${vname === "phone" ? 44 : 28}px`, target >= (vname === "phone" ? 44 : 28), `size=${target}`);
   await page.screenshot({ path: `${out}/${vname}-new-errors.png`, fullPage: true });
   if (vname === "desktop") await axe(page, "new request (errors shown)");
 
@@ -96,7 +102,7 @@ for (const [vname, size] of Object.entries(VIEWS)) {
     page.once("dialog", (d) => d.accept());
     await page.getByRole("link", { name: "Cancel" }).click();
     await page.waitForURL(/\/travel$/, { timeout: 15000 });
-    check("desktop: cancel confirmed returns to the list", true);
+    check("desktop: cancel confirmed returns to the list and clears the draft", page.url().endsWith("/travel") && (await page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith("travel:new-request:draft:")).length)) === 0);
     check("desktop: list has a New request link (no modal)", (await page.locator('a[href="/travel/requests/new"]').count()) > 0);
     await page.screenshot({ path: `${out}/${vname}-list.png`, fullPage: true });
   } else {

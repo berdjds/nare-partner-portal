@@ -207,7 +207,7 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
             <div>
               <Label htmlFor="ov-client-notes">Client messages and notes</Label>
               <Textarea id="ov-client-notes" rows={2} value={form.clientNotes} onChange={(e) => setForm({ ...form, clientNotes: e.target.value })} />
-              <p className="mt-1 text-xs text-muted-foreground">Visible to the agency on its quotation request.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Shared with the agency on this request.</p>
             </div>
             <div>
               <Label htmlFor="ov-internal-notes">Internal notes (staff only)</Label>

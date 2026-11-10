@@ -1,5 +1,5 @@
 {
-  "passed": 37,
+  "passed": 43,
   "failed": 0,
   "results": [
     {
@@ -18,7 +18,7 @@
       "detail": "overflow=0"
     },
     {
-      "name": "desktop: error summary and field errors appear",
+      "name": "desktop: one error summary alert and a message under each invalid field",
       "ok": true,
       "detail": ""
     },
@@ -28,9 +28,19 @@
       "detail": ""
     },
     {
-      "name": "desktop: invalid control exposes aria-invalid",
+      "name": "desktop: every invalid control exposes aria-invalid and is linked to its message",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "desktop: Enter on an invalid form creates nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: stepper touch target >= 28px",
+      "ok": true,
+      "detail": "size=32"
     },
     {
       "name": "axe new request (errors shown): no serious/critical violations",
@@ -50,7 +60,7 @@
     {
       "name": "desktop: double click creates exactly one request",
       "ok": true,
-      "detail": "before=4 after=5"
+      "detail": "before=6 after=7"
     },
     {
       "name": "desktop: detail page lists template review items (departure day / minimum / not applicable)",
@@ -78,7 +88,7 @@
       "detail": ""
     },
     {
-      "name": "desktop: cancel confirmed returns to the list",
+      "name": "desktop: cancel confirmed returns to the list and clears the draft",
       "ok": true,
       "detail": ""
     },
@@ -103,7 +113,7 @@
       "detail": "overflow=0"
     },
     {
-      "name": "tablet: error summary and field errors appear",
+      "name": "tablet: one error summary alert and a message under each invalid field",
       "ok": true,
       "detail": ""
     },
@@ -113,9 +123,19 @@
       "detail": ""
     },
     {
-      "name": "tablet: invalid control exposes aria-invalid",
+      "name": "tablet: every invalid control exposes aria-invalid and is linked to its message",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "tablet: Enter on an invalid form creates nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: stepper touch target >= 28px",
+      "ok": true,
+      "detail": "size=32"
     },
     {
       "name": "tablet: entered values survive a reload",
@@ -143,7 +163,7 @@
       "detail": "overflow=0"
     },
     {
-      "name": "phone: error summary and field errors appear",
+      "name": "phone: one error summary alert and a message under each invalid field",
       "ok": true,
       "detail": ""
     },
@@ -153,9 +173,19 @@
       "detail": ""
     },
     {
-      "name": "phone: invalid control exposes aria-invalid",
+      "name": "phone: every invalid control exposes aria-invalid and is linked to its message",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "phone: Enter on an invalid form creates nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: stepper touch target >= 44px",
+      "ok": true,
+      "detail": "size=44"
     },
     {
       "name": "phone: entered values survive a reload",

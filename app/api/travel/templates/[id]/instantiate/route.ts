@@ -155,6 +155,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const fresh = await prisma.travelRequest.findUnique({ where: { id: request.id }, select: { revision: true } });
       if (fresh) recalculation = await recalculateFromTemplate(actor, request.id, { expectedRevision: fresh.revision });
     } catch (err) {
+      console.error("[API /travel/templates/instantiate] template rules were not applied:", err instanceof WorkflowError ? err.code : err);
       recalculation = { error: err instanceof WorkflowError ? err.code : "RECALC_FAILED" };
     }
 

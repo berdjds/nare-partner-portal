@@ -4,6 +4,7 @@ import type { JSX } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { clearAllDrafts } from "@/lib/travel/new-request-form";
 import {
   Bell,
   Building2,
@@ -122,7 +123,7 @@ function UserCard({ role, userName, userEmail, version }: SidebarProps) {
           size="icon"
           className="h-8 w-8 shrink-0 text-muted-foreground"
           aria-label="Sign out"
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => { clearAllDrafts(); signOut({ callbackUrl: "/login" }); }}
         >
           <LogOut className="h-4 w-4" />
         </Button>
@@ -137,6 +138,7 @@ function UserCard({ role, userName, userEmail, version }: SidebarProps) {
           } catch {
             // Best effort: the local sign-out below still ends this session.
           }
+          clearAllDrafts();
           signOut({ callbackUrl: "/login" });
         }}
       >

@@ -44,6 +44,7 @@ export default async function PartnerPage() {
                   <span className="text-xs text-muted-foreground">{r.packageCode}</span>
                 </div>
                 <p className="text-sm text-muted-foreground">{r.startDate} to {r.endDate} · {r.status.replaceAll("_", " ").toLowerCase()}</p>
+                {details[i]?.clientNotes ? <p className="mt-1 whitespace-pre-wrap text-sm"><span className="font-medium">Your messages and notes: </span>{details[i]?.clientNotes}</p> : null}
                 {canDownload && docs.length > 0 ? (
                   <ul className="mt-2 flex flex-wrap gap-2">
                     {docs.map((d) => (

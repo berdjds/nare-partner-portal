@@ -129,11 +129,11 @@ function StepperRow({ label, count, onStep }: { label: string; count: number; on
     <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-1.5">
       <span className="text-sm">{label}</span>
       <div className="flex items-center gap-2">
-        <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0" aria-label={`Decrease ${label.toLowerCase()}`} onClick={() => onStep(-1)}>
+        <Button type="button" variant="outline" size="sm" className="h-11 w-11 p-0 sm:h-8 sm:w-8" aria-label={`Decrease ${label.toLowerCase()}`} onClick={() => onStep(-1)}>
           −
         </Button>
         <span className="w-6 text-center text-sm tabular-nums">{count}</span>
-        <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0" aria-label={`Increase ${label.toLowerCase()}`} onClick={() => onStep(1)}>
+        <Button type="button" variant="outline" size="sm" className="h-11 w-11 p-0 sm:h-8 sm:w-8" aria-label={`Increase ${label.toLowerCase()}`} onClick={() => onStep(1)}>
           +
         </Button>
       </div>
