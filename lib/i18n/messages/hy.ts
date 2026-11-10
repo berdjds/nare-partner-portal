@@ -34,6 +34,7 @@ export const hy: Record<MessageKey, string> = {
   "footer.terms": "Օգտագործման պայմաններ",
   "footer.privacy": "Գաղտնիություն",
   "footer.legalNav": "Իրավական տեղեկություններ",
+  "footer.map": "Դիտել քարտեզի վրա",
   "footer.since": "Հիմնադրվել է {year} թվականին",
   "footer.rights": "© {year} {name}։ Բոլոր իրավունքները պաշտպանված են։ Մշակող՝ Hayk FZC",
   "partner.title": "Իմ առաջարկները",

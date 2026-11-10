@@ -73,7 +73,9 @@ export default function ContactAdmin() {
   }
   const draft = rows.find((r) => r.status === "DRAFT");
   const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
-  const preview = mapEmbedUrl(form.lat !== "" && form.lng !== "" ? { lat: Number(form.lat), lng: Number(form.lng) } : undefined);
+  const latN = form.lat === "" || form.lat === undefined ? NaN : Number(form.lat);
+  const lngN = form.lng === "" || form.lng === undefined ? NaN : Number(form.lng);
+  const preview = Number.isFinite(latN) && Number.isFinite(lngN) && Math.abs(latN) <= 90 && Math.abs(lngN) <= 180 ? mapEmbedUrl({ lat: latN, lng: lngN }) : null;
   const grp = (g: Group, children: React.ReactNode) => (
     <fieldset className="rounded-lg border p-4"><legend className="px-1 text-sm font-semibold">{GROUP_LABEL[g]}</legend>
       {scope === "portal" && <label className="mb-3 flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4" checked={override[g]} onChange={(e) => setOverride((o) => ({ ...o, [g]: e.target.checked }))} /> Override the global value (otherwise inherited)</label>}

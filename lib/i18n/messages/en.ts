@@ -34,6 +34,7 @@ export const en = {
   "footer.terms": "Terms",
   "footer.privacy": "Privacy",
   "footer.legalNav": "Legal",
+  "footer.map": "View on map",
   "footer.since": "Founded in {year}",
   "footer.rights": "© {year} {name}. All rights reserved. Developed by Hayk FZC",
   "partner.title": "My quotations",

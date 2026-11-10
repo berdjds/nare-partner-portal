@@ -55,6 +55,13 @@ export function PublicFooter() {
             </p>
           ))}
           {contact.hours && <p className="text-muted-foreground">{contact.hours}</p>}
+          {contact.mapLinkUrl && (
+            <p>
+              <a href={contact.mapLinkUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground underline-offset-4 hover:text-foreground">
+                {t("footer.map")}
+              </a>
+            </p>
+          )}
         </div>
 
         <nav aria-label={t("footer.legalNav")} className="flex flex-col gap-2 text-sm">

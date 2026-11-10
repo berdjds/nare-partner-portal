@@ -39,6 +39,16 @@ export function ContactBlock() {
             </p>
           )}
         </div>
+        {contact.mapEmbedUrl && (
+          <iframe
+            title="Map"
+            src={contact.mapEmbedUrl}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin"
+            className="mx-auto mt-8 h-64 w-full max-w-2xl rounded-lg border border-border"
+          />
+        )}
       </div>
     </section>
   );

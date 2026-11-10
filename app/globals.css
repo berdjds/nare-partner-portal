@@ -65,3 +65,6 @@
     @apply accent-primary;
   }
 }
+
+/* Armenian text: put Noto Sans Armenian first so glyphs never fall back to tofu or a mismatched face. */
+html:lang(hy) body, html:lang(hy) button, html:lang(hy) input, html:lang(hy) textarea, html:lang(hy) select { font-family: var(--font-armenian), var(--font-geist-sans), system-ui, sans-serif; }
