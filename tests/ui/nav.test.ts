@@ -69,14 +69,13 @@ describe("navGroupsForUser", () => {
     ]);
   });
 
-  it("USER sees Inbox (Chat dashboard) + Tools only", () => {
+  it("USER sees Inbox (Chat dashboard) only: the calculator needs travel.internal.view", () => {
     // USER preset holds whatsapp.inbox.view (lib/permissions.ts ROLE_PRESETS),
     // satisfying the app/dashboard/page.tsx per-account view-permission guard;
     // USER is not a travel role and not ADMIN, so no Travel/Admin groups.
     const groups = navGroupsForUser(user("USER"));
-    expect(groupLabels(groups)).toEqual(["Inbox", "Tools"]);
+    expect(groupLabels(groups)).toEqual(["Inbox"]);
     expect(itemLabels(groups, "Inbox")).toEqual(["Chat dashboard"]);
-    expect(itemLabels(groups, "Tools")).toEqual(["Calculator"]);
   });
 
   it("USER with nare-only inbox access (marhaba view denied) still sees the Inbox link", () => {
@@ -93,7 +92,7 @@ describe("navGroupsForUser", () => {
         { key: "whatsapp.nare.view", allowed: true },
       ]),
     );
-    expect(groupLabels(groups)).toEqual(["Inbox", "Tools"]);
+    expect(groupLabels(groups)).toEqual(["Inbox"]);
     expect(itemLabels(groups, "Inbox")).toEqual(["Chat dashboard"]);
   });
 
@@ -114,16 +113,16 @@ describe("navGroupsForUser", () => {
     const groups = navGroupsForUser(
       user("USER", [{ key: "whatsapp.inbox.view", allowed: false }]),
     );
-    expect(groupLabels(groups)).toEqual(["Tools"]);
+    expect(groupLabels(groups)).toEqual([]);
   });
 
-  it("ADVISOR sees Travel [Requests, Review queue, Templates, Notifications] + Tools", () => {
+  it("ADVISOR sees Travel [Requests, Review queue, Templates, Notifications] (no Tools: the calculator needs the internal key)", () => {
     // ADVISOR preset holds travel.access (app/travel/page.tsx and
     // app/travel/review/page.tsx guards) and is a travel role
     // (app/travel/templates/page.tsx, app/travel/notifications/page.tsx);
     // the ADMIN-only pages (catalog/agencies/settings) stay hidden.
     const groups = navGroupsForUser(user("ADVISOR"));
-    expect(groupLabels(groups)).toEqual(["Travel", "Tools"]);
+    expect(groupLabels(groups)).toEqual(["Travel"]);
     expect(itemLabels(groups, "Travel")).toEqual([
       "Requests",
       "Review queue",
@@ -132,14 +131,14 @@ describe("navGroupsForUser", () => {
     ]);
   });
 
-  it("VALIDATOR sees the same visible set as ADVISOR", () => {
+  it("VALIDATOR sees the ADVISOR set plus Tools (internal key)", () => {
     // VALIDATOR preset also holds travel.access and is a travel role — same
     // four travel pages plus Tools.
     const advisor = navGroupsForUser(user("ADVISOR"));
     const validator = navGroupsForUser(user("VALIDATOR"));
     const strip = (groups: typeof advisor) =>
       groups.map((g) => ({ label: g.label, items: g.items.map((i) => i.href) }));
-    expect(strip(validator)).toEqual(strip(advisor));
+    expect(strip(validator)).toEqual([...strip(advisor), { label: "Tools", items: ["/calculator"] }]);
     expect(itemLabels(validator, "Travel")).toEqual([
       "Requests",
       "Review queue",
@@ -154,7 +153,7 @@ describe("navGroupsForUser", () => {
     // travel role, so the isTravelRole-gated pages
     // (app/travel/templates/page.tsx, app/travel/notifications/page.tsx) remain.
     const groups = navGroupsForUser(user("ADVISOR", [{ key: "travel.access", allowed: false }]));
-    expect(groupLabels(groups)).toEqual(["Travel", "Tools"]);
+    expect(groupLabels(groups)).toEqual(["Travel"]);
     expect(itemLabels(groups, "Travel")).toEqual(["Templates", "Notifications"]);
   });
 
@@ -186,12 +185,18 @@ describe("navGroupsForUser", () => {
     expect(itemLabels(groups, "Admin")).toEqual(["Partner applications"]);
   });
 
-  it("unknown role sees only Tools (Calculator visible to any active user)", () => {
-    // Unknown roles get the empty preset (presetForRole) and pass no gate;
-    // app/calculator/page.tsx guards only on getActiveUser, so Calculator stays.
-    const groups = navGroupsForUser(user("GHOST"));
-    expect(groupLabels(groups)).toEqual(["Tools"]);
-    expect(itemLabels(groups, "Tools")).toEqual(["Calculator"]);
+  it("unknown role sees nothing (no preset, no calculator)", () => {
+    expect(navGroupsForUser(user("GHOST"))).toEqual([]);
+  });
+
+  it("Calculator appears only with travel.internal.view: ADMIN, VALIDATOR, or an explicit grant; never plain ADVISOR/USER", () => {
+    const has = (u: NavUser) => navGroupsForUser(u).some((g) => g.items.some((i) => i.href === "/calculator"));
+    expect(has(user("ADMIN"))).toBe(true);
+    expect(has(user("VALIDATOR"))).toBe(true);
+    expect(has(user("ADVISOR"))).toBe(false);
+    expect(has(user("USER"))).toBe(false);
+    expect(has(user("ADVISOR", [{ key: "travel.internal.view", allowed: true }]))).toBe(true);
+    expect(has(user("VALIDATOR", [{ key: "travel.internal.view", allowed: false }]))).toBe(false);
   });
 
   it("match functions: /admin is exact, Requests covers /travel and /travel/requests/*", () => {

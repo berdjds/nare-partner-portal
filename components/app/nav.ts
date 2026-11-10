@@ -148,17 +148,20 @@ export function navGroupsForUser(user: NavUser | null | undefined): NavGroupMode
   // --- Tools ---------------------------------------------------------------
   // app/calculator/page.tsx guards only on getActiveUser — any active user
   // may open it, so the link is always visible here.
-  groups.push({
-    label: "Tools",
-    items: [
-      {
-        href: "/calculator",
-        label: "Calculator",
-        icon: "calculator",
-        match: (p) => p === "/calculator" || p.startsWith("/calculator/"),
-      },
-    ],
-  });
+  // The calculator is an internal costing workbook: shown only with the central internal key.
+  if (hasPermission(user, "travel.internal.view")) {
+    groups.push({
+      label: "Tools",
+      items: [
+        {
+          href: "/calculator",
+          label: "Calculator",
+          icon: "calculator",
+          match: (p) => p === "/calculator" || p.startsWith("/calculator/"),
+        },
+      ],
+    });
+  }
 
   // --- Admin ---------------------------------------------------------------
   const adminItems: NavItemModel[] = [];

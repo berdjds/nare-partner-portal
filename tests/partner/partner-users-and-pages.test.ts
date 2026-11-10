@@ -82,3 +82,43 @@ describe("landing redirects for PARTNER (no redirect loop)", () => {
     await expect(Partner()).rejects.toThrow("REDIRECT:/login");
   });
 });
+
+describe("/calculator: internal costing tool, server-side gate (travel.internal.view)", () => {
+  async function visit(user: any) {
+    as(user);
+    const Page = (await import("@/app/calculator/page")).default;
+    try { await (Page as any)(); return "RENDER"; } catch (e: any) { return String(e.message); }
+  }
+  it("ADMIN and VALIDATOR render; plain USER, ADVISOR, PARTNER and signed-out are redirected", async () => {
+    const mk = (role: string, extra: any = {}) => prisma.user.create({ data: { email: `c-${role}-${Math.random()}@t.io`, name: role, password: "x", role, ...extra } });
+    expect(await visit(await mk("ADMIN"))).toBe("RENDER");
+    expect(await visit(await mk("VALIDATOR"))).toBe("RENDER");
+    expect(await visit(await mk("ADVISOR"))).toBe("REDIRECT:/");
+    expect(await visit(await mk("USER"))).toBe("REDIRECT:/");
+    expect(await visit(await mk("PARTNER", { agencyId: agencyA.id }))).toBe("REDIRECT:/partner");
+    expect(await visit(null)).toBe("REDIRECT:/login");
+  });
+  it("an ADVISOR with an explicit grant renders; a VALIDATOR with the key denied is refused", async () => {
+    const adv = await prisma.user.create({ data: { email: "cg@t.io", name: "G", password: "x", role: "ADVISOR", permissions: { create: [{ key: "travel.internal.view", allowed: true }] } } });
+    expect(await visit(adv)).toBe("RENDER");
+    const val = await prisma.user.create({ data: { email: "cv@t.io", name: "V", password: "x", role: "VALIDATOR", permissions: { create: [{ key: "travel.internal.view", allowed: false }] } } });
+    expect(await visit(val)).toBe("REDIRECT:/");
+  });
+  it("no other route serves the calculator workbook (no API, no static copy)", async () => {
+    const { readdirSync, statSync, readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const root = path.resolve(__dirname, "../..");
+    const hits: string[] = [];
+    (function walk(d: string) {
+      for (const n of readdirSync(d)) {
+        if (["node_modules", ".next", ".git", "tests", "doc"].includes(n)) continue;
+        const p = path.join(d, n);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (/\.(ts|tsx|js)$/.test(n) && readFileSync(p, "utf8").includes("Hello_Armenia_Package_Calculator")) hits.push(path.relative(root, p));
+      }
+    })(root);
+    expect(hits).toEqual(["app/calculator/page.tsx"]);
+    expect(statSync(path.join(root, "public")).isDirectory()).toBe(true);
+    expect(() => statSync(path.join(root, "public", "Hello_Armenia_Package_Calculator_2026_v3.html"))).toThrow();
+  });
+});

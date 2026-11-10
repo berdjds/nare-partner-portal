@@ -4,6 +4,7 @@ import { readFile } from "fs/promises";
 import { join } from "path";
 import { authOptions } from "@/lib/auth";
 import { getActiveUser } from "@/lib/access-policy";
+import { hasPermission } from "@/lib/permissions";
 import AppShell from "@/components/app/AppShell";
 import CalculatorFrame from "@/components/calculator/CalculatorFrame";
 
@@ -11,8 +12,11 @@ export default async function CalculatorPage() {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
   if (!user) redirect("/login");
-  // The package calculator is an internal costing tool: never for agency (PARTNER) accounts.
+  // The package calculator is an internal costing workbook (supplier rates, margins):
+  // it needs the central internal-access permission (ADMIN and VALIDATOR presets, or an
+  // explicit grant). Plain USER, ungranted ADVISOR and PARTNER never get the file.
   if (user.role === "PARTNER") redirect("/partner");
+  if (!hasPermission(user, "travel.internal.view")) redirect("/");
 
   const filePath = join(
     process.cwd(),
