@@ -124,7 +124,7 @@ export function ResetPasswordForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="pr-10"
+                className="pe-10"
                 aria-invalid={newPasswordError ? "true" : undefined}
                 aria-describedby={
                   newPasswordError
@@ -137,7 +137,7 @@ export function ResetPasswordForm() {
                 aria-pressed={showPassword}
                 aria-label={showPassword ? RESET_PAGE.hideLabel : RESET_PAGE.showLabel}
                 onClick={() => setShowPassword((visible) => !visible)}
-                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                className="absolute inset-y-0 end-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" aria-hidden="true" />

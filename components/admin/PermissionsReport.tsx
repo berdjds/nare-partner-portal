@@ -84,7 +84,7 @@ export default function PermissionsReport() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b text-left">
+                <thead className="border-b text-start">
                   <tr>
                     <th className="pb-2 font-medium">User</th>
                     <th className="pb-2 font-medium">Role</th>

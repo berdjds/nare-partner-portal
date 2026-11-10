@@ -630,7 +630,7 @@ export default function ScenariosTab({ ctx }: { ctx: DetailContext }) {
                                 {formatDisplayDate(n.date)} · {n.roomType} ×{n.rooms}
                                 {n.extraBeds > 0 ? ` +${n.extraBeds} bed(s)` : ""}
                               </span>
-                              <span className="text-right">
+                              <span className="text-end">
                                 {money(n.amountAmd, "AMD")}
                                 {n.amountQuote != null && currency !== "AMD" ? ` · ${money(n.amountQuote, currency)}` : ""}
                               </span>
@@ -639,7 +639,7 @@ export default function ScenariosTab({ ctx }: { ctx: DetailContext }) {
                         </ul>
                         <p className="mt-1 flex items-baseline justify-between gap-4 border-t pt-1 font-medium">
                           <span>Stay total</span>
-                          <span className="text-right">
+                          <span className="text-end">
                             {money(sum("amountAmd"), "AMD")}
                             {currency !== "AMD" ? ` · ${money(sum("amountQuote"), currency)}` : ""}
                           </span>
@@ -933,7 +933,7 @@ function StayEditor({
                   <Input
                     type="number"
                     min={0}
-                    className="h-8 text-right text-[13px] [font-variant-numeric:tabular-nums]"
+                    className="h-8 text-end text-[13px] [font-variant-numeric:tabular-nums]"
                     value={a[key]}
                     onChange={(e) => onAllocation(ai, { [key]: Math.max(0, Number.parseInt(e.target.value || "0", 10) || 0) })}
                   />
@@ -1017,7 +1017,7 @@ function ServiceLineTable({
         {Array.from(byCategory.entries()).map(([cat, catLines]) => (
           <div key={cat}>
             <p className="text-xs font-semibold text-muted-foreground">{cat.replace(/_/g, " ")}</p>
-            <ul className="ml-2 space-y-0.5 text-sm">
+            <ul className="ms-2 space-y-0.5 text-sm">
               {catLines.map((l) => (
                 <li key={l.key}>
                   {l.label} — {basisLabel(l.basis, l.capacity ? Number(l.capacity) : null)} · {money(l.unitRate, l.currency)} × {l.quantity}
@@ -1066,7 +1066,7 @@ function ServiceLineTable({
               {l.scenarioKey ? ` · ${scenarioName(l.scenarioKey)}` : ""}
             </span>
             {l.overrideRate && <Badge variant="warning">override</Badge>}
-            <span className="ml-auto text-xs text-muted-foreground">Managed on the Itinerary tab</span>
+            <span className="ms-auto text-xs text-muted-foreground">Managed on the Itinerary tab</span>
           </div>
         ) : (
         <div key={l.key} className="grid items-end gap-2 rounded-lg border bg-card p-2 lg:grid-cols-[1.4fr_1fr_1fr_70px_90px_70px_70px_70px_110px_auto]">
@@ -1135,7 +1135,7 @@ function ServiceLineTable({
             <span className="text-xs text-muted-foreground">Unit rate</span>
             <Input
               placeholder="TBC"
-              className="h-8 text-right text-[13px] [font-variant-numeric:tabular-nums]"
+              className="h-8 text-end text-[13px] [font-variant-numeric:tabular-nums]"
               value={l.unitRate}
               onChange={(e) => onChange(i, { unitRate: e.target.value })}
             />
@@ -1143,7 +1143,7 @@ function ServiceLineTable({
           <div>
             <span className="text-xs text-muted-foreground">Qty</span>
             <Input
-              className="h-8 text-right text-[13px] [font-variant-numeric:tabular-nums]"
+              className="h-8 text-end text-[13px] [font-variant-numeric:tabular-nums]"
               value={l.quantity}
               onChange={(e) => onChange(i, { quantity: e.target.value })}
             />
@@ -1151,7 +1151,7 @@ function ServiceLineTable({
           <div>
             <span className="text-xs text-muted-foreground">Pax</span>
             <Input
-              className="h-8 text-right text-[13px] [font-variant-numeric:tabular-nums]"
+              className="h-8 text-end text-[13px] [font-variant-numeric:tabular-nums]"
               value={l.participants}
               onChange={(e) => onChange(i, { participants: e.target.value })}
             />
@@ -1159,7 +1159,7 @@ function ServiceLineTable({
           <div>
             <span className="text-xs text-muted-foreground">Capacity</span>
             <Input
-              className="h-8 text-right text-[13px] [font-variant-numeric:tabular-nums]"
+              className="h-8 text-end text-[13px] [font-variant-numeric:tabular-nums]"
               value={l.capacity}
               onChange={(e) => onChange(i, { capacity: e.target.value })}
             />

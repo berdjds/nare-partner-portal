@@ -154,7 +154,7 @@ export default function TemplatesList({ role }: TemplatesListProps) {
                       <TableCell>
                         {v.legacyMarkup ?? "—"}
                         {v.legacyMarkup && (
-                          <span className="ml-1 text-xs text-muted-foreground">(legacy markup, informational only)</span>
+                          <span className="ms-1 text-xs text-muted-foreground">(legacy markup, informational only)</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -565,8 +565,8 @@ function BatchDialog({
                 <TableRow>
                   <TableHead>Pax</TableHead>
                   <TableHead>Valid</TableHead>
-                  <TableHead className="text-right">Sell</TableHead>
-                  <TableHead className="text-right">Per person</TableHead>
+                  <TableHead className="text-end">Sell</TableHead>
+                  <TableHead className="text-end">Per person</TableHead>
                   <TableHead>Issues</TableHead>
                 </TableRow>
               </TableHeader>
@@ -577,8 +577,8 @@ function BatchDialog({
                     <TableCell>
                       <StateBadge value={r.valid ? "READY" : "FAILED"} />
                     </TableCell>
-                    <TableCell className="text-right">{r.sell ? money(r.sell, quoteCurrency) : "—"}</TableCell>
-                    <TableCell className="text-right">{r.perPayingPerson ? money(r.perPayingPerson, quoteCurrency) : "—"}</TableCell>
+                    <TableCell className="text-end">{r.sell ? money(r.sell, quoteCurrency) : "—"}</TableCell>
+                    <TableCell className="text-end">{r.perPayingPerson ? money(r.perPayingPerson, quoteCurrency) : "—"}</TableCell>
                     <TableCell className="text-xs">
                       {r.issues.map((i, j) => (
                         <div key={j}>

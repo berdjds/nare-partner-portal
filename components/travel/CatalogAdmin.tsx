@@ -621,7 +621,7 @@ function RateTable({
           {productType === "HOTEL" && <TableHead>Occupancy</TableHead>}
           {productType === "SERVICE" && <TableHead>Vehicle</TableHead>}
           <TableHead>Board</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
+          <TableHead className="text-end">Amount</TableHead>
           <TableHead>Validity</TableHead>
           <TableHead>Weekdays</TableHead>
           <TableHead>Min stay</TableHead>
@@ -635,7 +635,7 @@ function RateTable({
             {productType === "HOTEL" && <TableCell className="font-medium">{r.occupancy ?? "—"}</TableCell>}
             {productType === "SERVICE" && <TableCell>{r.vehicleType?.name ?? "—"}</TableCell>}
             <TableCell>{r.board ?? "—"}</TableCell>
-            <TableCell className="whitespace-nowrap text-right">{r.amount == null ? "TBC" : money(r.amount, r.currency)}</TableCell>
+            <TableCell className="whitespace-nowrap text-end">{r.amount == null ? "TBC" : money(r.amount, r.currency)}</TableCell>
             <TableCell className="whitespace-nowrap">{validityLabel(r.validFrom, r.validTo)}</TableCell>
             <TableCell>{weekdaysSummary(r.weekdays)}</TableCell>
             <TableCell>{r.minStay ?? "—"}</TableCell>
@@ -1587,7 +1587,7 @@ function RatesTab() {
                 <TableHead>Product</TableHead>
                 <TableHead>Occ / board</TableHead>
                 <TableHead>Vehicle</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-end">Amount</TableHead>
                 <TableHead>Validity</TableHead>
                 <TableHead>Evidence</TableHead>
                 <TableHead>Notes</TableHead>
@@ -1600,14 +1600,14 @@ function RatesTab() {
                 <TableRow key={r.id}>
                   <TableCell>
                     {productName(r)}
-                    <span className="ml-1 text-xs text-muted-foreground">({r.productType})</span>
+                    <span className="ms-1 text-xs text-muted-foreground">({r.productType})</span>
                   </TableCell>
                   <TableCell>
                     {r.occupancy ?? "—"}
                     {r.board ? ` / ${r.board}` : ""}
                   </TableCell>
                   <TableCell>{r.productType === "VEHICLE" ? "—" : (r.vehicleType?.name ?? "—")}</TableCell>
-                  <TableCell className="text-right">{r.amount == null ? "TBC" : money(r.amount, r.currency)}</TableCell>
+                  <TableCell className="text-end">{r.amount == null ? "TBC" : money(r.amount, r.currency)}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs">{validityLabel(r.validFrom, r.validTo)}</TableCell>
                   <TableCell className="text-xs">{r.evidenceRef ?? "—"}</TableCell>
                   <TableCell className="text-xs">{r.notes ?? "—"}</TableCell>

@@ -425,10 +425,10 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                         <span className="flex-1">
                           {s.label}
                           {vehicleName(s.vehicleTypeId) && (
-                            <span className="ml-1 text-xs text-muted-foreground">· {vehicleName(s.vehicleTypeId)}</span>
+                            <span className="ms-1 text-xs text-muted-foreground">· {vehicleName(s.vehicleTypeId)}</span>
                           )}
                           {!s.serviceProductId && (
-                            <span className="ml-1 text-xs text-muted-foreground">(label only)</span>
+                            <span className="ms-1 text-xs text-muted-foreground">(label only)</span>
                           )}
                         </span>
                         <span className="text-xs text-muted-foreground">qty</span>
@@ -552,7 +552,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                       value={s.label}
                       onChange={(e) => patchScenario(si, { label: e.target.value })}
                     />
-                    <div className="ml-auto flex gap-1">
+                    <div className="ms-auto flex gap-1">
                       <Button
                         variant="outline"
                         size="sm"

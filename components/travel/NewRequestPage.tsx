@@ -183,7 +183,7 @@ export default function NewRequestPage({ userId }: { userId: string }) {
       <nav aria-label="Sections" className="mb-4 flex gap-2 overflow-x-auto text-sm">
         {STEPS.map((s, i) => (
           <a key={s.id} href={`#${s.id}`} className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border px-3 hover:bg-muted">
-            <span className="mr-2 text-xs text-muted-foreground">{i + 1}</span>{s.label}
+            <span className="me-2 text-xs text-muted-foreground">{i + 1}</span>{s.label}
           </a>
         ))}
       </nav>
@@ -191,7 +191,7 @@ export default function NewRequestPage({ userId }: { userId: string }) {
       {errorList.length > 0 && (
         <div role="alert" className="mb-4 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm" tabIndex={-1}>
           <p className="font-medium">Please fix {errorList.length} {errorList.length === 1 ? "field" : "fields"} before creating the request:</p>
-          <ul className="mt-1 list-disc pl-5">{errorList.map((k) => <li key={k}>{allErrors[k]}</li>)}</ul>
+          <ul className="mt-1 list-disc ps-5">{errorList.map((k) => <li key={k}>{allErrors[k]}</li>)}</ul>
         </div>
       )}
 
@@ -291,7 +291,7 @@ export default function NewRequestPage({ userId }: { userId: string }) {
           </CardContent>
         </Card>
 
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 py-3 backdrop-blur lg:left-60">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 py-3 backdrop-blur lg:start-60">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2">
             <Link href="/travel" onClick={(e) => { e.preventDefault(); leave(); }} className="inline-flex min-h-11 items-center px-3 text-sm underline">Cancel</Link>
             <Button type="submit" disabled={submitting} aria-busy={submitting}>{submitting ? "Creating…" : "Create request"}</Button>

@@ -237,7 +237,7 @@ function UserCard({ role, userName, userEmail, version }: TravelNavProps) {
  */
 export function TravelSidebar(props: TravelNavProps) {
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r bg-card lg:flex">
+    <aside className="fixed inset-y-0 start-0 z-30 hidden w-60 flex-col border-e bg-card lg:flex">
       <div className="flex h-16 items-center border-b px-3">
         <Brand />
       </div>

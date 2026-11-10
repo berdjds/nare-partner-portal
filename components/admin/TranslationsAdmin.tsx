@@ -70,7 +70,7 @@ export default function TranslationsAdmin({ canTranslate, canApprove }: { canTra
               {shown.map((i) => (
                 <li key={`${i.entity}|${i.entityId}|${i.field}`}>
                   <button type="button" onClick={() => open(i)} aria-current={sel && sel.entityId === i.entityId && sel.field === i.field ? "true" : undefined}
-                    className="flex min-h-11 w-full flex-col items-start rounded-md border px-3 py-2 text-left text-sm hover:bg-muted aria-[current=true]:bg-muted">
+                    className="flex min-h-11 w-full flex-col items-start rounded-md border px-3 py-2 text-start text-sm hover:bg-muted aria-[current=true]:bg-muted">
                     <span className="font-medium">{i.label}</span>
                     <span className="text-xs text-muted-foreground">{STATE_TEXT[i.state]}{i.hasAiDraft ? " · AI draft" : ""}</span>
                   </button>

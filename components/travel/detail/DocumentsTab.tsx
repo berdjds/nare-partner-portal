@@ -61,19 +61,19 @@ export default function DocumentsTab({ ctx }: { ctx: DetailContext }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-3">Version</TableHead>
+              <TableHead className="ps-3">Version</TableHead>
               <TableHead>Kind</TableHead>
               <TableHead>State</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Issued at</TableHead>
               <TableHead>SHA-256</TableHead>
-              <TableHead className="pr-3">Actions</TableHead>
+              <TableHead className="pe-3">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((d) => (
               <TableRow key={d.id}>
-                <TableCell className="pl-3">{versionLabel(d.versionNo)}</TableCell>
+                <TableCell className="ps-3">{versionLabel(d.versionNo)}</TableCell>
                 <TableCell>
                   {d.kind === "INTERNAL" ? (
                     <Badge variant="warning">INTERNAL — not for client distribution</Badge>
@@ -87,7 +87,7 @@ export default function DocumentsTab({ ctx }: { ctx: DetailContext }) {
                 <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(d.createdAt)}</TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(d.issuedAt)}</TableCell>
                 <TableCell className="font-mono text-xs">{shortHash(d.sha256)}</TableCell>
-                <TableCell className="pr-3">
+                <TableCell className="pe-3">
                   <div className="flex gap-2">
                     {d.renderState === "READY" && canDownload(d) && (
                       <a href={`/api/travel/documents/${d.id}`} target="_blank" rel="noreferrer">

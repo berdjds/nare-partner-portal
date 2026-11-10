@@ -174,7 +174,7 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
               <CardTitle>
                 {versionLabel(version.versionNo)} — <StatusBadge status={version.status} />
                 {showingPreview && (
-                  <span className={cn("ml-2 rounded px-1.5 py-0.5 align-middle text-[10px] font-semibold", badgeStatusStyles.warning)}>
+                  <span className={cn("ms-2 rounded px-1.5 py-0.5 align-middle text-[10px] font-semibold", badgeStatusStyles.warning)}>
                     LIVE PREVIEW
                   </span>
                 )}
@@ -204,14 +204,14 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-3">Scenario</TableHead>
+                    <TableHead className="ps-3">Scenario</TableHead>
                     <TableHead>Valid</TableHead>
-                    <TableHead className="text-right">Cost</TableHead>
-                    <TableHead className="text-right">Sell</TableHead>
-                    <TableHead className="text-right">Profit</TableHead>
-                    <TableHead className="text-right">Margin %</TableHead>
-                    <TableHead className="text-right">Per paying person</TableHead>
-                    <TableHead className="pr-3 text-right">Issues</TableHead>
+                    <TableHead className="text-end">Cost</TableHead>
+                    <TableHead className="text-end">Sell</TableHead>
+                    <TableHead className="text-end">Profit</TableHead>
+                    <TableHead className="text-end">Margin %</TableHead>
+                    <TableHead className="text-end">Per paying person</TableHead>
+                    <TableHead className="pe-3 text-end">Issues</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -221,27 +221,27 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
                     return (
                       <Fragment key={row.id}>
                         <TableRow>
-                          <TableCell className="pl-3 font-medium">{r.label}</TableCell>
+                          <TableCell className="ps-3 font-medium">{r.label}</TableCell>
                           <TableCell>{r.valid ? "yes" : "no"}</TableCell>
                           {/* Costing columns: absent from advisor-redacted results.
                               Sell-side figures are the engine's bare-cost fallback
                               when invalid — meaningless, so show "—" (v0.15.1). */}
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             {r.totals ? money(r.totals.costQuote, ctx.resultCurrency) : "—"}
                           </TableCell>
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="text-end font-medium">
                             {r.valid ? money(r.sell, ctx.resultCurrency) : "—"}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             {r.valid && r.profit != null ? money(r.profit, ctx.resultCurrency) : "—"}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             {r.valid && r.margin != null ? `${(Number(r.margin) * 100).toFixed(1)}%` : "—"}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             {r.valid ? money(r.perPayingPerson, ctx.resultCurrency) : "—"}
                           </TableCell>
-                          <TableCell className="pr-3 text-right">{r.issues.length}</TableCell>
+                          <TableCell className="pe-3 text-end">{r.issues.length}</TableCell>
                         </TableRow>
                         {trace && trace.length > 0 && (
                           <TableRow className="hover:bg-transparent">

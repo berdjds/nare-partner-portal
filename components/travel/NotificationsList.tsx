@@ -124,7 +124,7 @@ export default function NotificationsList({ role }: NotificationsListProps) {
                   </TableCell>
                   <TableCell>
                     <StateBadge value={d.status} />
-                    {d.attempts > 0 && <span className="ml-1 text-xs text-muted-foreground">×{d.attempts}</span>}
+                    {d.attempts > 0 && <span className="ms-1 text-xs text-muted-foreground">×{d.attempts}</span>}
                   </TableCell>
                   <TableCell className="text-xs">{d.destination ?? "—"}</TableCell>
                   <TableCell className="max-w-xs">

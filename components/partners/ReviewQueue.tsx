@@ -149,20 +149,20 @@ export default function ReviewQueue() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Reference</TableHead>
+                  <TableHead className="ps-4">Reference</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Licence expiry</TableHead>
                   <TableHead>Submitted</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="pr-4" />
+                  <TableHead className="pe-4" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((a) => (
                   <TableRow key={a.id}>
-                    <TableCell className="pl-4 font-mono text-xs">{a.reference}</TableCell>
+                    <TableCell className="ps-4 font-mono text-xs">{a.reference}</TableCell>
                     <TableCell>
                       <div className="font-medium">{a.companyLegalName}</div>
                       {a.tradingName && (
@@ -185,7 +185,7 @@ export default function ReviewQueue() {
                         {STATUS_LABELS[a.status] ?? a.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="pr-4 text-right">
+                    <TableCell className="pe-4 text-end">
                       <Button size="sm" onClick={() => (window.location.href = `/admin/partners/${a.id}`)}>
                         Review
                       </Button>

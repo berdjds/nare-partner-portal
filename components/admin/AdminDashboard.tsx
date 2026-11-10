@@ -313,7 +313,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="border-b text-left">
+                  <thead className="border-b text-start">
                     <tr>
                       <th className="pb-2 font-medium">Name</th>
                       <th className="pb-2 font-medium">Email</th>
@@ -415,7 +415,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
             <CardContent>
               <div className="max-h-[600px] overflow-auto">
                 <table className="w-full text-sm">
-                  <thead className="border-b text-left">
+                  <thead className="border-b text-start">
                     <tr>
                       <th className="pb-2 font-medium">Time</th>
                       <th className="pb-2 font-medium">Action</th>

@@ -192,7 +192,7 @@ export default function ServicePickerDialog({
                 <p className="mb-1 text-xs font-medium">
                   {pendingVehicleProduct.name} — vehicle
                   {pickerVehicle && rateHint?.(pendingVehicleProduct, pickerVehicle) && (
-                    <span className="ml-2 font-normal text-muted-foreground">
+                    <span className="ms-2 font-normal text-muted-foreground">
                       {rateHint(pendingVehicleProduct, pickerVehicle)}
                     </span>
                   )}
@@ -237,7 +237,7 @@ export default function ServicePickerDialog({
                     <button
                       key={p.id}
                       type="button"
-                      className={`w-full rounded-lg border bg-card px-3 py-2 text-left text-sm transition-colors hover:bg-muted${
+                      className={`w-full rounded-lg border bg-card px-3 py-2 text-start text-sm transition-colors hover:bg-muted${
                         pendingVehicleProduct?.id === p.id ? " border-primary ring-1 ring-primary" : ""
                       }`}
                       onClick={() => pickProduct(p)}

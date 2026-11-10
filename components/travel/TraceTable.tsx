@@ -16,20 +16,20 @@ export default function TraceTable({ rows, className }: { rows: TraceRow[]; clas
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="pl-3">Description</TableHead>
+            <TableHead className="ps-3">Description</TableHead>
             <TableHead>Basis</TableHead>
             <TableHead>Calculation</TableHead>
-            <TableHead className="pr-3 text-right">Amount</TableHead>
+            <TableHead className="pe-3 text-end">Amount</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((r, i) => (
             <TableRow key={i} className={r.muted ? "text-muted-foreground" : undefined}>
-              <TableCell className="pl-3">{r.description}</TableCell>
+              <TableCell className="ps-3">{r.description}</TableCell>
               <TableCell>{r.basis}</TableCell>
               <TableCell>{r.calculation}</TableCell>
               <TableCell
-                className={cn("pr-3 text-right [font-variant-numeric:tabular-nums]", r.bold && "font-bold")}
+                className={cn("pe-3 text-end [font-variant-numeric:tabular-nums]", r.bold && "font-bold")}
               >
                 {r.amount}
               </TableCell>

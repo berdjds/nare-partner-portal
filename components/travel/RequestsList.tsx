@@ -133,7 +133,7 @@ export default function RequestsList({ role, userId, permissions }: RequestsList
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">Package code</TableHead>
+                <TableHead className="ps-4">Package code</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Agency</TableHead>
                 <TableHead>Dates</TableHead>
@@ -141,7 +141,7 @@ export default function RequestsList({ role, userId, permissions }: RequestsList
                 <TableHead>Validator</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Updated</TableHead>
-                {isAdmin && <TableHead className="pr-4" />}
+                {isAdmin && <TableHead className="pe-4" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -151,7 +151,7 @@ export default function RequestsList({ role, userId, permissions }: RequestsList
                   className="cursor-pointer"
                   onClick={() => (window.location.href = `/travel/requests/${r.id}`)}
                 >
-                  <TableCell className="pl-4 font-mono text-xs">{r.packageCode}</TableCell>
+                  <TableCell className="ps-4 font-mono text-xs">{r.packageCode}</TableCell>
                   <TableCell className="font-medium">{r.title}</TableCell>
                   <TableCell>
                     {r.agency.shortCode} — {r.agency.name}
@@ -166,7 +166,7 @@ export default function RequestsList({ role, userId, permissions }: RequestsList
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{new Date(r.updatedAt).toLocaleString()}</TableCell>
                   {isAdmin && (
-                    <TableCell className="pr-4 text-right">
+                    <TableCell className="pe-4 text-end">
                       <Button
                         variant="ghost"
                         size="icon"

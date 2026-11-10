@@ -43,3 +43,25 @@ describe("brand icons", () => {
     expect(existsSync(file("scripts/gen-brand-icons.mjs"))).toBe(true);
   });
 });
+
+describe("RTL readiness (Phase 5)", () => {
+  it("no component or page uses a physical left/right utility; only logical ones (ps/pe/ms/me/start/end/text-start/text-end)", async () => {
+    const { readdirSync, statSync } = await import("node:fs");
+    const hits: string[] = [];
+    const physical = /(?<![\w/])-?(?:pl|pr|ml|mr|left|right)-(?!1\/2\b|\[50%\])|(?<![\w-])(?:text-left|text-right|border-l|border-r|rounded-l|rounded-r)(?![\w-])/;
+    (function walk(d: string) {
+      for (const n of readdirSync(file(d))) {
+        const rel = `${d}/${n}`;
+        if (statSync(file(rel)).isDirectory()) walk(rel);
+        else if (rel.endsWith(".tsx")) readFileSync(file(rel), "utf8").split("\n").forEach((line, i) => { if (/className|cn\(|["'`][^"'`]*-[a-z]/.test(line) && physical.test(line)) hits.push(`${rel}:${i + 1}`); });
+      }
+    })("app"); (function walk(d: string) {
+      for (const n of readdirSync(file(d))) {
+        const rel = `${d}/${n}`;
+        if (statSync(file(rel)).isDirectory()) walk(rel);
+        else if (rel.endsWith(".tsx")) readFileSync(file(rel), "utf8").split("\n").forEach((line, i) => { if (physical.test(line)) hits.push(`${rel}:${i + 1}`); });
+      }
+    })("components");
+    expect(Array.from(new Set(hits))).toEqual([]);
+  });
+});

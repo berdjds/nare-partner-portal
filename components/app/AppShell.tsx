@@ -36,7 +36,7 @@ export default async function AppShell({
   return (
     <div className="min-h-screen bg-background">
       <Sidebar {...navProps} />
-      <div className="lg:pl-60">
+      <div className="lg:ps-60">
         <MobileBar {...navProps} />
         <main
           className={

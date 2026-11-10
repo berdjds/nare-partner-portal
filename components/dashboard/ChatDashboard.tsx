@@ -268,7 +268,7 @@ export default function ChatDashboard({
           <AccountSwitcher accounts={accounts} selected={selectedAccount} onSelect={setSelectedAccount} />
           {canSend && (
             <Button variant="outline" size="sm" onClick={() => setNewChatOpen(true)}>
-              <MessageSquarePlus className="h-4 w-4 sm:mr-1" />
+              <MessageSquarePlus className="h-4 w-4 sm:me-1" />
               <span className="hidden sm:inline">New message</span>
             </Button>
           )}
@@ -291,7 +291,7 @@ export default function ChatDashboard({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Chat list: full-width on mobile, sidebar on md+ */}
-        <aside className={`${selectedChat ? "hidden" : "flex"} w-full flex-col border-r bg-card md:flex md:max-w-sm`}>
+        <aside className={`${selectedChat ? "hidden" : "flex"} w-full flex-col border-e bg-card md:flex md:max-w-sm`}>
           <div className="border-b p-3">
             <Input placeholder="Search chats..." />
           </div>
@@ -300,7 +300,7 @@ export default function ChatDashboard({
               <button
                 key={chat.id}
                 onClick={() => setSelectedChat(chat)}
-                className={`flex w-full items-center gap-3 border-b px-4 py-3 text-left hover:bg-accent ${selectedChat?.id === chat.id ? "bg-accent" : ""}`}
+                className={`flex w-full items-center gap-3 border-b px-4 py-3 text-start hover:bg-accent ${selectedChat?.id === chat.id ? "bg-accent" : ""}`}
               >
                 <Avatar>
                   <AvatarImage src={chat.profilePicUrl || undefined} />

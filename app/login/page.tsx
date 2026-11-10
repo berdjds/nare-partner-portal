@@ -4,6 +4,8 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useT } from "@/lib/i18n/react";
+import { validateLogin } from "@/lib/login-validation";
+import { badgeStatusTextStyles } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,7 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,6 +39,15 @@ function LoginForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Format-only checks, done in the browser: they say nothing about whether an account exists.
+    const v = validateLogin(email, password);
+    const found = { email: v.email && t(v.email), password: v.password && t(v.password) };
+    setFieldErrors(found);
+    if (found.email || found.password) {
+      setError(null);
+      document.getElementById(found.email ? "email" : "password")?.focus();
+      return;
+    }
     setLoading(true);
     setError(null);
     const result = await signIn("credentials", {
@@ -88,7 +100,7 @@ function LoginForm() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">{t("login.email")}</Label>
                 <Input
@@ -99,8 +111,12 @@ function LoginForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t("login.emailPlaceholder")}
-                  required
+                  aria-invalid={fieldErrors.email ? true : undefined}
+                  aria-describedby={fieldErrors.email ? "email-error" : undefined}
                 />
+                {fieldErrors.email && (
+                  <p id="email-error" className={`text-sm font-medium ${badgeStatusTextStyles.danger}`}>{fieldErrors.email}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">{t("login.password")}</Label>
@@ -113,15 +129,16 @@ function LoginForm() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyUp={handlePasswordKeyUp}
-                    required
-                    className="pr-10"
+                    aria-invalid={fieldErrors.password ? true : undefined}
+                    aria-describedby={fieldErrors.password ? "password-error" : undefined}
+                    className="pe-10"
                   />
                   <button
                     type="button"
                     aria-pressed={showPassword}
                     aria-label={showPassword ? t("login.hidePassword") : t("login.showPassword")}
                     onClick={() => setShowPassword((visible) => !visible)}
-                    className="absolute inset-y-0 right-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    className="absolute inset-y-0 end-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -130,6 +147,9 @@ function LoginForm() {
                     )}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <p id="password-error" className={`text-sm font-medium ${badgeStatusTextStyles.danger}`}>{fieldErrors.password}</p>
+                )}
                 {capsLockOn && (
                   <p className="text-sm text-muted-foreground">{t("login.capsLock")}</p>
                 )}

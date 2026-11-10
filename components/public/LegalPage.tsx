@@ -43,7 +43,7 @@ export function LegalPage({ document }: { document: LegalDocument }) {
 
       <nav aria-label="On this page" className="mt-8 space-y-3">
         <h2 className="text-lg font-semibold text-foreground">On this page</h2>
-        <ul className="list-disc space-y-2 pl-6 text-foreground">
+        <ul className="list-disc space-y-2 ps-6 text-foreground">
           {document.sections.map((section) => (
             <li key={section.title}>
               <a
@@ -80,7 +80,7 @@ export function LegalPage({ document }: { document: LegalDocument }) {
               </p>
             ))}
             {section.items && (
-              <ul className="list-disc space-y-2 pl-6 leading-relaxed text-foreground">
+              <ul className="list-disc space-y-2 ps-6 leading-relaxed text-foreground">
                 {section.items.map((item) => (
                   <li key={item.slice(0, 48)}>{item}</li>
                 ))}

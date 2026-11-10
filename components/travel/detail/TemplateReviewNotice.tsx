@@ -47,7 +47,7 @@ export default function TemplateReviewNotice({ lines, failed = false, requestId,
           <h2 id="tpl-review-title" className="font-medium">
             {review.length > 0 ? `${review.length} template ${review.length === 1 ? "item needs" : "items need"} review` : "Template items not applicable"}
           </h2>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <ul className="mt-1 list-disc space-y-0.5 ps-5">
             {items.map((i) => (
               <li key={i.id}><strong>{i.label}</strong>{i.date ? ` (${i.date})` : ""}: {i.reasons.join("; ")}.</li>
             ))}
