@@ -45,6 +45,11 @@ import {
 import { calculate } from "@/lib/travel/engine";
 import { type PermissionKey } from "@/lib/permissions";
 import { buildEngineInputForVersion } from "@/lib/travel/resolve";
+import { templateDaysSchema } from "@/lib/travel/templates";
+import {
+  itemKey, itemsFromTemplateDays, lineEditInfo, mergeTemplateDays, planLines,
+  type Day as RecalcDay, type LineState as RecalcLineState,
+} from "@/lib/travel/recalc-plan";
 import { canonicalize, snapshotHash } from "@/lib/travel/snapshots";
 import { generatePackageCode } from "@/lib/travel/codes";
 import { getActivePolicy, getCompanyBranding, getFxMap, getTravelSettings } from "@/lib/travel/settings";
@@ -749,8 +754,17 @@ export async function saveVersionContent(
           }
         }
       }
+      // The editor round-trips only the fields it knows. Template provenance (Phase 2) is
+      // restored onto the recreated line that matches the old one by (product, date, vehicle).
+      const provenance = await tx.serviceLine.findMany({ where: { versionId, templateKey: { not: null } } });
       await tx.serviceLine.deleteMany({ where: { versionId } });
       for (const line of parsed.serviceLines) {
+        const prevIdx = line.serviceProductId
+          ? provenance.findIndex(
+              (p) => p.serviceProductId === line.serviceProductId && p.date === (line.date ?? null) && (p.vehicleTypeId ?? null) === (line.vehicleTypeId ?? null),
+            )
+          : -1;
+        const prev = prevIdx >= 0 ? provenance.splice(prevIdx, 1)[0] : null;
         const scenarioId = line.scenarioKey ? scenarioIdByKey.get(line.scenarioKey) ?? null : null;
         if (line.scenarioKey && !scenarioId) {
           throw new WorkflowError(
@@ -779,6 +793,11 @@ export async function saveVersionContent(
             serviceProductId: line.serviceProductId ?? null,
             date: line.date ?? null,
             vehicleTypeId: line.vehicleTypeId ?? null,
+            origin: prev?.origin ?? null,
+            templateKey: prev?.templateKey ?? null,
+            derivedJson: prev?.derivedJson ?? null,
+            ruleInactive: prev?.ruleInactive ?? false,
+            reviewFlag: prev?.reviewFlag ?? null,
           },
         });
       }
@@ -1817,6 +1836,11 @@ export async function createRevision(actor: WorkflowActor, requestId: string) {
           serviceProductId: line.serviceProductId,
           date: line.date,
           vehicleTypeId: line.vehicleTypeId,
+          origin: line.origin,
+          templateKey: line.templateKey,
+          derivedJson: line.derivedJson,
+          ruleInactive: line.ruleInactive,
+          reviewFlag: line.reviewFlag,
         },
       });
     }
@@ -1832,4 +1856,154 @@ export async function createRevision(actor: WorkflowActor, requestId: string) {
     `Created ${versionLabel(newVersion.versionNo)} for ${request.packageCode} from ${versionLabel(latest.versionNo)}`,
   );
   return newVersion;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: deterministic recalculation from the template (B2B cycle 1)
+// ---------------------------------------------------------------------------
+
+export const recalculateSchema = z.object({
+  /** Optimistic lock on TravelRequest.revision, exactly like updateDraft/saveVersionContent. */
+  expectedRevision: z.number().int().min(0),
+  /** Switch the version to another template version; omitted = the version's current one. */
+  templateVersionId: z.string().min(1).max(200).optional(),
+});
+export type RecalculateInput = z.infer<typeof recalculateSchema>;
+
+export interface RecalculationResult {
+  revision: number;
+  templateVersionId: string;
+  changed: boolean;
+  daysChanged: boolean;
+  linesUpdated: number;
+  governedLines: number;
+  conflicts: Array<{ key: string; label: string; code: string; detail: string }>;
+}
+
+/**
+ * Re-derives the template-governed part of the latest (editable) version from
+ * the request's current travellers and dates. Server-authoritative, idempotent
+ * (a second call with unchanged inputs writes nothing and keeps the revision),
+ * audited, and conflict-aware: manual edits are kept and reported, never
+ * overwritten. Prices are not touched here; they come from the engine.
+ */
+export async function recalculateFromTemplate(actor: WorkflowActor, requestId: string, input: RecalculateInput): Promise<RecalculationResult> {
+  const parsed = recalculateSchema.parse(input);
+  const request = await loadRequest(requestId);
+  assertOwnerOrAdmin(actor, request.ownerId);
+  const version = await loadLatestVersion(requestId);
+  if (!version) throw new WorkflowError("VERSION_NOT_FOUND", "request has no versions", 404);
+  assertTransition(version.status, ["DRAFT", "CHANGES_REQUESTED"], "recalculate");
+  if (request.revision !== parsed.expectedRevision) {
+    throw new WorkflowError("CONFLICT", `revision mismatch: expected ${parsed.expectedRevision}, request was modified concurrently`, 409);
+  }
+
+  const targetId = parsed.templateVersionId ?? version.templateVersionId;
+  if (!targetId) throw new WorkflowError("NO_TEMPLATE", "this version was not built from a template", 400);
+  const [target, previous] = await Promise.all([
+    prisma.templateVersion.findUnique({ where: { id: targetId } }),
+    version.templateVersionId && version.templateVersionId !== targetId
+      ? prisma.templateVersion.findUnique({ where: { id: version.templateVersionId } })
+      : Promise.resolve(null),
+  ]);
+  if (!target) throw new WorkflowError("TEMPLATE_NOT_FOUND", "template version not found", 404);
+  if (target.status !== "ACTIVE" && target.id !== version.templateVersionId) {
+    throw new WorkflowError("TEMPLATE_ARCHIVED", "archived template versions cannot be selected", 400);
+  }
+  const parseDays = (raw: string) => {
+    try { return templateDaysSchema.parse(JSON.parse(raw)); }
+    catch { throw new WorkflowError("TEMPLATE_CONTENT_INVALID", "template content is not valid", 400); }
+  };
+  const newTemplateDays = parseDays(target.daysJson);
+  const newItems = itemsFromTemplateDays(newTemplateDays);
+  const prevItems = previous
+    ? itemsFromTemplateDays(parseDays(previous.daysJson))
+    : version.templateVersionId === target.id ? newItems : null;
+
+  const travelers = JSON.parse(request.travelers) as TravelerSetup;
+
+  // ---- current content
+  const dayRows = await prisma.itineraryDay.findMany({ where: { versionId: version.id }, orderBy: { dayOffset: "asc" } });
+  const currentDays: RecalcDay[] = dayRows.map((d) => ({
+    dayOffset: d.dayOffset, date: d.date, narrative: d.narrative, overnightCity: d.overnightCity,
+    services: d.services ? (JSON.parse(d.services) as RecalcDay["services"]) : [],
+  }));
+  const dayOffsetByDate = new Map(currentDays.map((d) => [d.date, d.dayOffset]));
+  const lineRows = await prisma.serviceLine.findMany({ where: { versionId: version.id, scenarioId: null, serviceProductId: { not: null } } });
+  const toState = (l: (typeof lineRows)[number]): RecalcLineState => ({
+    id: l.id, label: l.label, serviceProductId: l.serviceProductId, date: l.date, vehicleTypeId: l.vehicleTypeId,
+    participants: l.participants, ruleInactive: l.ruleInactive, origin: l.origin, templateKey: l.templateKey,
+    derivedJson: l.derivedJson, reviewFlag: l.reviewFlag, overrideRate: l.overrideRate,
+  });
+  const lineEdits = new Map<string, { edited: boolean }>();
+  for (const l of lineRows) {
+    const off = l.date ? dayOffsetByDate.get(l.date) : undefined;
+    if (off === undefined || !l.serviceProductId) continue;
+    const info = lineEditInfo(toState(l));
+    lineEdits.set(itemKey(off, l.serviceProductId, l.vehicleTypeId), { edited: info.edited || l.overrideRate != null });
+  }
+
+  // ---- 1. days (re-dated, template items added/removed, manual items kept)
+  const merged = mergeTemplateDays({ currentDays, prevItems, newItems, newTemplateDays, startDate: request.startDate, lineEdits });
+  const sameDays = JSON.stringify(merged.days) === JSON.stringify(currentDays);
+  let revision = request.revision;
+  if (!sameDays) {
+    await saveVersionContent(actor, version.id, {
+      expectedRevision: revision,
+      itineraryDays: merged.days.map((d) => ({
+        dayOffset: d.dayOffset, date: d.date, narrative: d.narrative ?? null, overnightCity: d.overnightCity ?? null,
+        services: (d.services ?? []).map((s) => ({ serviceProductId: s.serviceProductId ?? null, label: s.label, details: s.details ?? null, vehicleTypeId: s.vehicleTypeId ?? null, quantity: s.quantity ?? null })),
+      })),
+    });
+    revision += 1;
+  }
+
+  // ---- 2. lines (participants / inactive / review flags from the rules)
+  const after = await prisma.serviceLine.findMany({ where: { versionId: version.id, scenarioId: null, serviceProductId: { not: null } } });
+  const plan = planLines({ items: newItems, lines: after.map(toState), travelers, startDate: request.startDate });
+  const switched = version.templateVersionId !== target.id;
+  const conflicts: RecalculationResult["conflicts"] = [...merged.conflicts, ...plan.conflicts];
+
+  // Cheap, honest checks on what rules cannot decide (owner decision O-ROOMS): flag, never edit.
+  const scenarios = await prisma.scenario.findMany({ where: { versionId: version.id }, include: { stays: true } });
+  for (const sc of scenarios) {
+    for (const st of sc.stays) {
+      if (st.checkIn < request.startDate || st.checkOut > request.endDate) {
+        conflicts.push({ key: `stay:${st.id}`, label: st.hotelName, code: "STAYS_NEED_REVIEW", detail: "stay dates fall outside the request dates" });
+      }
+      try {
+        const allocs = JSON.parse(st.allocations) as Array<{ adults: number; children: number }>;
+        const a = allocs.reduce((n, x) => n + (x.adults ?? 0), 0);
+        const c = allocs.reduce((n, x) => n + (x.children ?? 0), 0);
+        if (a !== travelers.adults || c !== travelers.children) {
+          conflicts.push({ key: `stay:${st.id}`, label: st.hotelName, code: "ROOMS_NEED_REVIEW", detail: "room allocation does not match the traveller counts" });
+        }
+      } catch { /* malformed allocations are reported by the engine */ }
+    }
+  }
+
+  const changed = !sameDays || plan.updates.length > 0 || switched;
+  if (plan.updates.length > 0 || switched) {
+    await tx(async (t) => {
+      const lock = await t.travelRequest.updateMany({ where: { id: requestId, revision }, data: { revision: { increment: 1 } } });
+      if (lock.count === 0) throw new WorkflowError("CONFLICT", "request was modified concurrently", 409);
+      for (const u of plan.updates) await t.serviceLine.update({ where: { id: u.id }, data: u.data });
+      if (switched) await t.quoteVersion.update({ where: { id: version.id }, data: { templateVersionId: target.id } });
+      await t.calculationSnapshot.deleteMany({ where: { versionId: version.id } });
+    });
+    revision += 1;
+  }
+
+  if (changed) {
+    await writeAuditLog(
+      "travel.recalc",
+      actor.id,
+      JSON.stringify({
+        requestId, versionId: version.id, templateVersionId: target.id, switchedFrom: switched ? version.templateVersionId : null,
+        revisionFrom: request.revision, revisionTo: revision, daysChanged: !sameDays, linesUpdated: plan.updates.length,
+        conflicts: conflicts.map((c) => c.code),
+      }),
+    );
+  }
+  return { revision, templateVersionId: target.id, changed, daysChanged: !sameDays, linesUpdated: plan.updates.length, governedLines: plan.governed, conflicts };
 }

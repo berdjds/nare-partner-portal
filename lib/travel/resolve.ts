@@ -417,7 +417,7 @@ function resolveServiceLine(
     quantity: line.quantity,
     participants: line.participants ?? undefined,
     capacity: line.capacity ?? undefined,
-    includedElsewhere: line.includedElsewhere,
+    includedElsewhere: line.includedElsewhere || line.ruleInactive,
     isStaffCost: line.isStaffCost,
     override,
     sourceRef,

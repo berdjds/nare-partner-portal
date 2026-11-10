@@ -34,6 +34,8 @@ interface ServiceDraft {
   label: string;
   quantity: number | null;
   vehicleTypeId: string | null;
+  /** Phase 2 template rule (strict, validated by the server). The editor does not author it yet but must carry it through a save. */
+  rule?: unknown;
 }
 
 interface DayDraft {
@@ -102,6 +104,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
           label: s.label,
           quantity: s.quantity ?? null,
           vehicleTypeId: s.vehicleTypeId ?? null,
+          rule: (s as { rule?: unknown }).rule ?? null,
         })),
       })),
     );

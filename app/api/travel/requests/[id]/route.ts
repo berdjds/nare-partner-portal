@@ -13,7 +13,7 @@ import {
   redactStay,
 } from "@/lib/travel/redact";
 import { buildTraceRows, type TraceRow } from "@/lib/travel/trace-table";
-import { updateDraft, updateDraftSchema } from "@/lib/travel/workflow";
+import { recalculateFromTemplate, updateDraft, updateDraftSchema, WorkflowError } from "@/lib/travel/workflow";
 import { writeAuditLog } from "@/lib/audit";
 import { getTravelActor, getTravelOrPartnerActor, travelError, unauthorized } from "../../guard";
 
@@ -210,6 +210,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const updated = await updateDraft(actor, id, parsed.data.expectedRevision, parsed.data.patch);
+    // Phase 2: travellers or dates changed on a template-built version -> re-derive it now,
+    // on the server, so the client never has to remember to ask. A failure here never
+    // fails the save; it is reported next to the saved request.
+    const p = parsed.data.patch;
+    if ((p.travelers !== undefined || p.startDate !== undefined || p.endDate !== undefined) && updated) {
+      const latest = await prisma.quoteVersion.findFirst({ where: { requestId: id }, orderBy: { versionNo: "desc" }, select: { templateVersionId: true } });
+      if (latest?.templateVersionId) {
+        try {
+          const recalculation = await recalculateFromTemplate(actor, id, { expectedRevision: updated.revision });
+          const fresh = await prisma.travelRequest.findUnique({ where: { id } });
+          return NextResponse.json({ ...(fresh ?? updated), recalculation });
+        } catch (err) {
+          return NextResponse.json({ ...updated, recalculation: { error: err instanceof WorkflowError ? err.code : "RECALC_FAILED" } });
+        }
+      }
+    }
     return NextResponse.json(updated);
   } catch (err) {
     return travelError(err, "[API /travel/requests/[id]]");

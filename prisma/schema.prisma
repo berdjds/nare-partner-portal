@@ -291,6 +291,15 @@ model ServiceLine {
   serviceProductId String? // catalog link; rates resolve from RateVersion(productType: SERVICE)
   date             String? // YYYY-MM-DD of the itinerary day that spawned the line; null = not day-linked
   vehicleTypeId    String? // selected fleet vehicle; SERVICE rates resolve per vehicle (null = vehicle-agnostic base rate)
+  // B2B cycle 1, Phase 2 (all additive and nullable/defaulted): template provenance for the
+  // deterministic recalculation. origin null = manual/legacy line; "TEMPLATE" = derived from
+  // the request's template version under templateKey. derivedJson is the last derived
+  // {participants, inactive}; a line that no longer matches it was edited by hand and is kept.
+  origin           String?
+  templateKey      String?
+  derivedJson      String?
+  ruleInactive     Boolean  @default(false) // template rule says nobody eligible: not charged
+  reviewFlag       String? // comma-separated rule conflict codes needing human review
 
   version QuoteVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
