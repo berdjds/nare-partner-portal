@@ -8,6 +8,8 @@ import { prisma } from "@/lib/prisma";
 import AppShell from "@/components/app/AppShell";
 import { PageHeader } from "@/components/app/PageHeader";
 import { partnerRequestList, partnerRequestDetail } from "@/lib/travel/partner-view";
+import { getRequestLocale } from "@/lib/i18n/server";
+import { translate } from "@/lib/i18n/messages";
 
 // Agency (PARTNER) landing: the agency's own requests and their issued client
 // quotations. Read-only. The data comes from the same allow-list projection as
@@ -25,14 +27,16 @@ export default async function PartnerPage() {
     : null;
   if (!agency) redirect("/login");
 
+  const locale = await getRequestLocale();
+  const t = (k: Parameters<typeof translate>[0], v?: Record<string, string | number>) => translate(k, locale, v);
   const requests = await partnerRequestList(agency.id, {});
   const details = await Promise.all(requests.map((r) => partnerRequestDetail(agency.id, r.id)));
 
   return (
     <AppShell>
-      <PageHeader title="My quotations" subtitle={`Requests and issued quotations for ${agency.name}.`} />
+      <PageHeader title={t("partner.title")} subtitle={t("partner.subtitle", { agency: agency.name })} />
       {requests.length === 0 ? (
-        <p className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">No requests yet.</p>
+        <p className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">{t("partner.empty")}</p>
       ) : (
         <ul className="space-y-3">
           {requests.map((r, i) => {
@@ -44,19 +48,19 @@ export default async function PartnerPage() {
                   <span className="text-xs text-muted-foreground">{r.packageCode}</span>
                 </div>
                 <p className="text-sm text-muted-foreground">{r.startDate} to {r.endDate} · {r.status.replaceAll("_", " ").toLowerCase()}</p>
-                {details[i]?.clientNotes ? <p className="mt-1 whitespace-pre-wrap text-sm"><span className="font-medium">Your messages and notes: </span>{details[i]?.clientNotes}</p> : null}
+                {details[i]?.clientNotes ? <p className="mt-1 whitespace-pre-wrap text-sm"><span className="font-medium">{t("partner.messages")}</span>{details[i]?.clientNotes}</p> : null}
                 {canDownload && docs.length > 0 ? (
                   <ul className="mt-2 flex flex-wrap gap-2">
                     {docs.map((d) => (
                       <li key={d.id}>
                         <Link className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm underline" href={`/api/travel/documents/${d.id}`} prefetch={false}>
-                          Quotation v{d.versionNo} (PDF)
+                          {t("partner.quotation", { version: d.versionNo })}
                         </Link>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">Quotation not issued yet.</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{t("partner.notIssued")}</p>
                 )}
               </li>
             );

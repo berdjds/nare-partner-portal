@@ -3,6 +3,11 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
+import { LocaleProvider } from "@/lib/i18n/react";
+import { PublicContactProvider } from "@/lib/contact/react";
+import { getRequestLocale } from "@/lib/i18n/server";
+import { dirOf } from "@/lib/i18n/locales";
+import { getPublicContact } from "@/lib/contact/service";
 
 export const metadata: Metadata = {
   title: "Nare Travel and Tours — Portal",
@@ -16,11 +21,19 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Language and direction come from the request (cookie, then Accept-Language, else English);
+  // the public contact comes from the published admin configuration with safe defaults.
+  const locale = await getRequestLocale();
+  const contact = await getPublicContact("portal");
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang={locale} dir={dirOf(locale)} className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="font-sans">
-        <ToastProvider>{children}</ToastProvider>
+        <LocaleProvider locale={locale}>
+          <PublicContactProvider contact={contact}>
+            <ToastProvider>{children}</ToastProvider>
+          </PublicContactProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

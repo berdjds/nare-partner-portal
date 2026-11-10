@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Shared legal document renderer (W5f, task legal-pages) — app/terms/page.tsx
  * and app/privacy/page.tsx render TERMS_OF_USE and PRIVACY_NOTICE from
@@ -9,7 +11,7 @@
  */
 
 import { LEGAL_LAST_UPDATED, type LegalDocument } from "@/lib/legal-content";
-import { CONTACT, OFFICE_ADDRESS } from "@/lib/portal-content";
+import { primaryEmail, telHref, usePublicContact } from "@/lib/contact/react";
 
 function sectionId(title: string): string {
   return title
@@ -19,6 +21,8 @@ function sectionId(title: string): string {
 }
 
 export function LegalPage({ document }: { document: LegalDocument }) {
+  const contact = usePublicContact();
+  const email = primaryEmail(contact);
   const relatedDocument =
     document.title === "Terms of Use"
       ? { title: "Privacy Notice", href: "/privacy" }
@@ -92,22 +96,24 @@ export function LegalPage({ document }: { document: LegalDocument }) {
           <h2 id="legal-contact-heading" className="text-xl font-semibold text-foreground">
             Contact us
           </h2>
-          <p className="leading-relaxed text-foreground">{OFFICE_ADDRESS}</p>
-          <p>
-            <a
-              href={`mailto:${CONTACT.email}`}
-              className="text-primary underline-offset-4 hover:underline"
-            >
-              {CONTACT.email}
-            </a>
-          </p>
-          {CONTACT.phones.map((phone) => (
-            <p key={phone}>
+          {contact.address && <p className="leading-relaxed text-foreground">{contact.address}</p>}
+          {email && (
+            <p>
               <a
-                href={`tel:${phone.replace(/\s/g, "")}`}
+                href={`mailto:${email}`}
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                {email}
+              </a>
+            </p>
+          )}
+          {(contact.phones ?? []).map((phone) => (
+            <p key={phone.number}>
+              <a
+                href={telHref(phone.number)}
                 className="text-muted-foreground underline-offset-4 hover:text-foreground"
               >
-                {phone}
+                {phone.number}
               </a>
             </p>
           ))}

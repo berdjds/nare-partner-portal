@@ -59,6 +59,8 @@ const EXPECTED_KEYS: PermissionKey[] = [
   "travel.internal.download",
   // W5b: B2B partner application review, admin-only by default.
   "partners.review",
+  "content.translate",
+  "content.approve",
 ];
 
 describe("permission keys", () => {

@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { useT } from "@/lib/i18n/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,10 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import { friendlyLoginError } from "@/lib/login-errors";
+import { FRIENDLY_CREDENTIALS_ERROR, friendlyLoginError } from "@/lib/login-errors";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
-import { FORGOT_ACCESS, LOGIN_PANEL, PARTNER_APPLY } from "@/lib/portal-content";
+import { FORGOT_ACCESS } from "@/lib/portal-content";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -25,6 +26,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const t = useT();
 
   const callbackUrl = searchParams.get("callbackUrl") || "/";
 
@@ -50,7 +52,10 @@ function LoginForm() {
     } else {
       // One identical message for every failure (lib/login-errors.ts): an
       // unknown email and a wrong password must stay indistinguishable.
-      const message = friendlyLoginError(result?.error);
+      // One identical, localised message for every failure (unknown email and wrong password stay
+      // indistinguishable); the catalogue text is the same sentence friendlyLoginError() returns in English.
+      const english = friendlyLoginError(result?.error);
+      const message = english === FRIENDLY_CREDENTIALS_ERROR ? t("login.error") : english;
       setError(message);
       toast(message, "error");
     }
@@ -62,13 +67,13 @@ function LoginForm() {
       <div className="grid flex-1 grid-rows-[auto_1fr] lg:grid-cols-2 lg:grid-rows-1">
       <aside className="flex flex-col gap-4 bg-gradient-to-br from-primary to-gradient-end px-6 py-8 text-primary-foreground lg:justify-center lg:gap-10 lg:px-16">
         <h1 className="max-w-md text-2xl font-semibold tracking-tight lg:text-4xl">
-          {LOGIN_PANEL.headline}
+          {t("login.headline")}
         </h1>
         <ul className="max-w-md space-y-2 text-base leading-relaxed text-primary-foreground/90 lg:space-y-4 lg:text-lg">
-          {LOGIN_PANEL.bullets.map((bullet) => (
-            <li key={bullet} className="flex items-start gap-3">
+          {(["login.bullet1", "login.bullet2", "login.bullet3"] as const).map((k) => (
+            <li key={k} className="flex items-start gap-3">
               <Check className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />
-              <span>{bullet}</span>
+              <span>{t(k)}</span>
             </li>
           ))}
         </ul>
@@ -77,15 +82,15 @@ function LoginForm() {
       <div className="flex flex-col items-center justify-start bg-background p-4 pt-12 lg:justify-center lg:pt-4">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Sign in to the partner portal</CardTitle>
+            <CardTitle className="text-xl">{t("login.title")}</CardTitle>
             <CardDescription>
-              Use the account provided by the Nare team.
+              {t("login.subtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t("login.email")}</Label>
                 <Input
                   id="email"
                   name="email"
@@ -93,12 +98,12 @@ function LoginForm() {
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={t("login.emailPlaceholder")}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t("login.password")}</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -114,7 +119,7 @@ function LoginForm() {
                   <button
                     type="button"
                     aria-pressed={showPassword}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? t("login.hidePassword") : t("login.showPassword")}
                     onClick={() => setShowPassword((visible) => !visible)}
                     className="absolute inset-y-0 right-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   >
@@ -126,7 +131,7 @@ function LoginForm() {
                   </button>
                 </div>
                 {capsLockOn && (
-                  <p className="text-sm text-muted-foreground">Caps Lock is on.</p>
+                  <p className="text-sm text-muted-foreground">{t("login.capsLock")}</p>
                 )}
               </div>
               {error && (
@@ -135,7 +140,7 @@ function LoginForm() {
                 </p>
               )}
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing in..." : "Sign in"}
+                {loading ? t("login.submitting") : t("login.submit")}
               </Button>
             </form>
             <p className="mt-4 text-center text-sm">
@@ -143,7 +148,7 @@ function LoginForm() {
                 href={FORGOT_ACCESS.href}
                 className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
               >
-                {FORGOT_ACCESS.label}
+                {t("login.forgot")}
               </Link>
             </p>
           </CardContent>
@@ -152,7 +157,7 @@ function LoginForm() {
           href="/partners/apply"
           className="mt-4 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
-          {PARTNER_APPLY.linkLabel}
+          {t("nav.apply")}
         </Link>
       </div>
       </div>

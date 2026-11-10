@@ -193,6 +193,14 @@ export function navGroupsForUser(user: NavUser | null | undefined): NavGroupMode
       match: (p) => p.startsWith("/admin/partners"),
     });
   }
+  // Mirrors app/admin/contact/page.tsx: admin.settings.
+  if (hasPermission(user, "admin.settings")) {
+    adminItems.push({ href: "/admin/contact", label: "Company and contact", icon: "settings", match: (p) => p.startsWith("/admin/contact") });
+  }
+  // Mirrors app/admin/translations/page.tsx: content.translate or content.approve.
+  if (hasPermission(user, "content.translate") || hasPermission(user, "content.approve")) {
+    adminItems.push({ href: "/admin/translations", label: "Translations", icon: "library", match: (p) => p.startsWith("/admin/translations") });
+  }
   if (adminItems.length > 0) groups.push({ label: "Admin", items: adminItems });
 
   return groups;

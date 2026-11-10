@@ -65,3 +65,13 @@ describe("catalogue completeness", () => {
     for (const [k, v] of Object.entries(hy)) if (!exempt.has(k)) expect(armenian(v), `${k}: ${v}`).toBe(true);
   });
 });
+
+describe("English catalogue reuses the content constants (single home for English text)", () => {
+  it("login and nav labels equal the portal-content values", async () => {
+    const pc = await import("@/lib/portal-content");
+    const { translate } = await import("@/lib/i18n/messages");
+    expect(translate("login.forgot", "en")).toBe(pc.FORGOT_ACCESS.label);
+    expect(translate("nav.apply", "en")).toBe(pc.PARTNER_APPLY.linkLabel);
+    expect(translate("login.headline", "en")).toBe(pc.LOGIN_PANEL.headline);
+  });
+});

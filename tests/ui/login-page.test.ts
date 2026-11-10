@@ -228,7 +228,7 @@ describe("submit and error handling contract (source-level)", () => {
 
   it("exposes the show/hide toggle state with aria-pressed", () => {
     expect(source).toContain("aria-pressed={showPassword}");
-    expect(source).toContain('showPassword ? "Hide password" : "Show password"');
+    expect(source).toContain('showPassword ? t("login.hidePassword") : t("login.showPassword")'); // English text lives in the catalogue (tests/i18n)
   });
 });
 

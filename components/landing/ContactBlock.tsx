@@ -1,6 +1,11 @@
-import { CONTACT, MAILTO_SUBJECTS } from "@/lib/portal-content";
+"use client";
+
+import { MAILTO_SUBJECTS } from "@/lib/portal-content";
+import { primaryEmail, telHref, usePublicContact } from "@/lib/contact/react";
 
 export function ContactBlock() {
+  const contact = usePublicContact();
+  const email = primaryEmail(contact);
   return (
     <section className="bg-muted">
       <div className="mx-auto max-w-4xl px-6 py-20 text-center sm:py-24">
@@ -8,27 +13,31 @@ export function ContactBlock() {
           Contact
         </h2>
         <div className="mt-8 space-y-4 text-base">
-          <p>
-            <a
-              href={`mailto:${CONTACT.email}?subject=${encodeURIComponent(
-                MAILTO_SUBJECTS.contact,
-              )}`}
-              className="font-medium text-primary hover:underline"
-            >
-              {CONTACT.email}
-            </a>
-          </p>
-          <p className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center sm:gap-6">
-            {CONTACT.phones.map((phone) => (
+          {email && (
+            <p>
               <a
-                key={phone}
-                href={`tel:${phone.replace(/\s/g, "")}`}
+                href={`mailto:${email}?subject=${encodeURIComponent(
+                  MAILTO_SUBJECTS.contact,
+                )}`}
                 className="font-medium text-primary hover:underline"
               >
-                {phone}
+                {email}
               </a>
-            ))}
-          </p>
+            </p>
+          )}
+          {contact.phones && contact.phones.length > 0 && (
+            <p className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center sm:gap-6">
+              {contact.phones.map((phone) => (
+                <a
+                  key={phone.number}
+                  href={telHref(phone.number)}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {phone.number}
+                </a>
+              ))}
+            </p>
+          )}
         </div>
       </div>
     </section>

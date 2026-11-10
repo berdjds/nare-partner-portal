@@ -81,3 +81,16 @@ describe("contact routes", () => {
     expect(res.headers.get("Cache-Control")).toMatch(/max-age/);
   });
 });
+
+describe("admin pages guards", () => {
+  it("/admin/contact needs admin.settings and /admin/translations needs a content key; others are redirected", async () => {
+    vi.doMock("next/navigation", () => ({ redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); } }));
+    const visit = async (path: string, u: any) => { as(u); const Page = (await import(path)).default; try { await Page(); return "RENDER"; } catch (e: any) { return String(e.message); } };
+    expect(await visit("@/app/admin/contact/page", admin)).toBe("RENDER");
+    for (const u of [advisor, partner, editor]) expect(await visit("@/app/admin/contact/page", u)).toBe("REDIRECT:/");
+    expect(await visit("@/app/admin/contact/page", null)).toBe("REDIRECT:/login");
+    expect(await visit("@/app/admin/translations/page", editor)).toBe("RENDER");
+    expect(await visit("@/app/admin/translations/page", admin)).toBe("RENDER");
+    for (const u of [advisor, partner]) expect(await visit("@/app/admin/translations/page", u)).toBe("REDIRECT:/");
+  });
+});

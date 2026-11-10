@@ -14,7 +14,8 @@
  */
 
 import type { Metadata } from "next";
-import { CONTACT, PAGE_TITLES, PARTNER_APPLY, robotsDirective } from "@/lib/portal-content";
+import { PAGE_TITLES, PARTNER_APPLY, robotsDirective } from "@/lib/portal-content";
+import { ContactEmailLink } from "@/components/partners/ContactEmailLink";
 import { issueFormToken } from "@/lib/partners/abuse";
 import { ApplyWizard } from "@/components/partners/ApplyWizard";
 import { PublicHeader } from "@/components/public/PublicHeader";
@@ -59,9 +60,7 @@ export default function PartnerApplyPage() {
         {formToken === null ? (
           <p role="alert" className="rounded-lg border border-border bg-card p-6 text-sm leading-relaxed">
             {PARTNER_APPLY.unavailable}{" "}
-            <a href={`mailto:${CONTACT.email}`} className="text-primary underline underline-offset-4">
-              {CONTACT.email}
-            </a>
+            <ContactEmailLink />
           </p>
         ) : (
           <ApplyWizard formToken={formToken} />

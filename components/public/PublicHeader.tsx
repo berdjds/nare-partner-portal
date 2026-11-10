@@ -14,18 +14,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { BrandMark } from "@/components/app/BrandMark";
-import { PARTNER_APPLY, PRODUCT_NAME } from "@/lib/portal-content";
+import { PRODUCT_NAME } from "@/lib/portal-content";
+import { useT } from "@/lib/i18n/react";
+import type { MessageKey } from "@/lib/i18n/messages";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 export type PublicPageKey = "home" | "apply" | "login";
 
-const NAV_LINKS: readonly { key: PublicPageKey; href: string; label: string }[] = [
-  { key: "home", href: "/", label: "Home" },
-  { key: "apply", href: "/partners/apply", label: PARTNER_APPLY.linkLabel },
-  { key: "login", href: "/login", label: "Sign in" },
+const NAV_LINKS: readonly { key: PublicPageKey; href: string; label: MessageKey }[] = [
+  { key: "home", href: "/", label: "nav.home" },
+  { key: "apply", href: "/partners/apply", label: "nav.apply" },
+  { key: "login", href: "/login", label: "common.signIn" },
 ];
 
 export function PublicHeader({ active }: { active?: PublicPageKey }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   return (
     <header
@@ -51,7 +55,7 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
             type="button"
             aria-expanded={open}
             aria-controls="public-header-nav"
-            aria-label={open ? "Close menu" : "Open menu"}
+            aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
             onClick={() => setOpen((visible) => !visible)}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted sm:hidden"
           >
@@ -65,7 +69,7 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
 
         <nav
           id="public-header-nav"
-          aria-label="Primary"
+          aria-label={t("nav.primary")}
           className={`${
             open ? "flex" : "hidden"
           } mt-4 w-full flex-col gap-4 text-sm font-medium sm:mt-0 sm:flex sm:w-auto sm:flex-row sm:items-center sm:gap-6`}
@@ -81,9 +85,10 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
                   : "text-muted-foreground hover:text-foreground"
               }
             >
-              {link.label}
+              {t(link.label)}
             </Link>
           ))}
+          <LanguageSwitcher />
         </nav>
       </div>
     </header>

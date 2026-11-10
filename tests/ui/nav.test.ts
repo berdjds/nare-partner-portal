@@ -64,6 +64,8 @@ describe("navGroupsForUser", () => {
           { href: "/admin", label: "Accounts and users panel", icon: "shield-check" },
           { href: "/admin/permissions", label: "Permissions report", icon: "users" },
           { href: "/admin/partners", label: "Partner applications", icon: "building-2" },
+          { href: "/admin/contact", label: "Company and contact", icon: "settings" },
+          { href: "/admin/translations", label: "Translations", icon: "library" },
         ],
       },
     ]);
@@ -165,14 +167,14 @@ describe("navGroupsForUser", () => {
     // which a plain ADMIN preset still holds.
     const groups = navGroupsForUser(user("ADMIN", [{ key: "admin.users", allowed: false }]));
     expect(groupLabels(groups)).toEqual(["Inbox", "Travel", "Tools", "Admin"]);
-    expect(itemLabels(groups, "Admin")).toEqual(["Accounts and users panel", "Partner applications"]);
+    expect(itemLabels(groups, "Admin")).toEqual(["Accounts and users panel", "Partner applications", "Company and contact", "Translations"]);
   });
 
   it("ADMIN denied partners.review loses the Partner applications link (W5b)", () => {
     // app/admin/partners/page.tsx requires hasPermission(user, "partners.review");
     // denying it must hide the link even though the other admin pages stay.
     const groups = navGroupsForUser(user("ADMIN", [{ key: "partners.review", allowed: false }]));
-    expect(itemLabels(groups, "Admin")).toEqual(["Accounts and users panel", "Permissions report"]);
+    expect(itemLabels(groups, "Admin")).toEqual(["Accounts and users panel", "Permissions report", "Company and contact", "Translations"]);
   });
 
   it("non-admin granted partners.review sees an Admin group with only Partner applications", () => {
@@ -222,5 +224,16 @@ describe("PARTNER navigation (B2B cycle 1)", () => {
   it("shows one item and never staff, calculator, admin or internal links", () => {
     const groups = navGroupsForUser(user("PARTNER", [{ key: "travel.internal.view", allowed: true }]));
     expect(groups.flatMap((g) => g.items.map((i) => i.href))).toEqual(["/partner"]);
+  });
+});
+
+describe("Phase 4 admin navigation", () => {
+  const admin = (u: NavUser) => navGroupsForUser(u).find((g) => g.label === "Admin")?.items.map((i) => i.href) ?? [];
+  it("Company and contact needs admin.settings; Translations needs content.translate or content.approve; PARTNER sees neither", () => {
+    expect(admin(user("ADVISOR"))).toEqual([]);
+    expect(admin(user("ADVISOR", [{ key: "content.translate", allowed: true }]))).toEqual(["/admin/translations"]);
+    expect(admin(user("ADVISOR", [{ key: "content.approve", allowed: true }]))).toEqual(["/admin/translations"]);
+    expect(admin(user("ADMIN", [{ key: "admin.settings", allowed: false }]))).not.toContain("/admin/contact");
+    expect(admin(user("PARTNER", [{ key: "content.approve", allowed: true }, { key: "admin.settings", allowed: true }]))).toEqual([]);
   });
 });

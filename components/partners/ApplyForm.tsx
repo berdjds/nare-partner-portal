@@ -34,7 +34,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CONTACT, PARTNER_APPLY } from "@/lib/portal-content";
+import { PARTNER_APPLY } from "@/lib/portal-content";
+import { primaryEmail, usePublicContact } from "@/lib/contact/react";
 import { CONSENT_VERSION } from "@/lib/partners/validation";
 
 // Mirrors KYC_MAX_FILE_BYTES (lib/partners/kyc-storage.ts, node-only).
@@ -72,6 +73,7 @@ export function isPresentFile(value: FormDataEntryValue | null): value is File {
 }
 
 export function ApplySuccess({ reference }: { reference: string }) {
+  const contactEmail = primaryEmail(usePublicContact());
   return (
     <div role="status" className="rounded-lg border border-border bg-card p-8">
       <h2 className="text-2xl font-semibold tracking-tight">{PARTNER_APPLY.successTitle}</h2>
@@ -79,13 +81,17 @@ export function ApplySuccess({ reference }: { reference: string }) {
       <p className="mt-1 font-mono text-xl font-semibold">{reference}</p>
       <p className="mt-6 text-sm leading-relaxed text-muted-foreground">{PARTNER_APPLY.successBody}</p>
       <p className="mt-6 text-sm">
-        <a
-          href={`mailto:${CONTACT.email}`}
-          className="text-primary underline underline-offset-4"
-        >
-          {CONTACT.email}
-        </a>
-        {" · "}
+        {contactEmail && (
+          <>
+            <a
+              href={`mailto:${contactEmail}`}
+              className="text-primary underline underline-offset-4"
+            >
+              {contactEmail}
+            </a>
+            {" · "}
+          </>
+        )}
         <Link href="/" className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
           Back to home
         </Link>
