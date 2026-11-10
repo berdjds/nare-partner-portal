@@ -89,20 +89,21 @@ export async function history(k: Key) {
 }
 
 // ---- writing
-async function nextVersion(k: Key) {
-  const last = await prisma.translation.findFirst({ where: { entity: k.entity, entityId: k.entityId, field: k.field, locale: k.locale }, orderBy: { version: "desc" }, select: { version: true } });
-  return (last?.version ?? 0) + 1;
-}
-
 async function createDraft(actor: Actor, k: Key, text: string, source: "HUMAN" | "AI", model: string | null, english: string) {
-  const version = await nextVersion(k);
   const created = await prisma.$transaction(async (tx) => {
+    const last = await tx.translation.findFirst({ where: { entity: k.entity, entityId: k.entityId, field: k.field, locale: k.locale }, orderBy: { version: "desc" }, select: { version: true } });
+    const version = (last?.version ?? 0) + 1;
+    // An AI draft must not push a person's pending draft out of review: refuse and say why.
+    if (source === "AI") {
+      const human = await tx.translation.findFirst({ where: { entity: k.entity, entityId: k.entityId, field: k.field, locale: k.locale, status: "DRAFT", source: "HUMAN" } });
+      if (human) throw new I18nError("HUMAN_DRAFT_PENDING", "a human draft is waiting for approval; approve or reject it before asking for an AI draft", 409);
+    }
     // Older unapproved drafts are superseded (kept as history); APPROVED rows are never touched here.
     await tx.translation.updateMany({ where: { entity: k.entity, entityId: k.entityId, field: k.field, locale: k.locale, status: "DRAFT" }, data: { status: "SUPERSEDED" } });
     const row = await tx.translation.create({ data: { ...k, version, text, status: "DRAFT", source, model, sourceHash: sha(english), createdById: actor.id } });
     await tx.translationEvent.create({ data: { translationId: row.id, action: source === "AI" ? "AI_GENERATED" : "CREATED", actorId: actor.id, detail: JSON.stringify({ model, sourceHash: row.sourceHash }) } });
     return row;
-  });
+  }).catch((e) => { if ((e as { code?: string }).code === "P2002") throw new I18nError("CONFLICT", "someone saved at the same time; reload and try again", 409); throw e; });
   return created;
 }
 
@@ -168,7 +169,7 @@ export async function reject(actor: Actor, translationId: string, reason?: strin
 }
 
 // ---- the missing-translation check
-export interface MissingItem { entity: string; entityId: string; field: string; label: string; english: string }
+export interface MissingItem { entity: string; entityId: string; field: string; label: string; english: string; stale?: boolean }
 
 async function candidatesFor(limit: number): Promise<MissingItem[]> {
   const candidates: MissingItem[] = [];
@@ -190,9 +191,13 @@ async function candidatesFor(limit: number): Promise<MissingItem[]> {
 export async function missingTranslations(locale: string, limit = 500): Promise<MissingItem[]> {
   const loc = checkKey({ entity: "ServiceProduct", entityId: "", field: "name", locale });
   const candidates = await candidatesFor(limit);
-  const approved = await prisma.translation.findMany({ where: { locale: loc, status: "APPROVED" }, select: { entity: true, entityId: true, field: true } });
-  const have = new Set(approved.map((a) => `${a.entity}|${a.entityId}|${a.field}`));
-  return candidates.filter((c) => !have.has(`${c.entity}|${c.entityId}|${c.field}`)).slice(0, limit);
+  const approved = await prisma.translation.findMany({ where: { locale: loc, status: "APPROVED" }, select: { entity: true, entityId: true, field: true, sourceHash: true } });
+  const have = new Map(approved.map((a) => [`${a.entity}|${a.entityId}|${a.field}`, a.sourceHash]));
+  // Missing = no approved translation; also reported (stale: true) when the English changed since approval.
+  return candidates.flatMap((c) => {
+    const h = have.get(`${c.entity}|${c.entityId}|${c.field}`);
+    return h === undefined ? [c] : h !== sha(c.english) ? [{ ...c, stale: true }] : [];
+  }).slice(0, limit);
 }
 
 export type ItemState = "missing" | "draft" | "approved" | "stale";

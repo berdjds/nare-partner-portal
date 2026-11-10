@@ -18,11 +18,12 @@ export async function saveDraft(actor: Actor, scope: string, data: unknown, note
   const sc = checkScope(scope);
   const parsed = (sc === "global" ? contactDataSchema : contactOverrideSchema).safeParse(data);
   if (!parsed.success) throw new ContactError("INVALID_CONTACT", parsed.error.issues.map((i) => `${i.path.join(".") || "data"}: ${i.message}`).join("; "));
-  const last = await prisma.contactProfile.findFirst({ where: { scope: sc }, orderBy: { version: "desc" }, select: { version: true } });
   const row = await prisma.$transaction(async (tx) => {
+    const last = await tx.contactProfile.findFirst({ where: { scope: sc }, orderBy: { version: "desc" }, select: { version: true } });
     await tx.contactProfile.updateMany({ where: { scope: sc, status: "DRAFT" }, data: { status: "SUPERSEDED" } });
     return tx.contactProfile.create({ data: { scope: sc, version: (last?.version ?? 0) + 1, status: "DRAFT", dataJson: JSON.stringify(parsed.data), note: note?.slice(0, 300) ?? null, createdById: actor.id } });
-  });
+  }).catch((e) => { if ((e as { code?: string }).code === "P2002") throw new ContactError("CONFLICT", "someone saved at the same time; reload and try again", 409); throw e; });
+  clearContactCache();
   await writeAuditLog("contact.draft", actor.id, JSON.stringify({ id: row.id, scope: sc, version: row.version }));
   return row;
 }
@@ -39,6 +40,7 @@ export async function publish(actor: Actor, id: string) {
     await tx.contactProfile.updateMany({ where: { scope: row.scope, status: "PUBLISHED", id: { not: id } }, data: { status: "SUPERSEDED" } });
     return tx.contactProfile.findUniqueOrThrow({ where: { id } });
   });
+  clearContactCache();
   await writeAuditLog("contact.publish", actor.id, JSON.stringify({ id, scope: row.scope, version: row.version }));
   return out;
 }
@@ -69,15 +71,16 @@ export interface PublicContact {
  * then the published portal override (field by field), reduced by the visibility flags. Any
  * failure returns the defaults: the public site never breaks because configuration did.
  */
-export async function getPublicContact(scope: Scope = "portal"): Promise<PublicContact> {
+async function computePublicContact(scope: Scope): Promise<PublicContact> {
   let merged: ContactData = DEFAULT_CONTACT;
   try {
-    const g = (await publishedData("global")) as Partial<ContactData> | null;
+    const g = (await publishedData("global")) as ContactData | null;
     const p = scope === "portal" ? ((await publishedData("portal")) as ContactOverride | null) : null;
-    const layers = [g, p].filter(Boolean) as Array<Partial<ContactData>>;
-    merged = { ...DEFAULT_CONTACT, visibility: { ...DEFAULT_CONTACT.visibility } };
-    for (const l of layers) {
-      const { visibility, ...rest } = l as Partial<ContactData> & { visibility?: Partial<ContactData["visibility"]> };
+    // A published global profile REPLACES the built-in defaults (so an admin can remove the address,
+    // hours or founded year); the defaults are only the base when nothing valid is published.
+    merged = g ? { ...g, visibility: { ...g.visibility } } : { ...DEFAULT_CONTACT, visibility: { ...DEFAULT_CONTACT.visibility } };
+    if (p) {
+      const { visibility, ...rest } = p as Partial<ContactData> & { visibility?: Partial<ContactData["visibility"]> };
       merged = { ...merged, ...rest, visibility: { ...merged.visibility, ...(visibility ?? {}) } } as ContactData;
     }
   } catch { merged = DEFAULT_CONTACT; }
@@ -92,4 +95,18 @@ export async function getPublicContact(scope: Scope = "portal"): Promise<PublicC
   if (v.hours && merged.hours) out.hours = merged.hours;
   if (v.map) { const e = mapEmbedUrl(merged.map), l = mapLinkUrl(merged.map); if (e) out.mapEmbedUrl = e; if (l) out.mapLinkUrl = l; }
   return out;
+}
+
+// Pages ask for the contact on every render (the root layout), so reads are cached in-process for a
+// short time and dropped the moment something is saved or published here.
+const CACHE_MS = 30_000;
+const cache = new Map<string, { at: number; value: PublicContact }>();
+export function clearContactCache() { cache.clear(); }
+
+export async function getPublicContact(scope: Scope = "portal"): Promise<PublicContact> {
+  const hit = cache.get(scope);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
+  const value = await computePublicContact(scope);
+  cache.set(scope, { at: Date.now(), value });
+  return value;
 }

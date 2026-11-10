@@ -28,3 +28,15 @@ Three new tables (`Translation`, `TranslationEvent`, `ContactProfile`); nothing 
 3. **RTL readiness is structural only:** `dir` follows the locale table, but 70 physical-direction utilities (`pl-`, `ml-`, `left-`, `text-left` ...) in 28 files still need to become logical ones before Arabic can be switched on; that audit belongs with the Phase 5 visual pass. Arabic content and an Arabic font are out of scope here.
 4. **Quotation PDFs and partner-facing content are still English.** A resolver (`resolveText`) exists for translated content but is not yet used by the PDF or partner views.
 5. **Cache:** the public contact endpoint is cached for 60 s in browsers; the pages read it per request.
+
+## Independent review (read-only) and what changed
+No high finding: no way to overwrite an approved translation, to approve without `content.approve`, or to reach the admin APIs without the key. Fixed after the review:
+* **M1** Accept-Language now follows the user's order and q-values (`q=0` and malformed entries ignored); an English entry ranked first keeps English.
+* **M2** a published global profile replaces the built-in defaults, so an admin can remove the address, hours or founded year; the admin form shows a saved profile exactly as saved.
+* **M3** an AI draft is refused (`HUMAN_DRAFT_PENDING`, 409) while a person's draft is waiting for approval.
+* **M4** the "may this text leave the server" check now normalises Unicode (NFKC, every digit script), refuses prices, costs, rates, margins and percentages, obfuscated emails, lower-case booking references and short local numbers (7+ digits), and the admin sees the exact text and must confirm before an AI request. Personal names cannot be detected automatically; the confirmation step and the allow-list are the controls.
+* **M5** public contact reads are cached in-process for 30 s and dropped on save or publish (the layout still reads the request cookie, so pages stay dynamic).
+* **L1** version numbers are computed inside the transaction and a simultaneous save is a clean 409; **L3** approving an AI draft over an approved human translation asks for confirmation; **L4** `goo.gl` and Google redirector links are refused, only `/maps` paths, the `maps.google.com` host and share links pass, userinfo is refused; **L6** the missing-translation check also reports stale approvals.
+* Found by the browser re-run, not the review: a history response arriving after the person began typing could blank the translation box (the Save button then looked disabled). Fixed with a typed-since-open guard.
+
+Still open: **L2** the stale-source re-check happens just before, not inside, the approval transaction (a very small window on SQLite); **L5** `next build` now downloads Noto Sans Armenian from Google Fonts, so builds need network access (CI already does; use `next/font/local` with a committed font file if offline builds matter).

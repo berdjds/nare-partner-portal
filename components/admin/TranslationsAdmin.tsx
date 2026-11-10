@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,8 @@ export default function TranslationsAdmin({ canTranslate, canApprove }: { canTra
   const [versions, setVersions] = useState<Version[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const typed = useRef(false); // true once the person types: a late history response must never overwrite their text
+  const openSeq = useRef(0);
 
   const loadOverview = useCallback(async () => {
     try { const r = await axios.get(`/api/admin/translations?locale=${LOCALE}`); setItems(r.data.items); setAiAvailable(r.data.aiAvailable); }
@@ -32,11 +34,15 @@ export default function TranslationsAdmin({ canTranslate, canApprove }: { canTra
 
   async function open(item: Item) {
     setSel(item);
+    typed.current = false;
+    const seq = ++openSeq.current;
+    setText("");
     try {
       const r = await axios.get(`/api/admin/translations?locale=${LOCALE}&entity=${item.entity}&entityId=${encodeURIComponent(item.entityId)}&field=${encodeURIComponent(item.field)}`);
+      if (seq !== openSeq.current) return; // another item was opened meanwhile
       const v: Version[] = r.data.history; setVersions(v);
       const draft = v.find((x) => x.status === "DRAFT") ?? v.find((x) => x.status === "APPROVED");
-      setText(draft?.text ?? "");
+      if (!typed.current) setText(draft?.text ?? "");
     } catch (e) { toast(msg(e, "Failed to load this item"), "error"); }
   }
   const act = async (body: Record<string, unknown>, ok: string) => {
@@ -80,12 +86,12 @@ export default function TranslationsAdmin({ canTranslate, canApprove }: { canTra
             <div className="grid gap-4 md:grid-cols-2">
               <div><p className="mb-1 text-sm font-medium">English (source)</p><p lang="en" className="whitespace-pre-wrap rounded-lg border bg-muted/40 p-3 text-sm">{sel.english}</p></div>
               <div><Label htmlFor="tr-text">Armenian</Label>
-                <Textarea id="tr-text" lang="hy" rows={6} value={text} onChange={(e) => setText(e.target.value)} disabled={!canTranslate} /></div>
+                <Textarea id="tr-text" lang="hy" rows={6} value={text} onChange={(e) => { typed.current = true; setText(e.target.value); }} disabled={!canTranslate} /></div>
             </div>
             <div className="flex flex-wrap gap-2">
               {canTranslate && <Button type="button" disabled={busy || !text.trim()} onClick={() => act({ action: "draft", text }, "Draft saved")}>Save draft</Button>}
-              {canTranslate && <Button type="button" variant="outline" disabled={busy || !aiAvailable} onClick={() => act({ action: "ai" }, "AI draft created, review it before approving")}>Generate AI draft</Button>}
-              {canApprove && draft && <Button type="button" variant="outline" disabled={busy} onClick={() => act({ action: "approve", id: draft.id }, "Approved and published")}>Approve draft v{draft.version}</Button>}
+              {canTranslate && <Button type="button" variant="outline" disabled={busy || !aiAvailable} onClick={() => { if (window.confirm(`This exact English text will be sent to the AI provider:\n\n${sel.english}\n\nMake sure it contains no client names or contact, booking, price or cost details. Continue?`)) act({ action: "ai" }, "AI draft created, review it before approving"); }}>Generate AI draft</Button>}
+              {canApprove && draft && <Button type="button" variant="outline" disabled={busy} onClick={() => { const replacesHuman = draft.source === "AI" && versions.some((v) => v.status === "APPROVED" && v.source === "HUMAN"); if (replacesHuman && !window.confirm("This AI draft will replace the approved human translation (kept in history). Approve it anyway?")) return; act({ action: "approve", id: draft.id }, "Approved and published"); }}>Approve draft v{draft.version}</Button>}
               {canApprove && draft && <Button type="button" variant="ghost" disabled={busy} onClick={() => act({ action: "reject", id: draft.id }, "Draft rejected")}>Reject draft</Button>}
             </div>
             {canTranslate && !aiAvailable && <p className="text-xs text-muted-foreground">AI generation is switched off on this server. Drafts can still be written by hand.</p>}

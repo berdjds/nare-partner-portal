@@ -52,17 +52,38 @@ export function deepSeekProvider(apiKey: string, fetchImpl: typeof fetch = fetch
   };
 }
 
-const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
-const PHONE = /(?:\+|\b)\d[\d\s().-]{7,}\d/g;
-const BOOKING = /\b[A-Z]{2,8}-\d{4}-\d{2}-\d{2}-\d{4}\b/;
-const URL_LIKE = /https?:\/\//i;
+const EMAIL = /[A-Z0-9._%+-]+\s*@\s*[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const EMAIL_WORDS = /\b[\w.-]+\s*[([]?\s*at\s*[)\]]?\s*[\w-]+\s*[([]?\s*dot\s*[)\]]?\s*[a-z]{2,}\b/i;
+const PHONE = /(?:\+|\b)\d[\d\s().-]{5,}\d/g;
+const BOOKING = /\b[A-Z]{2,8}-\d{4}-\d{2}-\d{2}-\d{4}\b/i;
+const URL_LIKE = /https?:\/\/|www\./i;
+const MONEY = /\d[\d.,\s]*\s?(?:usd|eur|amd|rub|gel|dram|dollars?|euros?)\b|[$€£֏₽₾]\s?\d|\d\s?[$€£֏₽₾]|\b(?:margin|markup|mark-up|commission|net rate|net price|supplier rate|cost price|purchase price|wholesale)\b|\d\s?%/i;
 
-/** Returns a reason when the text must not leave the server, else null. */
-export function sensitiveReason(text: string): string | null {
-  if (EMAIL.test(text)) return "email address";
-  // A phone-like run needs at least 9 digits, so ordinary year ranges such as "2019-2026" pass.
-  for (const m of text.match(PHONE) ?? []) if (m.replace(/\D/g, "").length >= 9) return "phone number";
+/** NFKC plus every Unicode decimal digit (Arabic-Indic, fullwidth, ...) mapped to ASCII, so patterns cannot be dodged. */
+export function normaliseForCheck(text: string): string {
+  const nfkc = text.normalize("NFKC");
+  const cps = Array.from(nfkc);
+  const ND = new RegExp("^\\p{Nd}$", "u"); // built from a string: the repo tsconfig targets pre-ES6
+  const isNd = (c: string) => ND.test(c);
+  return cps.map((c, i) => {
+    if (!isNd(c)) return c;
+    let start = i;
+    while (start > 0 && isNd(cps[start - 1])) start -= 1;
+    return String(((c.codePointAt(0)! - cps[start].codePointAt(0)!) % 10 + 10) % 10);
+  }).join("");
+}
+
+/** Returns a reason when the text must not leave the server, else null. Fail-safe: when in doubt, refuse. */
+export function sensitiveReason(raw: string): string | null {
+  const text = normaliseForCheck(raw);
+  if (EMAIL.test(text) || EMAIL_WORDS.test(text)) return "email address";
   if (BOOKING.test(text)) return "booking reference";
   if (URL_LIKE.test(text)) return "link";
+  if (MONEY.test(text)) return "price, cost, rate or margin";
+  // A phone-like run needs at least 7 digits; plain year ranges such as "2019-2026" are fine.
+  for (const m of text.match(PHONE) ?? []) {
+    if (/^\d{4}\s*[-–]\s*\d{4}$/.test(m.trim())) continue;
+    if (m.replace(/\D/g, "").length >= 7) return "phone number";
+  }
   return null;
 }

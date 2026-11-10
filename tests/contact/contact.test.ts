@@ -34,6 +34,9 @@ describe("schema", () => {
     expect(bad({ map: { lat: 40.18, lng: 44.51 } })).toBe(true);
     expect(bad({ map: { url: "https://evil.example/maps" } })).toBe(false);
     expect(bad({ map: { url: "javascript:alert(1)" } })).toBe(false);
+    expect(bad({ map: { url: "https://www.google.com/url?q=https://evil.example" } })).toBe(false); // redirector, not /maps
+    expect(bad({ map: { url: "https://goo.gl/maps/abc" } })).toBe(false);
+    expect(bad({ map: { url: "https://evil@www.google.com/maps/x" } })).toBe(false); // userinfo
     expect(bad({ map: { url: "https://maps.app.goo.gl/abc123" } })).toBe(true);
     expect(bad({ map: { url: "https://www.google.com/maps/place/Nare" } })).toBe(true);
     expect(bad({ map: { placeId: "ChIJ-bad id!" } })).toBe(false);
@@ -98,11 +101,29 @@ describe("service", () => {
     expect(logs.some((l) => l.scope === "portal")).toBe(true);
     expect(JSON.stringify(logs)).not.toContain("@nare.am"); // ids and versions only, not the content
   });
+  it("a published global profile replaces the built-in defaults: a cleared address stays cleared", async () => {
+    const { address: _a, ...noAddress } = base() as any;
+    const d = await svc.saveDraft(admin, "global", noAddress, "no address");
+    await svc.publish(admin, d.id);
+    svc.clearContactCache();
+    expect((await svc.getPublicContact("global")).address).toBeUndefined();
+    expect((await svc.getPublicContact("global")).generalEmail).toBe("info@nare.am");
+  });
+  it("reads are cached briefly and dropped on save/publish", async () => {
+    svc.clearContactCache();
+    const a = await svc.getPublicContact("portal"); const b = await svc.getPublicContact("portal");
+    expect(b).toBe(a); // same cached object
+    const d = await svc.saveDraft(admin, "global", { ...base(), hours: "Cache test" });
+    await svc.publish(admin, d.id);
+    expect(await svc.getPublicContact("global")).not.toBe(a);
+  });
   it("falls back to the defaults, not an error, when the database read fails; and a corrupt stored row is skipped", async () => {
     const bad = await prisma.contactProfile.create({ data: { scope: "global", version: 99, status: "PUBLISHED", dataJson: "{not json" } });
+    svc.clearContactCache();
     const ok = await svc.getPublicContact("portal");
     expect(ok.generalEmail).toBeDefined();
     await prisma.contactProfile.delete({ where: { id: bad.id } });
+    svc.clearContactCache();
     const spy = vi.spyOn(prisma.contactProfile, "findMany").mockRejectedValueOnce(new Error("db down"));
     expect((await svc.getPublicContact("portal")).generalEmail).toBe("info@nare.am");
     spy.mockRestore();

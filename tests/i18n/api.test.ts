@@ -94,3 +94,13 @@ describe("admin pages guards", () => {
     for (const u of [advisor, partner]) expect(await visit("@/app/admin/translations/page", u)).toBe("REDIRECT:/");
   });
 });
+
+describe("TranslationsAdmin late-response guard (source)", () => {
+  it("a history response arriving after the person started typing does not overwrite their text", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../../components/admin/TranslationsAdmin.tsx", import.meta.url), "utf8");
+    expect(src).toContain("if (!typed.current) setText(");
+    expect(src).toContain("typed.current = true");
+    expect(src).toContain("seq !== openSeq.current");
+  });
+});

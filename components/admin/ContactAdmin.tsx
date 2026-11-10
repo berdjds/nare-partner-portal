@@ -37,7 +37,7 @@ export default function ContactAdmin() {
       setRows(r.data.history); setDefaults(r.data.defaults);
       const latest: Row | undefined = r.data.history.find((x: Row) => x.status === "DRAFT") ?? r.data.history.find((x: Row) => x.status === "PUBLISHED");
       const data = latest ? parse(latest.dataJson) : s === "global" ? r.data.defaults : {};
-      const base = s === "global" ? { ...r.data.defaults, ...data } : data;
+      const base = s === "global" ? (latest ? data : r.data.defaults) : data; // a saved profile is shown exactly as saved: cleared fields stay cleared
       setForm({
         foundedYear: base.foundedYear ?? "", generalEmail: base.generalEmail ?? "", b2bEmail: base.b2bEmail ?? "",
         phones: (base.phones ?? []).map((p: { number: string }) => p.number).join("\n"), whatsapp: base.whatsapp ?? "",

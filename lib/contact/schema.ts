@@ -7,10 +7,15 @@ import { z } from "zod";
 
 const PHONE = /^\+?[0-9][0-9\s().-]{6,20}[0-9]$/;
 const phone = z.string().trim().regex(PHONE, "enter a valid phone number");
-const MAP_HOSTS = ["www.google.com", "google.com", "maps.google.com", "maps.app.goo.gl", "goo.gl"];
+const MAP_HOSTS = ["www.google.com", "google.com", "maps.google.com", "maps.app.goo.gl"];
 
 const mapUrl = z.string().trim().max(500).refine((u) => {
-  try { const x = new URL(u); return x.protocol === "https:" && MAP_HOSTS.includes(x.hostname); } catch { return false; }
+  try {
+    const x = new URL(u);
+    if (x.protocol !== "https:" || !MAP_HOSTS.includes(x.hostname) || x.username || x.password) return false;
+    // google.com hosts only for /maps paths (not google.com/url?q= redirects); the share host has short codes
+    return x.hostname === "maps.app.goo.gl" ? x.pathname.length > 1 : x.hostname === "maps.google.com" ? true : x.pathname.startsWith("/maps");
+  } catch { return false; }
 }, "use a Google Maps link (https)");
 
 export const mapSchema = z.object({

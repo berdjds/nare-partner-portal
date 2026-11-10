@@ -75,3 +75,18 @@ describe("English catalogue reuses the content constants (single home for Englis
     expect(translate("login.headline", "en")).toBe(pc.LOGIN_PANEL.headline);
   });
 });
+
+describe("Accept-Language", () => {
+  it("honours the user's order and q-values, ignores refusals, and keeps English when it ranks first", async () => {
+    const { pickFromAcceptLanguage: pick } = await import("@/lib/i18n/locales");
+    expect(pick("en-US,en;q=0.9,hy;q=0.8")).toBe("en");
+    expect(pick("hy-AM,hy;q=0.9,en;q=0.8")).toBe("hy");
+    expect(pick("hy;q=0, en")).toBe("en");
+    expect(pick("fr, hy;q=0.7, en;q=0.5")).toBe("hy");
+    expect(pick("ar, fr;q=0.8")).toBe("en"); // ar not enabled
+    expect(pick("*")).toBe("en");
+    expect(pick("")).toBe("en");
+    expect(pick(null)).toBe("en");
+    expect(pick("hy;q=abc")).toBe("en");
+  });
+});
