@@ -32,7 +32,7 @@ export async function partnerRequestDetail(agencyId: string, requestId: string) 
     where: { id: requestId, agencyId },
     select: {
       id: true, packageCode: true, agencyRef: true, title: true, destinations: true, startDate: true, endDate: true,
-      travelers: true, status: true, createdAt: true,
+      travelers: true, clientNotes: true, status: true, createdAt: true,
       agency: { select: { id: true, shortCode: true, name: true } },
       versions: {
         orderBy: { versionNo: "asc" },

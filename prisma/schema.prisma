@@ -184,7 +184,8 @@ model TravelRequest {
   travelers          String // JSON TravelerSetup (contracts.ts)
   roomPrefs          String?
   flightDetails      String?
-  notes              String?
+  notes              String? // INTERNAL staff notes (never shown to partners)
+  clientNotes        String? // B2B cycle 1: client messages and notes, visible to the agency (additive, nullable)
   status             String   @default("DRAFT") // QuoteStatus of latest version
   revision           Int      @default(0) // optimistic locking
   currentValidatorId String?

@@ -1,5 +1,6 @@
 "use client";
 
+import TemplateReviewNotice from "./TemplateReviewNotice";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
@@ -299,6 +300,8 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
           </CardContent>
         )}
       </Card>
+
+      <TemplateReviewNotice lines={version.serviceLines} />
 
       <QuoteSummaryBar ctx={ctx} />
 

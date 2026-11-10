@@ -46,6 +46,7 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
     roomPrefs: detail.roomPrefs ?? "",
     flightDetails: detail.flightDetails ?? "",
     notes: detail.notes ?? "",
+    clientNotes: detail.clientNotes ?? "",
     travelers: parseJson<TravelerSetupView>(detail.travelers, {
       adults: 0,
       children: 0,
@@ -70,6 +71,7 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
         roomPrefs: detail.roomPrefs ?? "",
         flightDetails: detail.flightDetails ?? "",
         notes: detail.notes ?? "",
+        clientNotes: detail.clientNotes ?? "",
         travelers: parseJson(detail.travelers, form.travelers),
       });
     }
@@ -94,6 +96,7 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
           roomPrefs: form.roomPrefs || null,
           flightDetails: form.flightDetails || null,
           notes: form.notes || null,
+          clientNotes: form.clientNotes || null,
           travelers: form.travelers,
         },
       });
@@ -148,7 +151,8 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
             />
             <Field label="Room preferences" value={detail.roomPrefs} />
             <Field label="Flight details" value={detail.flightDetails} />
-            <Field label="Notes" value={detail.notes} />
+            <Field label="Client messages and notes" value={detail.clientNotes} />
+            <Field label="Internal notes (staff only)" value={detail.notes} />
             <Field label="Agency contact" value={
               [detail.agency.contactName, detail.agency.contactEmail, detail.agency.contactPhone]
                 .filter(Boolean)
@@ -201,8 +205,13 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
               </div>
             </div>
             <div>
-              <Label>Notes</Label>
-              <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <Label htmlFor="ov-client-notes">Client messages and notes</Label>
+              <Textarea id="ov-client-notes" rows={2} value={form.clientNotes} onChange={(e) => setForm({ ...form, clientNotes: e.target.value })} />
+              <p className="mt-1 text-xs text-muted-foreground">Visible to the agency on its quotation request.</p>
+            </div>
+            <div>
+              <Label htmlFor="ov-internal-notes">Internal notes (staff only)</Label>
+              <Textarea id="ov-internal-notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="flex gap-2">
               <Button type="submit" disabled={saving || invalidDates}>

@@ -195,6 +195,7 @@ export const createRequestSchema = z.object({
   roomPrefs: longString.nullish(),
   flightDetails: longString.nullish(),
   notes: longString.nullish(),
+  clientNotes: longString.nullish(),
 });
 export type CreateRequestInput = z.infer<typeof createRequestSchema>;
 
@@ -207,6 +208,7 @@ export const updateDraftSchema = z.object({
   roomPrefs: longString.nullish(),
   flightDetails: longString.nullish(),
   notes: longString.nullish(),
+  clientNotes: longString.nullish(),
   agencyRef: shortString.nullish(),
 });
 export type UpdateDraftInput = z.infer<typeof updateDraftSchema>;
@@ -581,6 +583,7 @@ async function createRequestOnce(
           roomPrefs: parsed.roomPrefs ?? null,
           flightDetails: parsed.flightDetails ?? null,
           notes: parsed.notes ?? null,
+          clientNotes: parsed.clientNotes ?? null,
           status: "DRAFT",
         },
       }),
@@ -645,6 +648,7 @@ export async function updateDraft(
   if (parsed.roomPrefs !== undefined) data.roomPrefs = parsed.roomPrefs;
   if (parsed.flightDetails !== undefined) data.flightDetails = parsed.flightDetails;
   if (parsed.notes !== undefined) data.notes = parsed.notes;
+  if (parsed.clientNotes !== undefined) data.clientNotes = parsed.clientNotes;
   if (parsed.agencyRef !== undefined) data.agencyRef = parsed.agencyRef;
 
   await tx(async (tx) => {
