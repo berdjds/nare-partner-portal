@@ -33,7 +33,7 @@ export default function RequestProgress({ status }: { status: string }) {
   const note = OFF_PATH[status];
   return (
     <div>
-      <ol aria-label="Request progress" className="flex items-center gap-1.5 overflow-x-auto pb-1">
+      <ol aria-label="Request progress" className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
         {STAGES.map(([key, label], i) => {
           const done = current > i;
           const here = current === i;
