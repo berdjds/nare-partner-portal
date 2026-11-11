@@ -1,0 +1,62 @@
+PASS desktop landing: no horizontal scroll - overflow=0
+PASS desktop landing: axe serious/critical
+PASS desktop login: no horizontal scroll - overflow=0
+PASS desktop login: axe serious/critical
+PASS desktop apply: no horizontal scroll - overflow=0
+PASS desktop apply: axe serious/critical
+PASS desktop advisor new request: no horizontal scroll - overflow=0
+PASS desktop advisor new request: axe serious/critical
+PASS desktop advisor request details: no horizontal scroll - overflow=0
+PASS desktop advisor request details: axe serious/critical
+PASS desktop admin home: no horizontal scroll - overflow=0
+PASS desktop admin home: axe serious/critical
+PASS desktop admin requests: no horizontal scroll - overflow=0
+PASS desktop admin requests: axe serious/critical
+PASS desktop admin request details: no horizontal scroll - overflow=0
+PASS desktop admin request details: axe serious/critical
+PASS desktop danger zone present and collapsed - false
+PASS desktop partner home: no horizontal scroll - overflow=0
+PASS desktop partner home: axe serious/critical
+PASS tablet landing: no horizontal scroll - overflow=0
+PASS tablet landing: axe serious/critical
+PASS tablet login: no horizontal scroll - overflow=0
+PASS tablet login: axe serious/critical
+PASS tablet apply: no horizontal scroll - overflow=0
+PASS tablet apply: axe serious/critical
+PASS tablet advisor new request: no horizontal scroll - overflow=0
+PASS tablet advisor new request: axe serious/critical
+PASS tablet advisor request details: no horizontal scroll - overflow=0
+PASS tablet advisor request details: axe serious/critical
+PASS tablet admin home: no horizontal scroll - overflow=0
+PASS tablet admin home: axe serious/critical
+PASS tablet admin requests: no horizontal scroll - overflow=0
+PASS tablet admin requests: axe serious/critical
+PASS tablet admin request details: no horizontal scroll - overflow=0
+PASS tablet admin request details: axe serious/critical
+PASS tablet danger zone present and collapsed - false
+PASS tablet partner home: no horizontal scroll - overflow=0
+PASS tablet partner home: axe serious/critical
+PASS mobile landing: no horizontal scroll - overflow=0
+PASS mobile landing: axe serious/critical
+PASS mobile login: no horizontal scroll - overflow=0
+PASS mobile login: axe serious/critical
+PASS mobile apply: no horizontal scroll - overflow=0
+PASS mobile apply: axe serious/critical
+PASS mobile advisor new request: no horizontal scroll - overflow=0
+PASS mobile advisor new request: axe serious/critical
+PASS mobile advisor request details: no horizontal scroll - overflow=0
+PASS mobile advisor request details: axe serious/critical
+PASS mobile admin home: no horizontal scroll - overflow=0
+PASS mobile admin home: axe serious/critical
+PASS mobile admin requests: no horizontal scroll - overflow=0
+PASS mobile admin requests: axe serious/critical
+PASS mobile admin request details: no horizontal scroll - overflow=0
+PASS mobile admin request details: axe serious/critical
+PASS mobile danger zone present and collapsed - false
+PASS mobile partner home: no horizontal scroll - overflow=0
+PASS mobile partner home: axe serious/critical
+PASS hy mobile landing: lang=hy and no overflow - lang=hy overflow=0
+PASS hy mobile login: lang=hy and no overflow - lang=hy overflow=0
+PASS hy mobile apply: lang=hy and no overflow - lang=hy overflow=0
+
+60/60 passed
