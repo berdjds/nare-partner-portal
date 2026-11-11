@@ -164,15 +164,15 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>Title</Label>
-                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+                <Input aria-label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
               </div>
               <div>
                 <Label>Agency ref</Label>
-                <Input value={form.agencyRef} onChange={(e) => setForm({ ...form, agencyRef: e.target.value })} />
+                <Input aria-label="Agency ref" value={form.agencyRef} onChange={(e) => setForm({ ...form, agencyRef: e.target.value })} />
               </div>
               <div>
                 <Label>Destinations (comma separated)</Label>
-                <Input value={form.destinations} onChange={(e) => setForm({ ...form, destinations: e.target.value })} />
+                <Input aria-label="Destinations (comma separated)" value={form.destinations} onChange={(e) => setForm({ ...form, destinations: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -197,11 +197,11 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>Room preferences</Label>
-                <Textarea rows={2} value={form.roomPrefs} onChange={(e) => setForm({ ...form, roomPrefs: e.target.value })} />
+                <Textarea aria-label="Room preferences" rows={2} value={form.roomPrefs} onChange={(e) => setForm({ ...form, roomPrefs: e.target.value })} />
               </div>
               <div>
                 <Label>Flight details</Label>
-                <Textarea rows={2} value={form.flightDetails} onChange={(e) => setForm({ ...form, flightDetails: e.target.value })} />
+                <Textarea aria-label="Flight details" rows={2} value={form.flightDetails} onChange={(e) => setForm({ ...form, flightDetails: e.target.value })} />
               </div>
             </div>
             <div>

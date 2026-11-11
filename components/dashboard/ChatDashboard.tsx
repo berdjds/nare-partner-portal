@@ -430,7 +430,7 @@ export default function ChatDashboard({
           <form onSubmit={handleStartNewChat} className="space-y-4">
             <div>
               <Label>Phone number</Label>
-              <Input
+              <Input aria-label="Phone number"
                 placeholder="37412345678"
                 value={newNumber}
                 onChange={(e) => setNewNumber(e.target.value)}
@@ -439,7 +439,7 @@ export default function ChatDashboard({
             </div>
             <div>
               <Label>Message</Label>
-              <Textarea
+              <Textarea aria-label="Message"
                 placeholder="Type a message..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}

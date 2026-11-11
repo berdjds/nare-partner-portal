@@ -465,7 +465,7 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
           {reviewAction !== "APPROVE" && (
             <div>
               <Label>Reason (required)</Label>
-              <Textarea rows={3} value={reviewReason} onChange={(e) => setReviewReason(e.target.value)} />
+              <Textarea aria-label="Reason (required)" rows={3} value={reviewReason} onChange={(e) => setReviewReason(e.target.value)} />
             </div>
           )}
           <DialogFooter>
@@ -497,7 +497,7 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
                 exception reason.
               </p>
               <Label>Below-floor exception reason</Label>
-              <Textarea rows={2} value={belowFloorReason} onChange={(e) => setBelowFloorReason(e.target.value)} />
+              <Textarea aria-label="Below-floor exception reason" rows={2} value={belowFloorReason} onChange={(e) => setBelowFloorReason(e.target.value)} />
             </div>
           )}
           <DialogFooter>
@@ -631,7 +631,7 @@ function AssignValidatorDialog({
           ) : (
             <div>
               <Label>Validator user id</Label>
-              <Input value={validatorId} onChange={(e) => setValidatorId(e.target.value)} placeholder="cuid…" />
+              <Input aria-label="Validator user id" value={validatorId} onChange={(e) => setValidatorId(e.target.value)} placeholder="cuid…" />
               <p className="mt-1 text-xs text-muted-foreground">
                 {isAdmin
                   ? "Could not load the user list."
@@ -641,7 +641,7 @@ function AssignValidatorDialog({
           )}
           <div>
             <Label>Due date (optional)</Label>
-            <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+            <Input aria-label="Due date (optional)" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
           </div>
         </div>
         <DialogFooter>

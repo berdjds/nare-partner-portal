@@ -361,7 +361,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
                                   </div>
                                   <div>
                                     <Label>Phone (WhatsApp)</Label>
-                                    <Input
+                                    <Input aria-label="Phone (WhatsApp)"
                                       value={editPhone}
                                       onChange={(e) => setEditPhone(e.target.value)}
                                       placeholder="37499123456 (digits, optional +)"

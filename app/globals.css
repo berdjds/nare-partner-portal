@@ -30,7 +30,7 @@
     --muted-foreground: 0 0% 40%;
     --accent: 203 87% 95%; /* light brand-blue tint */
     --accent-foreground: 203 89% 28%;
-    --destructive: 0 84% 60%; /* alert red — distinct from brand blue */
+    --destructive: 0 72% 45%; /* alert red, AA with white text (was 0 84% 60%, 3.6:1) */
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 88%;
     --input: 0 0% 78%;

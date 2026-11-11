@@ -1,0 +1,736 @@
+{
+  "passed": 146,
+  "failed": 0,
+  "results": [
+    {
+      "name": "desktop landing: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop landing: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop landing: one h1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop landing: in the hero, Sign in comes before Become a partner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop landing: three service cards and four steps",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop landing: no retired claims; founded 2019 shown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop login: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop login: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop login: empty submit shows field messages, marks fields invalid, focuses email",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop login: malformed email is a format message, no request is sent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop partner apply: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop partner apply: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop terms: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop terms: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: favicon.ico served and icon links declared",
+      "ok": true,
+      "detail": "/favicon.ico,/brand/icon-32.png,/brand/nare-icon.webp,/brand/apple-touch-icon.png"
+    },
+    {
+      "name": "tablet landing: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet landing: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet landing: one h1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet landing: in the hero, Sign in comes before Become a partner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet landing: three service cards and four steps",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet landing: no retired claims; founded 2019 shown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet login: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet login: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet login: empty submit shows field messages, marks fields invalid, focuses email",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet login: malformed email is a format message, no request is sent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet partner apply: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet partner apply: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet terms: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet terms: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: favicon.ico served and icon links declared",
+      "ok": true,
+      "detail": "/favicon.ico,/brand/icon-32.png,/brand/nare-icon.webp,/brand/apple-touch-icon.png"
+    },
+    {
+      "name": "phone landing: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone landing: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone landing: one h1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone landing: in the hero, Sign in comes before Become a partner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone landing: three service cards and four steps",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone landing: no retired claims; founded 2019 shown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone login: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone login: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone login: empty submit shows field messages, marks fields invalid, focuses email",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone login: malformed email is a format message, no request is sent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone partner apply: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone partner apply: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone terms: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone terms: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: favicon.ico served and icon links declared",
+      "ok": true,
+      "detail": "/favicon.ico,/brand/icon-32.png,/brand/nare-icon.webp,/brand/apple-touch-icon.png"
+    },
+    {
+      "name": "desktop admin admin home: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin admin home: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin permissions report: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin permissions report: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin partner applications: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin partner applications: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin company and contact: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin company and contact: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin translations: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin translations: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin requests: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin requests: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin templates: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin templates: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin catalog: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin catalog: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin agencies: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin agencies: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin settings: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin settings: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin notifications: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin notifications: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin review queue: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin review queue: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop admin calculator: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop admin calculator: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin admin home: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin admin home: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin permissions report: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin permissions report: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin partner applications: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin partner applications: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin company and contact: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin company and contact: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin translations: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin translations: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin requests: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin requests: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin templates: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin templates: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin catalog: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin catalog: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin agencies: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin agencies: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin settings: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin settings: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin notifications: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin notifications: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin review queue: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin review queue: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet admin calculator: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet admin calculator: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin admin home: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin admin home: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin permissions report: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin permissions report: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin partner applications: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin partner applications: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin company and contact: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin company and contact: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin translations: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin translations: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin requests: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin requests: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin templates: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin templates: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin catalog: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin catalog: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin agencies: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin agencies: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin settings: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin settings: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin notifications: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin notifications: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin review queue: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin review queue: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone admin calculator: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone admin calculator: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "advisor: request created for the audit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop advisor requests: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop advisor requests: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop advisor new request: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop advisor new request: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop advisor request detail: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "desktop advisor request detail: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet advisor requests: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet advisor requests: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet advisor new request: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet advisor new request: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet advisor request detail: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "tablet advisor request detail: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone advisor requests: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone advisor requests: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone advisor new request: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone advisor new request: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone advisor request detail: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone advisor request detail: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone advisor detail: every tab can be selected",
+      "ok": true,
+      "detail": "tabs=5"
+    },
+    {
+      "name": "phone advisor detail: tab bar scrolls inside itself (no page overflow)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone partner landing: no horizontal page scroll",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "phone partner landing: axe serious/critical",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

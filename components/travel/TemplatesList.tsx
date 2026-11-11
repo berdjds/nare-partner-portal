@@ -250,7 +250,7 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label>Code</Label>
-              <Input
+              <Input aria-label="Code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="ARM-S26-0405A"
@@ -260,7 +260,7 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
             </div>
             <div>
               <Label>Nights</Label>
-              <Input
+              <Input aria-label="Nights"
                 type="number"
                 min={1}
                 max={59}
@@ -271,7 +271,7 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
             </div>
             <div className="sm:col-span-2">
               <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Armenia highlights" required />
+              <Input aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Armenia highlights" required />
             </div>
           </div>
           <DialogFooter>
@@ -438,7 +438,7 @@ function InstantiateDialog({
             </div>
             <div className="sm:col-span-2">
               <Label>Title</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+              <Input aria-label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
             </div>
             <div>
               <Label>Start date</Label>
@@ -450,7 +450,7 @@ function InstantiateDialog({
             </div>
             <div>
               <Label>Adults</Label>
-              <Input
+              <Input aria-label="Adults"
                 type="number"
                 min={0}
                 value={form.adults}
@@ -459,7 +459,7 @@ function InstantiateDialog({
             </div>
             <div>
               <Label>Paying travelers</Label>
-              <Input
+              <Input aria-label="Paying travelers"
                 type="number"
                 min={0}
                 value={form.paying}
@@ -469,7 +469,7 @@ function InstantiateDialog({
           </div>
           <div>
             <Label>Notes</Label>
-            <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <Textarea aria-label="Notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={saving || !form.agencyId || !form.startDate || !form.endDate}>
@@ -552,7 +552,7 @@ function BatchDialog({
           </div>
           <div>
             <Label>Pax bands</Label>
-            <Input value={bands} onChange={(e) => setBands(e.target.value)} placeholder="2,4,6" />
+            <Input aria-label="Pax bands" value={bands} onChange={(e) => setBands(e.target.value)} placeholder="2,4,6" />
           </div>
           <Button type="submit" disabled={busy || !startDate}>
             {busy ? "Running..." : "Run"}

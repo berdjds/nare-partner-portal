@@ -543,7 +543,7 @@ function RateDialog({
             )}
             <div>
               <Label>Amount (decimal string, empty = TBC)</Label>
-              <Input
+              <Input aria-label="Amount (decimal string, empty = TBC)"
                 placeholder="e.g. 45000 or 45000.00"
                 value={form.amount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })}
@@ -551,7 +551,7 @@ function RateDialog({
             </div>
             <div>
               <Label>Currency</Label>
-              <Input
+              <Input aria-label="Currency"
                 maxLength={3}
                 value={form.currency}
                 onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
@@ -572,11 +572,11 @@ function RateDialog({
             </div>
             <div>
               <Label>Min stay (nights, optional)</Label>
-              <Input type="number" min={1} value={form.minStay} onChange={(e) => setForm({ ...form, minStay: e.target.value })} />
+              <Input aria-label="Min stay (nights, optional)" type="number" min={1} value={form.minStay} onChange={(e) => setForm({ ...form, minStay: e.target.value })} />
             </div>
             <div>
               <Label>Priority (higher wins on overlap)</Label>
-              <Input type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} />
+              <Input aria-label="Priority (higher wins on overlap)" type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} />
             </div>
           </div>
           <div>
@@ -585,7 +585,7 @@ function RateDialog({
           </div>
           <div>
             <Label>Notes (optional)</Label>
-            <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <Input aria-label="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -771,11 +771,11 @@ function ServiceDialog({
         <form onSubmit={save} className="space-y-4">
           <div>
             <Label>Name</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <Input aria-label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           </div>
           <div>
             <Label>Details (optional — long description shown on the client quotation; the name stays the short title)</Label>
-            <Textarea
+            <Textarea aria-label="Details (optional — long description shown on the client quotation; the name stays the short title)"
               rows={3}
               value={form.details}
               onChange={(e) => setForm({ ...form, details: e.target.value })}
@@ -833,7 +833,7 @@ function ServiceDialog({
             </div>
             <div>
               <Label>Language (optional)</Label>
-              <Input value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} />
+              <Input aria-label="Language (optional)" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} />
             </div>
             <div>
               <Label>Duration variant (optional)</Label>
@@ -1012,16 +1012,16 @@ function HotelDialog({
         <form onSubmit={save} className="space-y-4">
           <div>
             <Label>Name</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <Input aria-label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>City (optional)</Label>
-              <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              <Input aria-label="City (optional)" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             </div>
             <div>
               <Label>Country</Label>
-              <Input
+              <Input aria-label="Country"
                 maxLength={3}
                 value={form.country}
                 onChange={(e) => setForm({ ...form, country: e.target.value.toUpperCase() })}
@@ -1030,7 +1030,7 @@ function HotelDialog({
             </div>
             <div>
               <Label>Stars (optional)</Label>
-              <Input type="number" min={1} max={5} value={form.stars} onChange={(e) => setForm({ ...form, stars: e.target.value })} />
+              <Input aria-label="Stars (optional)" type="number" min={1} max={5} value={form.stars} onChange={(e) => setForm({ ...form, stars: e.target.value })} />
             </div>
             <div>
               <Label>Kind</Label>
@@ -1046,7 +1046,7 @@ function HotelDialog({
             </div>
             <div>
               <Label>Room type (optional)</Label>
-              <Input
+              <Input aria-label="Room type (optional)"
                 placeholder="e.g. Standard / Cottage 2BR"
                 value={form.roomType}
                 onChange={(e) => setForm({ ...form, roomType: e.target.value })}
@@ -1054,11 +1054,11 @@ function HotelDialog({
             </div>
             <div>
               <Label>Beds (optional)</Label>
-              <Input placeholder="e.g. 1 DBL + 1 SGL" value={form.beds} onChange={(e) => setForm({ ...form, beds: e.target.value })} />
+              <Input aria-label="Beds (optional)" placeholder="e.g. 1 DBL + 1 SGL" value={form.beds} onChange={(e) => setForm({ ...form, beds: e.target.value })} />
             </div>
             <div>
               <Label>Capacity adults</Label>
-              <Input
+              <Input aria-label="Capacity adults"
                 type="number"
                 min={0}
                 value={form.capacityAdults}
@@ -1068,7 +1068,7 @@ function HotelDialog({
             </div>
             <div>
               <Label>Capacity children</Label>
-              <Input
+              <Input aria-label="Capacity children"
                 type="number"
                 min={0}
                 value={form.capacityChildren}
@@ -1078,7 +1078,7 @@ function HotelDialog({
             </div>
             <div>
               <Label>Capacity total</Label>
-              <Input
+              <Input aria-label="Capacity total"
                 type="number"
                 min={1}
                 value={form.capacityTotal}
@@ -1093,7 +1093,7 @@ function HotelDialog({
           </div>
           <div>
             <Label>Board options (comma-separated, e.g. BB, HB, FB)</Label>
-            <Input value={form.boardOptions} onChange={(e) => setForm({ ...form, boardOptions: e.target.value })} />
+            <Input aria-label="Board options (comma-separated, e.g. BB, HB, FB)" value={form.boardOptions} onChange={(e) => setForm({ ...form, boardOptions: e.target.value })} />
           </div>
           <div className="flex flex-wrap gap-6">
             <label className="flex items-center gap-2 text-sm">

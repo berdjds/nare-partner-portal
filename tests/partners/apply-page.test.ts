@@ -443,7 +443,7 @@ describe("allow-list and entry links", () => {
     for (const rel of ["components/landing/Hero.tsx", "app/login/page.tsx"]) {
       const source = readSource(rel);
       expect(source, rel).toContain('href="/partners/apply"');
-      expect(source, rel).toContain(rel.startsWith("app/login") ? 't("nav.apply")' : "PARTNER_APPLY.linkLabel"); // login reads the label from the catalogue, which imports PARTNER_APPLY.linkLabel
+      expect(source, rel).toContain('t("nav.apply")'); // hero and login read the label from the catalogue, which imports PARTNER_APPLY.linkLabel
     }
   });
 

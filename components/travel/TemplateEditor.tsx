@@ -331,7 +331,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="w-72">
                     <Label>Template name</Label>
-                    <Input
+                    <Input aria-label="Template name"
                       value={name}
                       onChange={(e) => {
                         setName(e.target.value);

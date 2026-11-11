@@ -59,7 +59,7 @@ describe("W4 brand tokens", () => {
       "--secondary": "0 0% 93%",
       "--muted": "0 0% 93%",
       "--input": "0 0% 78%",
-      "--destructive": "0 84% 60%", // alert red, distinct from the brand blue
+      "--destructive": "0 72% 45%", // alert red, AA (>= 4.5:1) with white text; raised from 0 84% 60% (3.6:1) in Phase 5
       "--destructive-foreground": "0 0% 98%",
       "--sidebar-background": "0 0% 100%",
       "--sidebar-foreground": "0 0% 10%",
@@ -141,5 +141,17 @@ describe("W4 brand tokens", () => {
     // The mark is the real Nare icon from the brand repository.
     expect(brandMark).toContain("/brand/nare-icon.webp");
     expect(existsSync(path.join(REPO_ROOT, "public", "brand", "nare-icon.webp"))).toBe(true);
+  });
+});
+
+describe("destructive token contrast (Phase 5)", () => {
+  it("white text on --destructive meets WCAG AA (4.5:1)", () => {
+    const css = readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8");
+    const [h, s, l] = /--destructive:\s*(\d+)\s+(\d+)%\s+(\d+)%/.exec(css)!.slice(1).map(Number);
+    const S = s / 100, L = l / 100, a = S * Math.min(L, 1 - L);
+    const f = (n: number) => { const k = (n + h / 30) % 12; return L - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+    const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    const lum = 0.2126 * lin(f(0)) + 0.7152 * lin(f(8)) + 0.0722 * lin(f(4));
+    expect(1.05 / (lum + 0.05)).toBeGreaterThanOrEqual(4.5);
   });
 });
