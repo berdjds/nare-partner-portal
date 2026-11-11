@@ -374,15 +374,15 @@ export interface TitledContentItem {
 export const B2B_SERVICES: readonly TitledContentItem[] = [
   {
     title: "DMC Services",
-    body: "Comprehensive Destination Management Company services in Armenia",
+    body: "Destination management services in Armenia for your clients’ travel",
   },
   {
     title: "MICE Solutions",
-    body: "Complete MICE event planning and management",
+    body: "Planning and organisation of meetings, incentives, conferences and events",
   },
   {
     title: "Group Bookings",
-    body: "Specialized services for large group travel",
+    body: "Travel arrangements for groups of travellers",
   },
 ] as const;
 

@@ -1,14 +1,20 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/react";
 
 type TableProps = React.HTMLAttributes<HTMLTableElement> & { regionLabel?: string };
 // The scroll wrapper is a keyboard-focusable named region (WCAG 2.1.1); callers should pass a specific regionLabel.
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
-  ({ className, regionLabel = "Data table", ...props }, ref) => (
-    <div className="relative w-full overflow-auto" tabIndex={0} role="region" aria-label={regionLabel}>
+  ({ className, regionLabel, ...props }, ref) => {
+    const t = useT();
+    return (
+    <div className="relative w-full overflow-auto" tabIndex={0} role="region" aria-label={regionLabel ?? t("table.region")}>
       <table ref={ref} className={cn("w-full caption-bottom text-[13px] [font-variant-numeric:tabular-nums]", className)} {...props} />
     </div>
-  )
+    );
+  }
 );
 Table.displayName = "Table";
 

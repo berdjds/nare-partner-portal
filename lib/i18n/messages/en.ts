@@ -9,6 +9,7 @@ import { FRIENDLY_CREDENTIALS_ERROR } from "@/lib/login-errors";
 export const en = {
   "common.brand": PRODUCT_NAME,
   "common.signIn": "Sign in",
+  "table.region": "Data table",
   "lang.label": "Language",
   "nav.home": "Home",
   "nav.apply": PARTNER_APPLY.linkLabel,

@@ -49,6 +49,16 @@ describe("client messages vs internal notes", () => {
     expect(body.clientNotes).toBe("window seats please");
     expect(JSON.stringify(body)).not.toContain("SECRET-INTERNAL");
   });
+  it("owner decision 2: the agency sees client messages on a DRAFT request, in the detail route and the partner helper; other agencies never do", async () => {
+    const { request } = await wf.createRequest(actorOf(fx.advisor), { ...createRequestInput(fx.agency.id), notes: "SECRET-INTERNAL", clientNotes: "draft-stage message" } as any);
+    expect((await prisma.travelRequest.findUniqueOrThrow({ where: { id: request.id } })).status).toBe("DRAFT");
+    const { partnerRequestDetail } = await import("@/lib/travel/partner-view");
+    const own = await partnerRequestDetail(fx.agency.id, request.id);
+    expect(own?.clientNotes).toBe("draft-stage message");
+    expect(JSON.stringify(own)).not.toContain("SECRET-INTERNAL");
+    const otherAgency = await prisma.agency.create({ data: { name: "Other Agency", shortCode: "OTH" } as any });
+    expect(await partnerRequestDetail(otherAgency.id, request.id)).toBeNull();
+  });
   it("staff still receive both fields on the detail route", async () => {
     const { request } = await wf.createRequest(actorOf(fx.advisor), { ...createRequestInput(fx.agency.id), notes: "N", clientNotes: "C" } as any);
     as(fx.advisor);

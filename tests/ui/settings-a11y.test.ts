@@ -32,3 +32,12 @@ describe("every Select trigger has an accessible name", () => {
     expect(bad).toEqual([]);
   });
 });
+
+describe("Settings label associations", () => {
+  it("each Settings text field is tied to its visible label with htmlFor/id", () => {
+    const labels = Array.from(src.matchAll(/<Label htmlFor="(settings-[a-z0-9-]+)">/g), (m) => m[1]);
+    expect(labels.length).toBeGreaterThanOrEqual(7);
+    expect(new Set(labels).size).toBe(labels.length);
+    for (const id of labels) expect(src).toContain(`id="${id}"`);
+  });
+});

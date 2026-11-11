@@ -148,7 +148,7 @@ describe("portal content: wording guards", () => {
 describe("portal content: Phase 5 landing copy", () => {
   it("lists exactly three core service groups with the approved wording", () => {
     expect(B2B_SERVICES.map((s) => s.title)).toEqual(["DMC Services", "MICE Solutions", "Group Bookings"]);
-    expect(B2B_SERVICES[0].body).toBe("Comprehensive Destination Management Company services in Armenia");
+    expect(B2B_SERVICES[0].body).toBe("Destination management services in Armenia for your clients’ travel");
   });
   it("has the section titles and no empty string anywhere", () => {
     expect(Object.keys(LANDING_TITLES).sort()).toEqual(["benefits", "contact", "services", "steps", "trust"]);

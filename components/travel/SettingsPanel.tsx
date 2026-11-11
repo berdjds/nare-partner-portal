@@ -153,13 +153,13 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
             {settings && (
               <form onSubmit={handleSave} className="space-y-4">
                 <div>
-                  <Label>Company timezone</Label>
-                  <Input aria-label="Company timezone" value={form.companyTz} onChange={(e) => setForm({ ...form, companyTz: e.target.value })} required />
+                  <Label htmlFor="settings-company-timezone">Company timezone</Label>
+                  <Input id="settings-company-timezone" value={form.companyTz} onChange={(e) => setForm({ ...form, companyTz: e.target.value })} required />
                   <p className="mt-1 text-xs text-muted-foreground">IANA name, e.g. Asia/Yerevan. Package code dates use it.</p>
                 </div>
                 <div>
-                  <Label>Overdue reminder (hours)</Label>
-                  <Input aria-label="Overdue reminder (hours)"
+                  <Label htmlFor="settings-overdue-reminder-hours">Overdue reminder (hours)</Label>
+                  <Input id="settings-overdue-reminder-hours"
                     type="number"
                     min={1}
                     placeholder="disabled"
@@ -176,8 +176,8 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                   Require active policy + FX before issuing
                 </label>
                 <div>
-                  <Label>Infant max age</Label>
-                  <Input aria-label="Infant max age"
+                  <Label htmlFor="settings-infant-max-age">Infant max age</Label>
+                  <Input id="settings-infant-max-age"
                     type="number"
                     min={0}
                     max={12}
@@ -275,8 +275,8 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
             {settings && (
               <form onSubmit={handleSaveBranding} className="space-y-4">
                 <div>
-                  <Label>Company name</Label>
-                  <Input aria-label="Company name"
+                  <Label htmlFor="settings-company-name">Company name</Label>
+                  <Input id="settings-company-name"
                     value={branding.companyName}
                     onChange={(e) => setBranding({ ...branding, companyName: e.target.value })}
                     placeholder="defaults to the client agency name"
@@ -284,15 +284,15 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label>Phone</Label>
-                    <Input aria-label="Phone"
+                    <Label htmlFor="settings-phone">Phone</Label>
+                    <Input id="settings-phone"
                       value={branding.companyPhone}
                       onChange={(e) => setBranding({ ...branding, companyPhone: e.target.value })}
                     />
                   </div>
                   <div>
-                    <Label>Email</Label>
-                    <Input aria-label="Email"
+                    <Label htmlFor="settings-email">Email</Label>
+                    <Input id="settings-email"
                       type="email"
                       value={branding.companyEmail}
                       onChange={(e) => setBranding({ ...branding, companyEmail: e.target.value })}
@@ -300,15 +300,15 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                   </div>
                 </div>
                 <div>
-                  <Label>Website</Label>
-                  <Input aria-label="Website"
+                  <Label htmlFor="settings-website">Website</Label>
+                  <Input id="settings-website"
                     value={branding.companyWebsite}
                     onChange={(e) => setBranding({ ...branding, companyWebsite: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label>Address</Label>
-                  <Input aria-label="Address"
+                  <Label htmlFor="settings-address">Address</Label>
+                  <Input id="settings-address"
                     value={branding.companyAddress}
                     onChange={(e) => setBranding({ ...branding, companyAddress: e.target.value })}
                   />

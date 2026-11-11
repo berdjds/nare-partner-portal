@@ -150,6 +150,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           (actor.id === request.ownerId || actor.role === ROLE_ADMIN) &&
           ["DRAFT", "CHANGES_REQUESTED"].includes(v.status);
         const redactCostFields = redactResults && !versionEditable;
+        // Owner decision 3: the advisor assigned to (owning) this request may see the stay rate overrides they
+        // negotiated, at any status. Nobody else without travel.internal.view does.
+        const ownsAsAdvisor = actor.role === ROLE_ADVISOR && actor.id === request.ownerId;
         return {
           ...v,
           quoteCurrency,
@@ -192,7 +195,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             }
             return {
               ...sc,
-              stays: redactCostFields ? sc.stays.map(redactStay) : sc.stays,
+              stays: redactCostFields && !ownsAsAdvisor ? sc.stays.map(redactStay) : sc.stays,
               resultJson: redactResults ? redactScenarioResultJson(sc.resultJson) : sc.resultJson,
               traceRows,
             };
