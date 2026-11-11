@@ -69,13 +69,13 @@ function NavGroups({ groups, inSheet = false }: { groups: NavGroupModel[]; inShe
       <Link
         href={item.href}
         className={cn(
-          "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
+          "relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors",
           active
-            ? "bg-primary/[0.08] text-primary"
+            ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-2 before:start-0 before:w-1 before:rounded-full before:bg-sidebar-primary"
             : "text-muted-foreground hover:bg-muted hover:text-foreground"
         )}
       >
-        <Icon className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground/70")} />
+        <Icon className={cn("h-4 w-4 shrink-0", active ? "text-sidebar-primary" : "text-muted-foreground")} />
         {item.label}
       </Link>
     );
@@ -85,7 +85,7 @@ function NavGroups({ groups, inSheet = false }: { groups: NavGroupModel[]; inShe
     <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
       {groups.map((group) => (
         <div key={group.label}>
-          <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">
             {group.label}
           </p>
           <div className="flex flex-col gap-0.5">
@@ -110,7 +110,7 @@ function UserCard({ role, userName, userEmail, version }: SidebarProps) {
     <div className="border-t p-3">
       <div className="flex items-center gap-2.5 rounded-lg p-1.5">
         <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+          <AvatarFallback className="bg-brand/10 text-xs font-semibold text-brand">
             {initials(userName, userEmail)}
           </AvatarFallback>
         </Avatar>
@@ -166,7 +166,7 @@ function useNavGroups(props: SidebarProps): NavGroupModel[] {
 export function Sidebar(props: SidebarProps): JSX.Element {
   const groups = useNavGroups(props);
   return (
-    <aside className="fixed inset-y-0 start-0 z-30 hidden w-60 flex-col border-e bg-card lg:flex">
+    <aside className="fixed inset-y-0 start-0 z-30 hidden w-60 flex-col border-e border-sidebar-border bg-sidebar lg:flex">
       <div className="flex h-16 items-center border-b px-3">
         <BrandMark />
       </div>

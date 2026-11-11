@@ -180,12 +180,21 @@ export default function NewRequestPage({ userId }: { userId: string }) {
         subtitle="The package code is generated from the agency and today's date."
         actions={<Button type="button" variant="ghost" onClick={leave}><ArrowLeft /> Back to requests</Button>}
       />
-      <nav aria-label="Sections" className="mb-4 flex gap-2 overflow-x-auto text-sm">
-        {STEPS.map((s, i) => (
-          <a key={s.id} href={`#${s.id}`} className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border px-3 hover:bg-muted">
-            <span className="me-2 text-xs text-muted-foreground">{i + 1}</span>{s.label}
-          </a>
-        ))}
+      <nav aria-label="Sections" className="mb-5">
+        <ol className="flex gap-2 overflow-x-auto pb-1 text-sm">
+          {STEPS.map((s, i) => {
+            const done = [Boolean(form.agencyId), Boolean(form.startDate && form.endDate && !allErrors.endDate), Boolean(touched.travelers) && form.travelers.adults > 0, Boolean(form.clientNotes.trim() || form.notes.trim()), false][i] ?? false;
+            return (
+              <li key={s.id} className="shrink-0">
+                <a href={`#${s.id}`} className="inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-card px-4 font-medium shadow-sm transition-colors hover:border-brand/40 hover:bg-brand/5">
+                  <span aria-hidden="true" className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${done ? "bg-brand text-white" : "bg-muted text-muted-foreground"}`}>{done ? "✓" : i + 1}</span>
+                  {s.label}
+                  {done && <span className="sr-only"> (completed)</span>}
+                </a>
+              </li>
+            );
+          })}
+        </ol>
       </nav>
       {restored && <p role="status" className="mb-4 rounded-lg border bg-muted/50 p-3 text-sm">We restored what you had entered. <button type="button" className="underline" onClick={() => { try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } setForm({ ...EMPTY_NEW_REQUEST }); setDirty(false); setRestored(false); setTouched({}); setErrors({}); }}>Start over</button></p>}
       {errorList.length > 0 && (
@@ -195,7 +204,8 @@ export default function NewRequestPage({ userId }: { userId: string }) {
         </div>
       )}
 
-      <form onSubmit={submit} noValidate className="space-y-4 pb-24">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <form id="nr-form" onSubmit={submit} noValidate className="max-w-3xl space-y-5 pb-24 lg:pb-8">
         <Card id="nr-sec-context">
           <CardHeader><CardTitle>1. Agency</CardTitle><CardDescription>Who the quotation is for.</CardDescription></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -291,13 +301,31 @@ export default function NewRequestPage({ userId }: { userId: string }) {
           </CardContent>
         </Card>
 
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 py-3 backdrop-blur lg:start-60">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 px-4 py-3 shadow-[0_-8px_24px_-16px_hsl(var(--plum)/0.4)] backdrop-blur lg:hidden">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2">
             <Link href="/travel" onClick={(e) => { e.preventDefault(); leave(); }} className="inline-flex min-h-11 items-center px-3 text-sm underline">Cancel</Link>
             <Button type="submit" disabled={submitting} aria-busy={submitting}>{submitting ? "Creating…" : "Create request"}</Button>
           </div>
         </div>
       </form>
+
+      <aside aria-label="Request summary" className="hidden lg:sticky lg:top-6 lg:block">
+        <div className="rounded-card border border-border bg-card p-6 shadow-[var(--shadow-soft)]">
+          <h2 className="font-display text-xl text-plum">Summary</h2>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div><dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">Agency</dt><dd className="mt-0.5 font-medium">{agency ? `${agency.shortCode} — ${agency.name}` : "Not chosen yet"}</dd></div>
+            <div><dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">Dates</dt><dd className="mt-0.5 font-medium">{form.startDate && form.endDate && !allErrors.endDate ? `${formatDisplayDateRange(form.startDate, form.endDate)} (${tripNights} nights)` : "Not set yet"}</dd></div>
+            <div><dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">Template</dt><dd className="mt-0.5 font-medium">{chosen ? `${chosen.template.code} — ${chosen.template.name}` : "None"}</dd></div>
+            <div><dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">Travellers</dt><dd className="mt-0.5 font-medium">{form.travelers.adults} adults, {form.travelers.children} children, {form.travelers.paying} paying</dd></div>
+          </dl>
+          <div className="mt-6 flex flex-col gap-2">
+            <Button type="submit" form="nr-form" size="lg" disabled={submitting} aria-busy={submitting}>{submitting ? "Creating…" : "Create request"}</Button>
+            <Button type="button" variant="ghost" onClick={leave}>Cancel</Button>
+          </div>
+          <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Prices are always calculated on the server. Internal notes are never shown to the agency.</p>
+        </div>
+      </aside>
+      </div>
     </>
   );
 }

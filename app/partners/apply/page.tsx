@@ -45,12 +45,13 @@ export default function PartnerApplyPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <PublicHeader active="apply" />
-      <header className="bg-gradient-to-br from-primary to-gradient-end text-primary-foreground">
+      <header className="relative overflow-hidden bg-gradient-to-br from-plum via-plum to-brand text-white">
+        <span aria-hidden="true" className="pointer-events-none absolute -bottom-20 -end-16 h-56 w-56 rounded-full border-[24px] border-white/10" />
         <div className="mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-8 sm:py-12">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h1 className="font-display relative text-3xl leading-tight sm:text-4xl">
             {PARTNER_APPLY.headline}
           </h1>
-          <p className="max-w-xl leading-relaxed text-primary-foreground/90">
+          <p className="max-w-xl leading-relaxed relative text-white/90">
             {PARTNER_APPLY.intro}
           </p>
         </div>

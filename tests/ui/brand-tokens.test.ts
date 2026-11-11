@@ -47,28 +47,25 @@ describe("W4 brand tokens", () => {
 
   it("globals.css declares every brand token with its exact value", () => {
     const expected: Record<string, string> = {
-      "--brand": "203 89% 53%", // exact Nare brand blue (mark and accents)
-      "--warm": "27 96% 61%", // Nare brand orange
-      "--primary": "203 89% 35%", // deepened brand blue, AA with white text
+      "--brand": "358 68% 40%", // pomegranate red sampled from the Nare logo
+      "--plum": "330 47% 20%", // aubergine of the logo wordmark
+      "--warm": "35 88% 52%", // restrained amber
+      "--primary": "214 90% 42%", // bright blue, AA with white text: actions only
       "--primary-foreground": "0 0% 100%",
-      "--gradient-end": "203 89% 38%",
-      "--ring": "203 89% 35%",
-      "--foreground": "0 0% 10%",
-      "--accent": "203 87% 95%", // light brand-blue tint
-      "--accent-foreground": "203 89% 28%",
-      "--secondary": "0 0% 93%",
-      "--muted": "0 0% 93%",
-      "--input": "0 0% 78%",
-      "--destructive": "0 72% 45%", // alert red, AA (>= 4.5:1) with white text; raised from 0 84% 60% (3.6:1) in Phase 5
+      "--ring": "214 90% 42%",
+      "--background": "38 40% 97%", // ivory canvas
+      "--foreground": "222 32% 11%", // charcoal
+      "--accent": "214 90% 96%",
+      "--accent-foreground": "214 80% 26%",
+      "--destructive": "0 72% 45%", // alert red, AA (>= 4.5:1) with white text
       "--destructive-foreground": "0 0% 98%",
-      "--sidebar-background": "0 0% 100%",
-      "--sidebar-foreground": "0 0% 10%",
-      "--sidebar-primary": "203 89% 35%",
+      "--sidebar-background": "40 33% 99%",
+      "--sidebar-foreground": "222 32% 11%",
+      "--sidebar-primary": "358 68% 40%",
       "--sidebar-primary-foreground": "0 0% 100%",
-      "--sidebar-accent": "203 87% 95%",
-      "--sidebar-accent-foreground": "203 89% 28%",
-      "--sidebar-border": "0 0% 93%",
-      "--sidebar-ring": "203 89% 40%",
+      "--sidebar-accent": "358 60% 96%",
+      "--sidebar-accent-foreground": "358 68% 30%",
+      "--sidebar-ring": "214 90% 42%",
     };
     for (const [token, value] of Object.entries(expected)) {
       expect(tokenValue(globalsCss, token)).toBe(value);

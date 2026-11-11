@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import { Noto_Sans_Armenian } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { LocaleProvider } from "@/lib/i18n/react";
@@ -11,10 +10,8 @@ import { dirOf } from "@/lib/i18n/locales";
 import { BRAND_THEME_COLOR } from "@/lib/brand";
 import { getPublicContact } from "@/lib/contact/service";
 
-// Geist has no Armenian glyphs. Noto Sans Armenian is self-hosted by next/font at build time (the
-// same family the Nare site uses) and, being a unicode-range subset, is downloaded only by pages
-// that actually show Armenian text. Arabic (later) will add its own family the same way.
-const notoArmenian = Noto_Sans_Armenian({ subsets: ["armenian"], display: "swap", variable: "--font-armenian", preload: false });
+// Fonts are local only (Geist ships in the npm package; the serif display and Armenian stacks are system fonts
+// declared in globals.css), so a build or a page view never contacts a font service.
 
 export const metadata: Metadata = {
   title: "Nare Travel and Tours — Portal",
@@ -32,7 +29,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: BRAND_THEME_COLOR, // brand blue (--primary)
+  themeColor: BRAND_THEME_COLOR, // pomegranate red (--brand)
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -44,7 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getRequestLocale();
   const contact = await getPublicContact("portal");
   return (
-    <html lang={locale} dir={dirOf(locale)} className={`${GeistSans.variable} ${GeistMono.variable} ${notoArmenian.variable}`}>
+    <html lang={locale} dir={dirOf(locale)} className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="font-sans">
         <LocaleProvider locale={locale}>
           <PublicContactProvider contact={contact}>

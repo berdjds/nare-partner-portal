@@ -238,11 +238,10 @@ describe("PublicHeader menu toggle (source-level)", () => {
     );
 
     expect(wordmark, "the wordmark link").not.toBeNull();
-    expect(wordmark![0]).toContain("text-[13px]");
-    expect(wordmark![0]).toContain("tracking-[0.08em]");
-    expect(wordmark![0]).toContain("min-[400px]:text-sm");
-    expect(wordmark![0]).toContain("min-[400px]:tracking-[0.2em]");
-    expect(wordmark![0]).toContain("sm:text-lg");
+    expect(wordmark![0]).toContain("font-display");
+    expect(wordmark![0]).toContain("text-base");
+    expect(wordmark![0]).toContain("min-[400px]:text-lg");
+    expect(wordmark![0]).toContain("sm:text-xl");
     expect(wordmarkText, "the wordmark text").not.toBeNull();
     expect(wordmarkText![1]).toContain("min-w-0");
     expect(wordmarkText![1]).toContain("truncate");

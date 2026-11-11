@@ -3,48 +3,51 @@
 @tailwind utilities;
 
 @layer base {
-  /* Nare Travel and Tours brand (W4), taken from the Nare Travel and Tours
-     website repository (blue primary, warm orange secondary, lucide icons).
-     The whole palette lives in these CSS variables — a palette change touches
-     this file only. --brand is the exact brand blue (203 89% 53%) for decorative
-     accents; --primary (203 89% 35%) and --gradient-end (203 89% 38%) are
-     deepened blues of the same hue so white text and link text meet WCAG AA.
-     --warm is the brand orange, for rare highlights. Destructive keeps its own
-     red, visibly distinct from the blue. Badges, pills and status tints carry
-     their own hues (see the badge status map) so the accent stays rare. */
+  /* Nare Travel and Tours portal palette (redesign). Taken from the Nare logo and staging.nare.am: warm ivory
+     canvas, charcoal ink, pomegranate red (--brand, sampled from the logo) and aubergine (--plum), with a
+     bright blue reserved for actions (--primary, used by buttons, links and focus) and a restrained amber (--warm) for
+     small highlights. The whole palette lives in these CSS variables; components use tokens only.
+     Contrast (WCAG AA, checked in tests/ui/contrast.test.ts) is above 4.5:1 for every text pairing. */
   :root {
-    --background: 0 0% 96%;
-    --foreground: 0 0% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    --brand: 203 89% 53%; /* exact Nare brand blue */
-    --warm: 27 96% 61%; /* Nare brand orange */
-    --primary: 203 89% 35%; /* deepened brand blue, AA with white text */
+    --background: 38 40% 97%; /* ivory */
+    --foreground: 222 32% 11%; /* charcoal */
+    --card: 40 33% 99%;
+    --card-foreground: 222 32% 11%;
+    --popover: 40 33% 99%;
+    --popover-foreground: 222 32% 11%;
+    --brand: 358 68% 40%; /* pomegranate red from the logo */
+    --plum: 330 47% 20%; /* aubergine from the logo wordmark */
+    --warm: 35 88% 52%; /* restrained amber */
+    --primary: 214 90% 42%; /* bright blue: actions */
     --primary-foreground: 0 0% 100%;
-    --gradient-end: 203 89% 38%;
-    --secondary: 0 0% 93%;
-    --secondary-foreground: 0 0% 10%;
-    --muted: 0 0% 93%;
-    --muted-foreground: 0 0% 40%;
-    --accent: 203 87% 95%; /* light brand-blue tint */
-    --accent-foreground: 203 89% 28%;
-    --destructive: 0 72% 45%; /* alert red, AA with white text (was 0 84% 60%, 3.6:1) */
+    --gradient-end: 330 47% 20%;
+    --secondary: 36 30% 92%;
+    --secondary-foreground: 222 32% 11%;
+    --muted: 36 28% 93%;
+    --muted-foreground: 220 12% 38%;
+    --accent: 214 90% 96%; /* light blue tint */
+    --accent-foreground: 214 80% 26%;
+    --destructive: 0 72% 45%; /* alert red, AA with white text */
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 88%;
-    --input: 0 0% 78%;
-    --ring: 203 89% 35%;
-    --radius: 0.75rem;
-    /* Sidebar: slim white rail; the active item is tinted in brand blue. */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 10%;
-    --sidebar-primary: 203 89% 35%;
+    --border: 34 22% 86%;
+    --input: 34 16% 72%;
+    --ring: 214 90% 42%;
+    --radius: 1rem;
+    --radius-card: 1.5rem; /* 24px cards */
+    --shadow-soft: 0 1px 2px hsl(222 32% 11% / 0.05), 0 14px 34px -16px hsl(330 47% 20% / 0.22);
+    --shadow-lift: 0 2px 4px hsl(222 32% 11% / 0.06), 0 30px 60px -24px hsl(330 47% 20% / 0.36);
+    /* Sidebar: warm white rail; the active item carries the pomegranate accent. */
+    --sidebar-background: 40 33% 99%;
+    --sidebar-foreground: 222 32% 11%;
+    --sidebar-primary: 358 68% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 203 87% 95%;
-    --sidebar-accent-foreground: 203 89% 28%;
-    --sidebar-border: 0 0% 93%;
-    --sidebar-ring: 203 89% 40%;
+    --sidebar-accent: 358 60% 96%;
+    --sidebar-accent-foreground: 358 68% 30%;
+    --sidebar-border: 34 22% 90%;
+    --sidebar-ring: 214 90% 42%;
+    /* Local/system font stacks only: nothing is fetched from a font service. */
+    --font-display-stack: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Noto Serif", Georgia, "Sylfaen", "Noto Serif Armenian", serif;
+    --font-armenian-stack: "Noto Sans Armenian", "Sylfaen", "Segoe UI", "Mshtakan", "Arial Unicode MS", system-ui, sans-serif;
   }
 }
 
@@ -67,4 +70,16 @@
 }
 
 /* Armenian text: put Noto Sans Armenian first so glyphs never fall back to tofu or a mismatched face. */
-html:lang(hy) body, html:lang(hy) button, html:lang(hy) input, html:lang(hy) textarea, html:lang(hy) select { font-family: var(--font-armenian), var(--font-geist-sans), system-ui, sans-serif; }
+html:lang(hy) body, html:lang(hy) button, html:lang(hy) input, html:lang(hy) textarea, html:lang(hy) select { font-family: var(--font-armenian-stack); }
+html:lang(hy) .font-display { font-family: var(--font-display-stack); letter-spacing: 0; }
+
+/* Editorial serif display type for headings and big numbers (local fonts). */
+.font-display { font-family: var(--font-display-stack); font-weight: 600; letter-spacing: -0.015em; }
+
+/* Motion is decoration: honour the OS setting everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* A calm focus ring that is visible on ivory, white and burgundy surfaces alike. */
+:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }

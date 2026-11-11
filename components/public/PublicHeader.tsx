@@ -33,7 +33,7 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
 
   return (
     <header
-      className="border-b border-border bg-background"
+      className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur"
       onKeyDown={(event) => {
         // Escape closes the mobile menu from anywhere inside the header.
         if (event.key === "Escape") {
@@ -41,11 +41,11 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
         }
       }}
     >
-      <div className="mx-auto max-w-5xl px-6 py-4 sm:flex sm:items-center sm:justify-between sm:gap-6">
+      <div className="mx-auto max-w-6xl px-6 py-3 sm:flex sm:items-center sm:justify-between sm:gap-6">
         <div className="flex items-center justify-between gap-3">
           <Link
             href="/"
-            className="flex min-w-0 items-center gap-2.5 text-[13px] font-bold uppercase tracking-[0.08em] text-foreground min-[400px]:text-sm min-[400px]:tracking-[0.2em] sm:text-lg"
+            className="font-display flex min-w-0 items-center gap-2.5 text-base font-semibold tracking-tight text-plum min-[400px]:text-lg sm:text-xl"
           >
             <BrandMark markOnly />
             <span className="min-w-0 truncate">{PRODUCT_NAME}</span>
@@ -57,7 +57,7 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
             aria-controls="public-header-nav"
             aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
             onClick={() => setOpen((visible) => !visible)}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted sm:hidden"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-foreground hover:bg-muted sm:hidden"
           >
             {open ? (
               <X className="h-5 w-5" aria-hidden="true" />
@@ -80,9 +80,11 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
               href={link.href}
               aria-current={active === link.key ? "page" : undefined}
               className={
-                active === link.key
-                  ? "text-primary underline underline-offset-4"
-                  : "text-muted-foreground hover:text-foreground"
+                link.key === "login"
+                  ? "inline-flex h-10 items-center justify-center rounded-xl bg-primary px-5 text-primary-foreground shadow-sm transition hover:bg-primary/90"
+                  : active === link.key
+                    ? "text-brand underline decoration-2 underline-offset-8"
+                    : "text-muted-foreground transition-colors hover:text-plum"
               }
             >
               {t(link.label)}

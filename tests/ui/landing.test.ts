@@ -218,25 +218,27 @@ describe("no raw colours in the landing sources", () => {
     }
   });
 
-  it("Hero uses the approved gradient, one existing brand asset, portal eyebrow and outlined secondary link", () => {
+  it("Hero is an ivory editorial layout: serif headline, filled Sign in, outlined secondary link, one existing brand asset, portal eyebrow", () => {
     const hero = readSource("components/landing/Hero.tsx");
-    expect(hero).toContain("bg-gradient-to-br");
-    expect(hero).toContain("from-primary");
-    expect(hero).toContain("to-gradient-end");
+    expect(hero).toContain("bg-background");
+    expect(hero).toContain("font-display");
+    expect(hero).toContain("bg-primary");
+    expect(hero).toContain("from-plum");
     expect(hero).toContain('t("landing.eyebrow")');
     expect(hero).not.toContain("uppercase");
     expect(hero).not.toContain("{PRODUCT_NAME}");
-    expect(hero).toContain("border-2 border-primary-foreground");
+    expect(hero).toContain("border-2 border-plum/25");
     expect(hero.match(/\/brand\/nare-icon\.webp/g) ?? []).toHaveLength(1);
   });
 
-  it("public heroes do not use the retired to-brand gradient stop", () => {
+  it("public heroes do not use the retired blue gradient (from-primary / to-gradient-end)", () => {
     for (const rel of [
       "components/landing/Hero.tsx",
       "app/login/page.tsx",
       "app/partners/apply/page.tsx",
     ]) {
-      expect(readSource(rel), rel).not.toContain("to-brand");
+      expect(readSource(rel), rel).not.toContain("from-primary");
+      expect(readSource(rel), rel).not.toContain("to-gradient-end");
     }
   });
 });

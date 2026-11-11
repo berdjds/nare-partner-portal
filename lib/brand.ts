@@ -1,8 +1,7 @@
 /**
- * Platform APIs (browser theme colour, web manifest) cannot read CSS variables, so the one hex value
- * lives here. It is --primary (203 89% 35%) from app/globals.css; tests/ui/brand-icons.test.ts
- * checks they still agree.
+ * Platform APIs (browser theme colour, web manifest) cannot read CSS variables, so the hex values live here.
+ * BRAND_THEME_COLOR is --brand (358 68% 40%, the pomegranate red of the Nare logo); BRAND_BACKGROUND_COLOR is
+ * --background (38 40% 97%, ivory). tests/ui/brand-icons.test.ts checks they still agree with app/globals.css.
  */
-export const BRAND_THEME_COLOR = "#0a6ca9";
-/** --background (0 0% 96%). */
-export const BRAND_BACKGROUND_COLOR = "#f5f5f5";
+export const BRAND_THEME_COLOR = "#ab2125";
+export const BRAND_BACKGROUND_COLOR = "#faf8f4";

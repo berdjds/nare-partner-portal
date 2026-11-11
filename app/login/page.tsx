@@ -77,29 +77,31 @@ function LoginForm() {
     <div className="flex min-h-screen flex-col">
       <PublicHeader active="login" />
       <div className="grid flex-1 grid-rows-[auto_1fr] lg:grid-cols-2 lg:grid-rows-1">
-      <aside className="flex flex-col gap-4 bg-gradient-to-br from-primary to-gradient-end px-6 py-8 text-primary-foreground lg:justify-center lg:gap-10 lg:px-16">
-        <h1 className="max-w-md text-2xl font-semibold tracking-tight lg:text-4xl">
+      <aside className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-plum via-plum to-brand px-6 py-8 text-white lg:justify-center lg:gap-10 lg:px-16">
+        <span aria-hidden="true" className="pointer-events-none absolute -bottom-24 -end-20 h-72 w-72 rounded-full border-[28px] border-white/10" />
+        <span aria-hidden="true" className="pointer-events-none absolute -top-16 start-1/3 hidden h-40 w-40 rounded-full bg-warm/20 blur-2xl lg:block" />
+        <h1 className="font-display relative max-w-md text-3xl leading-tight lg:text-5xl">
           {t("login.headline")}
         </h1>
-        <ul className="max-w-md space-y-2 text-base leading-relaxed text-primary-foreground/90 lg:space-y-4 lg:text-lg">
+        <ul className="max-w-md space-y-2 relative text-base leading-relaxed text-white/90 lg:space-y-4 lg:text-lg">
           {(["login.bullet1", "login.bullet2", "login.bullet3"] as const).map((k) => (
             <li key={k} className="flex items-start gap-3">
-              <Check className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-warm text-plum"><Check className="h-3.5 w-3.5" aria-hidden="true" /></span>
               <span>{t(k)}</span>
             </li>
           ))}
         </ul>
       </aside>
 
-      <div className="flex flex-col items-center justify-start bg-background p-4 pt-12 lg:justify-center lg:pt-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl">{t("login.title")}</CardTitle>
+      <div className="flex flex-col items-center justify-start bg-background p-4 pt-10 lg:justify-center lg:pt-4">
+        <Card className="w-full max-w-md shadow-[var(--shadow-lift)]">
+          <CardHeader className="p-8 pb-4 text-center">
+            <CardTitle className="text-3xl">{t("login.title")}</CardTitle>
             <CardDescription>
               {t("login.subtitle")}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-8 pt-2">
             <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">{t("login.email")}</Label>
@@ -159,7 +161,7 @@ function LoginForm() {
                   {error}
                 </p>
               )}
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" size="lg" className="w-full" disabled={loading}>
                 {loading ? t("login.submitting") : t("login.submit")}
               </Button>
             </form>

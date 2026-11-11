@@ -251,16 +251,17 @@ function DeleteRequestCard({ ctx }: { ctx: DetailContext }) {
   }
 
   return (
-    <Card className="mt-4 border-destructive/40">
-      <CardHeader>
-        <CardTitle className="text-base">Danger zone</CardTitle>
-        <CardDescription>Hard-deletes this request with all versions, documents and notifications.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <details className="group mt-6 rounded-card border border-border/70 bg-card/60 open:border-destructive/40">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-card px-5 py-3 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <span>Danger zone</span>
+        <span aria-hidden="true" className="text-xs transition-transform group-open:rotate-180">⌄</span>
+      </summary>
+      <div className="space-y-3 px-5 pb-5">
+        <p className="text-sm text-muted-foreground">Hard-deletes this request with all versions, documents and notifications.</p>
         <Button variant="destructive" size="sm" onClick={() => setConfirmOpen(true)}>
           Delete request
         </Button>
-      </CardContent>
+      </div>
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
@@ -280,7 +281,7 @@ function DeleteRequestCard({ ctx }: { ctx: DetailContext }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </details>
   );
 }
 

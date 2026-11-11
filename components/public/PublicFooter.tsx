@@ -19,10 +19,10 @@ export function PublicFooter() {
   const t = useT();
 
   return (
-    <footer className="border-t border-border bg-background">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10 sm:flex-row sm:justify-between">
+    <footer className="border-t border-border bg-card">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10 sm:flex-row sm:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">{PRODUCT_NAME}</p>
+          <p className="font-display text-lg text-plum">{PRODUCT_NAME}</p>
           {contact.address && (
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
               {contact.address}
@@ -81,7 +81,7 @@ export function PublicFooter() {
       </div>
 
       <div className="border-t border-border">
-        <p className="mx-auto max-w-5xl px-6 py-4 text-[13px] text-muted-foreground">
+        <p className="mx-auto max-w-6xl px-6 py-4 text-[13px] text-muted-foreground">
           {t("footer.rights", { year, name: PRODUCT_NAME })}
         </p>
       </div>

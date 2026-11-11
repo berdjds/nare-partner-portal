@@ -25,11 +25,12 @@ describe("brand icons", () => {
     expect(b.subarray(offset, offset + 4).toString("latin1")).toBe("\x89PNG");
     expect(offset + size).toBe(b.length);
   });
-  it("the theme colour hex equals the --primary token (203 89% 35%)", async () => {
+  it("the theme colour hex equals the --brand token (358 68% 40%) and the background hex equals --background", async () => {
     const { BRAND_THEME_COLOR } = await import("@/lib/brand");
     const css = readFileSync(file("app/globals.css"), "utf8");
-    expect(css).toContain("--primary: 203 89% 35%");
-    const [h, s, l] = [203 / 360, 0.89, 0.35];
+    expect(css).toContain("--brand: 358 68% 40%");
+    expect(css).toContain("--background: 38 40% 97%");
+    const [h, s, l] = [358 / 360, 0.68, 0.4];
     const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
     const f = (t: number) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
     const hex = [f(h + 1 / 3), f(h), f(h - 1 / 3)].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");

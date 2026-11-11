@@ -11,6 +11,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["var(--font-geist-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["var(--font-display-stack)"],
         mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
       },
       colors: {
@@ -48,6 +49,7 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
         brand: "hsl(var(--brand))",
+        plum: "hsl(var(--plum))",
         "gradient-end": "hsl(var(--gradient-end))",
         warm: "hsl(var(--warm))",
         sidebar: {
@@ -66,6 +68,7 @@ const config: Config = {
         },
       },
       borderRadius: {
+        card: "var(--radius-card)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
