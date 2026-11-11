@@ -324,6 +324,7 @@ export default function SettingsPanel({ role, userId }: SettingsPanelProps) {
                       onChange={(e) => setBranding({ ...branding, brandColor: e.target.value })}
                     />
                     <Input
+                      aria-label="Brand color hex"
                       className="w-28 font-mono"
                       placeholder={DEFAULT_BRAND_COLOR}
                       value={branding.brandColor}

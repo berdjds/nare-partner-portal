@@ -519,7 +519,7 @@ export default function ReviewTab({ ctx }: { ctx: DetailContext }) {
             <div>
               <Label>Accepted scenario</Label>
               <Select value={outcomeScenarioId} onValueChange={setOutcomeScenarioId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Accepted scenario">
                   <SelectValue placeholder="Select scenario" />
                 </SelectTrigger>
                 <SelectContent>
@@ -616,7 +616,7 @@ function AssignValidatorDialog({
             <div>
               <Label>Validator</Label>
               <Select value={validatorId} onValueChange={setValidatorId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Validator">
                   <SelectValue placeholder="Select validator" />
                 </SelectTrigger>
                 <SelectContent>

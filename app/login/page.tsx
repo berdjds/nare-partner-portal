@@ -51,7 +51,7 @@ function LoginForm() {
     setLoading(true);
     setError(null);
     const result = await signIn("credentials", {
-      email,
+      email: email.trim(),
       password,
       redirect: false,
       callbackUrl,

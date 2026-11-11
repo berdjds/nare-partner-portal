@@ -95,7 +95,7 @@ export default function TravelerSetupEditor({ value, onChange }: TravelerSetupEd
                 value={String(value.childAges?.[i] ?? DEFAULT_CHILD_AGE)}
                 onValueChange={(v) => setChildAge(i, Number(v))}
               >
-                <SelectTrigger className="w-20">
+                <SelectTrigger aria-label="Child age" className="w-20">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

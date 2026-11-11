@@ -298,7 +298,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
                   onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
                 />
                 <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v as typeof newUser.role })}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Role">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -348,7 +348,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
                                   <div>
                                     <Label>Role</Label>
                                     <Select value={editRole} onValueChange={setEditRole}>
-                                      <SelectTrigger>
+                                      <SelectTrigger aria-label="Role">
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>

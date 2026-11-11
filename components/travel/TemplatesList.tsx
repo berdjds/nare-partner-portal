@@ -409,7 +409,7 @@ function InstantiateDialog({
             <div>
               <Label>Template version</Label>
               <Select value={versionId} onValueChange={setVersionId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Template version">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -424,7 +424,7 @@ function InstantiateDialog({
             <div>
               <Label>Agency</Label>
               <Select value={form.agencyId} onValueChange={(v) => setForm({ ...form, agencyId: v })}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Agency">
                   <SelectValue placeholder="Select agency" />
                 </SelectTrigger>
                 <SelectContent>
@@ -534,7 +534,7 @@ function BatchDialog({
           <div>
             <Label>Version</Label>
             <Select value={versionId} onValueChange={setVersionId}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger aria-label="Version" className="w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

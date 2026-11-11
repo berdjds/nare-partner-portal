@@ -10,3 +10,25 @@ describe("SettingsPanel accessible names (Phase 5 audit)", () => {
     expect(src).toMatch(/type="color"\s+aria-label="Brand color picker"/);
   });
 });
+
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((f) => {
+    const p = join(dir, f);
+    return statSync(p).isDirectory() ? walk(p) : p.endsWith(".tsx") ? [p] : [];
+  });
+}
+
+describe("every Select trigger has an accessible name", () => {
+  it("each <SelectTrigger> carries aria-label or id (label htmlFor)", () => {
+    const bad: string[] = [];
+    for (const f of [...walk("components"), ...walk("app")]) {
+      if (f.endsWith("ui/select.tsx")) continue;
+      const tags = readFileSync(f, "utf8").match(/<SelectTrigger\b[^>]*>/g) ?? [];
+      for (const t of tags) if (!/aria-label|aria-labelledby|\bid=/.test(t)) bad.push(f);
+    }
+    expect(bad).toEqual([]);
+  });
+});

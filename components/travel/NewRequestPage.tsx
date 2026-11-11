@@ -202,7 +202,7 @@ export default function NewRequestPage({ userId }: { userId: string }) {
             <div className="sm:col-span-2">
               <Label htmlFor="nr-agency">Agency</Label>
               <Select value={form.agencyId} onValueChange={(v) => { update({ agencyId: v }); touch("agencyId"); }}>
-                <SelectTrigger id="nr-agency" {...describedBy("nr-agency", shown.agencyId)}><SelectValue placeholder="Select agency" /></SelectTrigger>
+                <SelectTrigger aria-label="Agency" id="nr-agency" {...describedBy("nr-agency", shown.agencyId)}><SelectValue placeholder="Select agency" /></SelectTrigger>
                 <SelectContent>{agencies.map((a) => <SelectItem key={a.id} value={a.id}>{a.shortCode} — {a.name}</SelectItem>)}</SelectContent>
               </Select>
               <FieldError id="nr-agency" message={shown.agencyId} />

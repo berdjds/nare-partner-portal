@@ -198,7 +198,7 @@ export default function ServicePickerDialog({
                   )}
                 </p>
                 <Select value={pickerVehicle} onValueChange={setPickerVehicle}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Vehicle type">
                     <SelectValue placeholder="Select vehicle" />
                   </SelectTrigger>
                   <SelectContent>

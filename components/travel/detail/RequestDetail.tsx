@@ -272,7 +272,7 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
           <CardContent>
             <div className="flex flex-wrap items-center gap-2">
               <Select value={compareA} onValueChange={setCompareA}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger aria-label="Compare version A" className="w-32">
                   <SelectValue placeholder="Version A" />
                 </SelectTrigger>
                 <SelectContent>
@@ -284,7 +284,7 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
                 </SelectContent>
               </Select>
               <Select value={compareB} onValueChange={setCompareB}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger aria-label="Compare version B" className="w-32">
                   <SelectValue placeholder="Version B" />
                 </SelectTrigger>
                 <SelectContent>

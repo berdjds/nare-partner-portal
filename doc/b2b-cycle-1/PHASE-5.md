@@ -27,3 +27,11 @@ First run: 15 failures. Fixes: aria-labels on 57 label/control pairs (templates,
 ## Evidence
 
 `doc/b2b-cycle-1/evidence/phase5/` (screenshots, `browser-phase5-results.json`), script `evidence/browser-phase5.mjs`, seed `evidence/phase5-seed.ts`. Isolated trial-mode server on a throwaway SQLite DB; production data untouched.
+
+## Independent review (read-only Opus subagent) and what changed
+
+No high-severity finding. Fixed: 34 more unnamed select/input controls (guard test added); `Table` accepts a `regionLabel`; reverted two non-existent Tailwind animation classes (Radix `data-side` is physical); dialog/sheet footers use `gap-2`; sign-in sends the trimmed email; neutral public meta description (no mention of the WhatsApp inbox); unused `trust.*` catalogue keys removed.
+Left for the owner or later: repeated benefit lines in the trust strip; capability wording on service cards ("Comprehensive", "Specialized"), earlier-approved nare.am text; Sheet slide direction in RTL (Arabic disabled); hard-coded English region label.
+
+## Final verification
+`tsc --noEmit` clean; Vitest 131 files / 1672 tests pass; Chromium audit 146/146 (desktop, tablet, phone; admin, advisor, partner).

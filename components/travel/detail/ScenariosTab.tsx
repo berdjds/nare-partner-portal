@@ -848,7 +848,7 @@ function StayEditor({
         {editable ? (
           <>
             <Select value={stay.hotelProductId ?? ""} onValueChange={onSelectHotel}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Hotel">
                 <SelectValue placeholder={stay.hotelName || "Select hotel"} />
               </SelectTrigger>
               <SelectContent>
@@ -906,7 +906,7 @@ function StayEditor({
               <div>
                 <span className="text-xs text-muted-foreground">Room type</span>
                 <Select value={a.roomType} onValueChange={(v) => onAllocation(ai, { roomType: v })}>
-                  <SelectTrigger className="h-8 text-[13px]">
+                  <SelectTrigger aria-label="Room type" className="h-8 text-[13px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1079,7 +1079,7 @@ function ServiceLineTable({
           <div>
             <span className="text-xs text-muted-foreground">Category</span>
             <Select value={l.category} onValueChange={(v) => onChange(i, { category: v })}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Category">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1094,7 +1094,7 @@ function ServiceLineTable({
           <div>
             <span className="text-xs text-muted-foreground">Basis</span>
             <Select value={l.basis} onValueChange={(v) => onChange(i, { basis: v })}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Basis">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1113,7 +1113,7 @@ function ServiceLineTable({
                 value={l.vehicleTypeId ?? "ANY"}
                 onValueChange={(v) => onChange(i, { vehicleTypeId: v === "ANY" ? null : v })}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Vehicle type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1170,7 +1170,7 @@ function ServiceLineTable({
               value={l.scenarioKey ?? "SHARED"}
               onValueChange={(v) => onChange(i, { scenarioKey: v === "SHARED" ? null : v })}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label="Scenario">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

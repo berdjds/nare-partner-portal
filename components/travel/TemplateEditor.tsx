@@ -342,7 +342,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                   <div>
                     <Label>Version</Label>
                     <Select value={versionId} onValueChange={switchVersion}>
-                      <SelectTrigger className="w-48">
+                      <SelectTrigger aria-label="Version" className="w-48">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -612,7 +612,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                                 }
                               }}
                             >
-                              <SelectTrigger>
+                              <SelectTrigger aria-label="Select option">
                                 <SelectValue placeholder="Select hotel" />
                               </SelectTrigger>
                               <SelectContent>
@@ -688,7 +688,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                               <div>
                                 <span className="text-xs text-muted-foreground">Room type</span>
                                 <Select value={a.roomType} onValueChange={(v) => patchAlloc(si, ti, ai, { roomType: v })}>
-                                  <SelectTrigger>
+                                  <SelectTrigger aria-label="Room type">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>

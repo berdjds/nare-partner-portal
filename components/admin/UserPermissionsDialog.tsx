@@ -147,7 +147,7 @@ export default function UserPermissionsDialog({ userId, onClose }: { userId: str
                     value={pending[key] ?? "default"}
                     onValueChange={(v) => setPending((prev) => ({ ...prev, [key]: v as OverrideChoice }))}
                   >
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger aria-label="Permission override" className="w-32">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

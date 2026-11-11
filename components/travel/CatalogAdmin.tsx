@@ -279,7 +279,7 @@ function SupplierSelect({
 }) {
   return (
     <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
-      <SelectTrigger>
+      <SelectTrigger aria-label="Select option">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -487,7 +487,7 @@ function RateDialog({
                   <Input value={form.occupancy || "—"} disabled />
                 ) : (
                   <Select value={form.occupancy || NONE} onValueChange={(v) => setForm({ ...form, occupancy: v === NONE ? "" : v })}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Occupancy">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -508,6 +508,7 @@ function RateDialog({
                 <Input value={form.board || "—"} disabled />
               ) : (
                 <Input
+                  aria-label="Board"
                   placeholder="BB / HB / FB (optional)"
                   value={form.board}
                   onChange={(e) => setForm({ ...form, board: e.target.value })}
@@ -526,7 +527,7 @@ function RateDialog({
                     value={form.vehicleTypeId || NONE}
                     onValueChange={(v) => setForm({ ...form, vehicleTypeId: v === NONE ? "" : v })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Vehicle type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -786,7 +787,7 @@ function ServiceDialog({
             <div>
               <Label>Category</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Category">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -801,7 +802,7 @@ function ServiceDialog({
             <div>
               <Label>Pricing basis</Label>
               <Select value={form.basis} onValueChange={(v) => setForm({ ...form, basis: v })}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Pricing basis">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -841,7 +842,7 @@ function ServiceDialog({
                 value={form.durationVariant || NONE}
                 onValueChange={(v) => setForm({ ...form, durationVariant: v === NONE ? "" : v })}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Duration variant (optional)">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1035,7 +1036,7 @@ function HotelDialog({
             <div>
               <Label>Kind</Label>
               <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v })}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Kind">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1375,7 +1376,7 @@ function ServicesTab() {
           <div className="flex gap-2">
             <Input placeholder="Search services..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-56">
+              <SelectTrigger aria-label="Category filter" className="w-56">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1556,7 +1557,7 @@ function RatesTab() {
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger aria-label="Status filter" className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1569,7 +1570,7 @@ function RatesTab() {
             </SelectContent>
           </Select>
           <Select value={productType} onValueChange={setProductType}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Product type filter" className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1793,7 +1794,7 @@ function FxPolicyTab() {
               required
             />
             <Select value={policyForm.type} onValueChange={(v) => setPolicyForm({ ...policyForm, type: v })}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Policy type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
