@@ -69,7 +69,7 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
           aria-label={t("nav.primary")}
           className={`${
             open ? "flex" : "hidden"
-          } mt-4 w-full flex-col gap-4 text-sm font-medium sm:mt-0 sm:flex sm:w-auto sm:flex-row sm:items-center sm:gap-6`}
+          } mt-4 w-full flex-col gap-4 text-[15px] font-medium sm:mt-0 sm:flex sm:w-auto sm:flex-row sm:items-center sm:gap-6`}
         >
           {NAV_LINKS.map((link) => (
             <Link

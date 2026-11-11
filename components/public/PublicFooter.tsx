@@ -30,7 +30,7 @@ const SOCIAL: Record<SocialPlatform, { Icon: Icon; label: string }> = {
 };
 const ORDER: SocialPlatform[] = ["facebook", "instagram", "linkedin", "tiktok", "youtube", "twitter", "tripadvisor"];
 
-const link = "text-white/70 underline-offset-4 transition-colors hover:text-white hover:underline";
+const link = "text-base text-white/70 underline-offset-4 transition-colors hover:text-white hover:underline";
 
 /** `compact` is the slim bar used on the sign-in and application pages: no repeated contact block, just legal links and social icons. */
 export function PublicFooter({ compact = false }: { compact?: boolean } = {}) {
@@ -62,7 +62,7 @@ export function PublicFooter({ compact = false }: { compact?: boolean } = {}) {
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr_1.4fr]">
           <div className="space-y-5">
             <p className="font-display text-3xl">{PRODUCT_NAME}</p>
-            <p className="max-w-sm leading-relaxed text-white/70">{t("footer.description")}</p>
+            <p className="max-w-sm text-base leading-relaxed text-white/70">{t("footer.description")}</p>
             {contact.foundedYear && <p className="text-sm text-white/60">{t("footer.since", { year: contact.foundedYear })}</p>}
             {socials.length > 0 && (
               <div>

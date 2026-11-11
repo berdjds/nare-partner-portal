@@ -1,3 +1,12 @@
+/* Fonts: the exact files staging.nare.am serves (Inter, Fraunces, Noto Sans/Serif Armenian; SIL Open Font Licence), self-hosted in
+   public/fonts (see public/fonts/SOURCES.md). Nothing is fetched from a font service. Variable weights 100-900. */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/inter-latin.woff2") format("woff2"); unicode-range: U+??,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+304,U+308,U+329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/inter-latin-ext.woff2") format("woff2"); unicode-range: U+100-2BA,U+2BD-2C5,U+2C7-2CC,U+2CE-2D7,U+2DD-2FF,U+304,U+308,U+329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/fraunces-latin.woff2") format("woff2"); unicode-range: U+??,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+304,U+308,U+329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/fraunces-latin-ext.woff2") format("woff2"); unicode-range: U+100-2BA,U+2BD-2C5,U+2C7-2CC,U+2CE-2D7,U+2DD-2FF,U+304,U+308,U+329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Noto Sans Armenian"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/noto-sans-armenian.woff2") format("woff2"); unicode-range: U+308,U+530-58F,U+2010,U+2024,U+25CC,U+FB13-FB17; }
+@font-face { font-family: "Noto Serif Armenian"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/noto-serif-armenian.woff2") format("woff2"); unicode-range: U+308,U+530-58F,U+2010,U+2024,U+25CC,U+FB13-FB17; }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -47,8 +56,10 @@
     --sidebar-border: 34 22% 90%;
     --sidebar-ring: 214 90% 42%;
     /* Local/system font stacks only: nothing is fetched from a font service. */
-    --font-display-stack: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Noto Serif", Georgia, "Sylfaen", "Noto Serif Armenian", serif;
-    --font-armenian-stack: "Noto Sans Armenian", "Sylfaen", "Segoe UI", "Mshtakan", "Arial Unicode MS", system-ui, sans-serif;
+    --font-display-stack: "Fraunces", "Noto Serif Armenian", Georgia, "Times New Roman", serif; /* staging's display face */
+    --font-sans-stack: "Inter", "Noto Sans Armenian", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif; /* staging's body face */
+    --font-armenian-stack: "Inter", "Noto Sans Armenian", "Sylfaen", ui-sans-serif, system-ui, sans-serif;
+    --font-display-hy-stack: "Noto Serif Armenian", "Sylfaen", Georgia, serif; /* staging uses Noto Serif Armenian for Armenian headings */
   }
 }
 
@@ -72,10 +83,11 @@
 
 /* Armenian text: put Noto Sans Armenian first so glyphs never fall back to tofu or a mismatched face. */
 html:lang(hy) body, html:lang(hy) button, html:lang(hy) input, html:lang(hy) textarea, html:lang(hy) select { font-family: var(--font-armenian-stack); }
-html:lang(hy) .font-display { font-family: var(--font-display-stack); letter-spacing: 0; }
+html:lang(hy) .font-display { font-family: var(--font-display-hy-stack); letter-spacing: 0; font-weight: 600; line-height: 1.12; }
 
 /* Editorial serif display type for headings and big numbers (local fonts). */
-.font-display { font-family: var(--font-display-stack); font-weight: 600; letter-spacing: -0.015em; }
+.font-display { font-family: var(--font-display-stack); font-weight: 600; font-optical-sizing: auto; letter-spacing: -0.02em; }
+body { font-family: var(--font-sans-stack); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 /* Motion is decoration: honour the OS setting everywhere. */
 @media (prefers-reduced-motion: reduce) {

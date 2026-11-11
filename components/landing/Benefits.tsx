@@ -14,8 +14,8 @@ export function Benefits() {
         <ul className="mt-6 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
           {KEYS.map((k, i) => (
             <li key={k} className="border-t-2 border-brand/25 pt-4">
-              <span aria-hidden="true" className="font-display text-sm font-semibold text-brand">0{i + 1}</span>
-              <p className="mt-2 text-[15px] leading-relaxed text-foreground">{t(k)}</p>
+              <span aria-hidden="true" className="font-display text-base font-semibold text-brand">0{i + 1}</span>
+              <p className="mt-2 text-[17px] leading-relaxed text-foreground">{t(k)}</p>
             </li>
           ))}
         </ul>

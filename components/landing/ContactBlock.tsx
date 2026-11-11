@@ -14,7 +14,7 @@ export function ContactBlock() {
     <section id="contact" aria-labelledby="contact-heading" className="bg-background">
       <div className="mx-auto max-w-7xl px-6 pb-16 lg:pb-24">
         <div className="flex flex-col items-start justify-between gap-8 rounded-[2rem] bg-primary p-8 text-primary-foreground shadow-[var(--shadow-lift)] md:flex-row md:items-center md:p-12">
-          <h2 id="contact-heading" className="font-display max-w-xl text-balance text-3xl font-semibold leading-tight md:text-4xl">{t("cta.title")}</h2>
+          <h2 id="contact-heading" className="font-display max-w-xl text-balance text-[clamp(1.9rem,3.6vw,3rem)] font-semibold leading-[1.08]">{t("cta.title")}</h2>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/login" className="pill-btn pill-btn-light group px-8 py-4 text-base">
               {t("common.signIn")}

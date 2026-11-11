@@ -17,6 +17,7 @@ describe("local fonts only", () => {
     expect(css).toContain("--font-display-stack");
     expect(css).toContain("--font-armenian-stack");
     expect(css).not.toMatch(/@import\s+url\(/);
+    expect(css).not.toMatch(/url\(["']?https?:/);
   });
   it("honours reduced motion", () => {
     expect(read("app/globals.css")).toContain("prefers-reduced-motion: reduce");
@@ -116,5 +117,24 @@ describe("staging-system landing (corrective pass 2)", () => {
     expect(read("app/login/page.tsx")).toContain("yerevan-market.webp");
     expect(read("app/partners/apply/page.tsx")).toContain("yerevan-market.webp");
     expect(read("app/login/page.tsx")).not.toContain("hero-expo");
+  });
+});
+
+describe("typography matches staging.nare.am (self-hosted, no font service)", () => {
+  it("Inter, Fraunces and the Noto Armenian faces are local files declared with @font-face, and the stacks match staging's", () => {
+    const { existsSync } = require("node:fs") as typeof import("node:fs");
+    const css = read("app/globals.css");
+    for (const f of ["inter-latin", "inter-latin-ext", "fraunces-latin", "fraunces-latin-ext", "noto-sans-armenian", "noto-serif-armenian"]) {
+      expect(existsSync(`public/fonts/${f}.woff2`), f).toBe(true);
+      expect(css, f).toContain(`/fonts/${f}.woff2`);
+    }
+    expect(css).toMatch(/--font-sans-stack:\s*"Inter"/);
+    expect(css).toMatch(/--font-display-stack:\s*"Fraunces"/);
+    expect(css).toMatch(/--font-display-hy-stack:\s*"Noto Serif Armenian"/);
+    expect(read("public/fonts/SOURCES.md")).toContain("staging.nare.am");
+    expect(read("tailwind.config.ts")).toContain('sans: ["var(--font-sans-stack)"]');
+  });
+  it("section titles use staging's display scale", () => {
+    for (const f of ["ServicesSection", "HowItWorks", "AboutNare"]) expect(read(`components/landing/${f}.tsx`), f).toContain("text-[clamp(2.1rem,4.6vw,4rem)]");
   });
 });

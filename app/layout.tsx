@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
@@ -10,8 +9,8 @@ import { dirOf } from "@/lib/i18n/locales";
 import { BRAND_THEME_COLOR } from "@/lib/brand";
 import { getPublicContact } from "@/lib/contact/service";
 
-// Fonts are local only (Geist ships in the npm package; the serif display and Armenian stacks are system fonts
-// declared in globals.css), so a build or a page view never contacts a font service.
+// Fonts are local only: the same Inter / Fraunces / Noto Armenian files staging.nare.am serves, self-hosted in
+// public/fonts and declared in globals.css (Geist Mono stays for code), so a page view never contacts a font service.
 
 export const metadata: Metadata = {
   title: "Nare Travel and Tours — Portal",
@@ -41,7 +40,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getRequestLocale();
   const contact = await getPublicContact("portal");
   return (
-    <html lang={locale} dir={dirOf(locale)} className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang={locale} dir={dirOf(locale)} className={GeistMono.variable}>
+      <head>
+        <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+      </head>
       <body className="font-sans">
         <LocaleProvider locale={locale}>
           <PublicContactProvider contact={contact}>
