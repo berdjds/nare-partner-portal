@@ -8,15 +8,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import { mapEmbedUrl, type ContactData } from "@/lib/contact/schema";
+import { mapEmbedUrl, SOCIAL_PLATFORMS, type ContactData } from "@/lib/contact/schema";
 
 type Scope = "global" | "portal";
 interface Row { id: string; scope: string; version: number; status: string; dataJson: string; note: string | null; createdAt: string; publishedAt: string | null; publishedById: string | null }
-const VIS_LABELS: Record<string, string> = { foundedYear: "Founded year", generalEmail: "General email", b2bEmail: "B2B portal email", phones: "Phones", whatsapp: "WhatsApp", address: "Address", hours: "Business hours", map: "Map" };
-const GROUPS = ["emails", "phones", "details", "map", "visibility"] as const;
+const VIS_LABELS: Record<string, string> = { foundedYear: "Founded year", generalEmail: "General email", b2bEmail: "B2B portal email", phones: "Phones", whatsapp: "WhatsApp", address: "Address", hours: "Business hours", map: "Map", social: "Social links" };
+const GROUPS = ["emails", "phones", "details", "social", "map", "visibility"] as const;
 type Group = (typeof GROUPS)[number];
-const GROUP_KEYS: Record<Group, string[]> = { emails: ["generalEmail", "b2bEmail"], phones: ["phones", "whatsapp"], details: ["foundedYear", "address", "hours"], map: ["map"], visibility: ["visibility"] };
-const GROUP_LABEL: Record<Group, string> = { emails: "Emails", phones: "Phones and WhatsApp", details: "Founded year, address and hours", map: "Map", visibility: "What is shown publicly" };
+const GROUP_KEYS: Record<Group, string[]> = { emails: ["generalEmail", "b2bEmail"], phones: ["phones", "whatsapp"], details: ["foundedYear", "address", "hours"], social: ["social"], map: ["map"], visibility: ["visibility"] };
+const GROUP_LABEL: Record<Group, string> = { emails: "Emails", phones: "Phones and WhatsApp", details: "Founded year, address and hours", social: "Social links", map: "Map", visibility: "What is shown publicly" };
 const msg = (e: unknown, fb: string) => (axios.isAxiosError(e) ? e.response?.data?.error ?? fb : fb);
 const parse = (j: string): Partial<ContactData> => { try { return JSON.parse(j); } catch { return {}; } };
 
@@ -26,7 +26,7 @@ export default function ContactAdmin() {
   const [rows, setRows] = useState<Row[]>([]);
   const [defaults, setDefaults] = useState<ContactData | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
-  const [override, setOverride] = useState<Record<Group, boolean>>({ emails: true, phones: true, details: true, map: true, visibility: true });
+  const [override, setOverride] = useState<Record<Group, boolean>>({ emails: true, phones: true, details: true, social: true, map: true, visibility: true });
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -42,11 +42,12 @@ export default function ContactAdmin() {
         foundedYear: base.foundedYear ?? "", generalEmail: base.generalEmail ?? "", b2bEmail: base.b2bEmail ?? "",
         phones: (base.phones ?? []).map((p: { number: string }) => p.number).join("\n"), whatsapp: base.whatsapp ?? "",
         address: base.address ?? "", hours: base.hours ?? "",
+        ...Object.fromEntries(SOCIAL_PLATFORMS.map((p) => [`social_${p}`, base.social?.[p] ?? ""])),
         mapUrl: base.map?.url ?? "", placeId: base.map?.placeId ?? "", lat: base.map?.lat ?? "", lng: base.map?.lng ?? "",
         visibility: { ...(s === "global" ? r.data.defaults.visibility : {}), ...(base.visibility ?? {}) },
       });
-      setOverride(s === "global" ? { emails: true, phones: true, details: true, map: true, visibility: true }
-        : { emails: "generalEmail" in data || "b2bEmail" in data, phones: "phones" in data || "whatsapp" in data, details: "address" in data || "hours" in data || "foundedYear" in data, map: "map" in data, visibility: "visibility" in data });
+      setOverride(s === "global" ? { emails: true, phones: true, details: true, social: true, map: true, visibility: true }
+        : { emails: "generalEmail" in data || "b2bEmail" in data, phones: "phones" in data || "whatsapp" in data, details: "address" in data || "hours" in data || "foundedYear" in data, social: "social" in data, map: "map" in data, visibility: "visibility" in data });
     } catch (e) { toast(msg(e, "Failed to load"), "error"); }
   }, [toast]);
   useEffect(() => { load(scope); }, [scope, load]);
@@ -58,6 +59,7 @@ export default function ContactAdmin() {
     if (on("emails")) { d.generalEmail = form.generalEmail; d.b2bEmail = form.b2bEmail; }
     if (on("phones")) { d.phones = String(form.phones).split("\n").map((s) => s.trim()).filter(Boolean).map((number) => ({ number })); if (form.whatsapp) d.whatsapp = form.whatsapp; }
     if (on("details")) { if (form.foundedYear !== "") d.foundedYear = num(form.foundedYear); if (form.address) d.address = form.address; if (form.hours) d.hours = form.hours; }
+    if (on("social")) { const so = Object.fromEntries(SOCIAL_PLATFORMS.map((p) => [p, String(form[`social_${p}`] ?? "").trim()]).filter(([, u]) => u)); d.social = so; }
     if (on("map")) { const m: Record<string, unknown> = {}; if (form.mapUrl) m.url = form.mapUrl; if (form.placeId) m.placeId = form.placeId; if (form.lat !== "") m.lat = num(form.lat); if (form.lng !== "") m.lng = num(form.lng); if (Object.keys(m).length) d.map = m; }
     if (on("visibility")) d.visibility = form.visibility;
     return d;
@@ -107,6 +109,10 @@ export default function ContactAdmin() {
             {field("ct-year", "Founded year", <Input id="ct-year" type="number" value={form.foundedYear ?? ""} onChange={(e) => set("foundedYear", e.target.value)} />)}
             {field("ct-hours", "Business hours", <Input id="ct-hours" value={form.hours ?? ""} onChange={(e) => set("hours", e.target.value)} />)}
             <div className="sm:col-span-2">{field("ct-address", "Address", <Textarea id="ct-address" rows={2} value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} />)}</div>
+          </div>)}
+          {grp("social", <div className="grid gap-3 sm:grid-cols-2">
+            {SOCIAL_PLATFORMS.map((p) => field(`ct-social-${p}`, `${p[0].toUpperCase()}${p.slice(1)} link`, <Input id={`ct-social-${p}`} value={form[`social_${p}`] ?? ""} onChange={(e) => set(`social_${p}`, e.target.value)} placeholder="https://" />))}
+            <p className="text-xs text-muted-foreground sm:col-span-2">Only https links on the platform's own domain are accepted. Leave a field empty to hide that icon.</p>
           </div>)}
           {grp("map", <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">{field("ct-mapurl", "Google Maps link", <Input id="ct-mapurl" value={form.mapUrl ?? ""} onChange={(e) => set("mapUrl", e.target.value)} placeholder="https://maps.app.goo.gl/..." />)}</div>

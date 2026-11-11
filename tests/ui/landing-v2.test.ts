@@ -129,7 +129,7 @@ describe("Phase 5 landing sections", () => {
       ["benefits", "benefits-heading", LANDING_TITLES.benefits],
       ["services", "services-heading", LANDING_TITLES.services],
       ["how-it-works", "how-heading", LANDING_TITLES.steps],
-      ["trust", "trust-heading", LANDING_TITLES.trust],
+      ["about", "about-heading", LANDING_TITLES.trust],
     ] as const) {
       expect(html, id).toMatch(new RegExp(`<section[^>]*id="${id}"[^>]*aria-labelledby="${heading}"`));
       expect(html).toContain(`id="${heading}"`);
@@ -147,10 +147,10 @@ describe("Phase 5 landing sections", () => {
     for (const b of BENEFITS) expect(html).toContain(escapeHtml(b));
   });
 
-  it("renders the sections in order: hero, benefits, services, steps, trust, contact", async () => {
+  it("renders the sections in order: hero, benefits, services, steps, about, contact", async () => {
     const html = await renderLanding();
     const at = (needle: string) => { const i = html.indexOf(needle); expect(i, needle).toBeGreaterThan(-1); return i; };
-    const order = [HERO.headline, 'id="benefits"', 'id="services"', 'id="how-it-works"', 'id="trust"', escapeHtml(LANDING_TITLES.contact)].map((n) => at(escapeHtml(n) === n ? n : n));
+    const order = [HERO.headline, 'id="benefits"', 'id="services"', 'id="how-it-works"', 'id="about"', escapeHtml(LANDING_TITLES.contact)].map((n) => at(escapeHtml(n) === n ? n : n));
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 

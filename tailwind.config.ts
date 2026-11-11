@@ -50,6 +50,7 @@ const config: Config = {
         },
         brand: "hsl(var(--brand))",
         plum: "hsl(var(--plum))",
+        footer: "hsl(var(--footer))",
         "gradient-end": "hsl(var(--gradient-end))",
         warm: "hsl(var(--warm))",
         sidebar: {

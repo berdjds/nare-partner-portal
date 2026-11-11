@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { hasPermission } from "@/lib/permissions";
-import { contactDataSchema, contactOverrideSchema, DEFAULT_CONTACT, mapEmbedUrl, mapLinkUrl, type ContactData, type ContactOverride } from "@/lib/contact/schema";
+import { type SocialPlatform, contactDataSchema, contactOverrideSchema, DEFAULT_CONTACT, mapEmbedUrl, mapLinkUrl, type ContactData, type ContactOverride } from "@/lib/contact/schema";
 
 export class ContactError extends Error {
   constructor(public code: string, message: string, public httpStatus = 400) { super(message); }
@@ -64,6 +64,7 @@ async function publishedData(scope: Scope): Promise<(ContactData | ContactOverri
 export interface PublicContact {
   foundedYear?: number; generalEmail?: string; b2bEmail?: string; phones?: Array<{ label?: string; number: string }>;
   whatsapp?: string; address?: string; hours?: string; mapEmbedUrl?: string; mapLinkUrl?: string;
+  social?: Partial<Record<SocialPlatform, string>>;
 }
 
 /**
@@ -93,6 +94,7 @@ async function computePublicContact(scope: Scope): Promise<PublicContact> {
   if (v.whatsapp && merged.whatsapp) out.whatsapp = merged.whatsapp;
   if (v.address && merged.address) out.address = merged.address;
   if (v.hours && merged.hours) out.hours = merged.hours;
+  if (v.social !== false && merged.social) { const s = Object.fromEntries(Object.entries(merged.social).filter(([, u]) => Boolean(u))); if (Object.keys(s).length) out.social = s as PublicContact["social"]; }
   if (v.map) { const e = mapEmbedUrl(merged.map), l = mapLinkUrl(merged.map); if (e) out.mapEmbedUrl = e; if (l) out.mapLinkUrl = l; }
   return out;
 }

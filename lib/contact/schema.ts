@@ -18,6 +18,23 @@ const mapUrl = z.string().trim().max(500).refine((u) => {
   } catch { return false; }
 }, "use a Google Maps link (https)");
 
+/** Social profiles: https links on each platform's own domain, so a typo or a lookalike host cannot be published. */
+export const SOCIAL_PLATFORMS = ["facebook", "instagram", "linkedin", "tiktok", "youtube", "twitter", "tripadvisor"] as const;
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+const SOCIAL_HOSTS: Record<SocialPlatform, string[]> = {
+  facebook: ["facebook.com", "fb.com"], instagram: ["instagram.com"], linkedin: ["linkedin.com"], tiktok: ["tiktok.com"],
+  youtube: ["youtube.com", "youtu.be"], twitter: ["twitter.com", "x.com"], tripadvisor: ["tripadvisor.com"],
+};
+const socialUrl = (p: SocialPlatform) => z.string().trim().max(300).refine((u) => {
+  try {
+    const x = new URL(u);
+    if (x.protocol !== "https:" || x.username || x.password) return false;
+    const h = x.hostname.replace(/^www\./, "");
+    return SOCIAL_HOSTS[p].some((d) => h === d || h.endsWith(`.${d}`));
+  } catch { return false; }
+}, `use an https link on ${SOCIAL_HOSTS[p][0]}`);
+export const socialSchema = z.object(Object.fromEntries(SOCIAL_PLATFORMS.map((p) => [p, socialUrl(p).optional()])) as unknown as Record<SocialPlatform, z.ZodOptional<z.ZodEffects<z.ZodString>>>).strict();
+
 export const mapSchema = z.object({
   url: mapUrl.optional(),
   placeId: z.string().trim().regex(/^[A-Za-z0-9_-]{10,200}$/, "invalid Place ID").optional(),
@@ -28,6 +45,7 @@ export const mapSchema = z.object({
 export const visibilitySchema = z.object({
   foundedYear: z.boolean(), generalEmail: z.boolean(), b2bEmail: z.boolean(), phones: z.boolean(),
   whatsapp: z.boolean(), address: z.boolean(), hours: z.boolean(), map: z.boolean(),
+  social: z.boolean().optional(), // absent in profiles saved before social links existed: treated as shown when links are set
 }).strict();
 
 export const contactDataSchema = z.object({
@@ -39,6 +57,7 @@ export const contactDataSchema = z.object({
   address: z.string().trim().max(300).optional(),
   hours: z.string().trim().max(300).optional(),
   map: mapSchema.optional(),
+  social: socialSchema.optional(),
   visibility: visibilitySchema,
 }).strict();
 
@@ -55,7 +74,14 @@ export const DEFAULT_CONTACT: ContactData = {
   b2bEmail: "reservation@nare.am",
   phones: [{ number: "+374 91 005046" }, { number: "+374 10 545046" }],
   address: "91 Teryan St, Tparan Business Center, Yerevan, Armenia",
-  visibility: { foundedYear: true, generalEmail: true, b2bEmail: true, phones: true, whatsapp: false, address: true, hours: false, map: false },
+  // Nare's own profiles, as configured on staging.nare.am (data_backup/socialLinks.json); editable in Admin > Company and contact.
+  social: {
+    facebook: "https://www.facebook.com/Nare.Travel.and.Tours/",
+    instagram: "https://www.instagram.com/nare_travel/",
+    linkedin: "https://www.linkedin.com/company/105172290/",
+    tiktok: "https://www.tiktok.com/@nare_travel",
+  },
+  visibility: { foundedYear: true, generalEmail: true, b2bEmail: true, phones: true, whatsapp: false, address: true, hours: false, map: false, social: true },
 };
 
 type MapInput = { url?: string; placeId?: string; lat?: number; lng?: number };

@@ -187,11 +187,13 @@ describe("PublicHeader rendered (initial closed state)", () => {
     expect(html).not.toContain("aria-current");
   });
 
-  it("renders the shared BrandMark image as a decorative mark", () => {
+  it("renders exactly one brand lockup: the approved script logo with the product name as its text alternative", () => {
     const html = renderToStaticMarkup(createElement(PublicHeader, { active: "home" }));
 
-    expect(html).toContain("url=%2Fbrand%2Fnare-icon.webp");
-    expect(html).toMatch(/<img[^>]*alt=""[^>]*>/);
+    const images = html.match(/<img\b[^>]*>/g) ?? [];
+    expect(images).toHaveLength(1);
+    expect(images[0]).toContain('src="/brand/nare-logo.webp"');
+    expect(images[0]).toContain(`alt="${PRODUCT_NAME}"`);
   });
 });
 
@@ -219,7 +221,7 @@ describe("PublicHeader menu toggle (source-level)", () => {
     expect(source).toContain("sm:flex");
   });
 
-  it("keeps the BrandMark and menu button in one non-wrapping row on phones", () => {
+  it("keeps the logo and menu button in one non-wrapping row on phones", () => {
     const row = source.match(
       /<div className="(flex items-center justify-between[^"]*)">([\s\S]*?)<\/div>/,
     );
@@ -227,24 +229,16 @@ describe("PublicHeader menu toggle (source-level)", () => {
     expect(row, "the mobile header row").not.toBeNull();
     expect(row![1]).toContain("gap-3");
     expect(row![1]).not.toContain("flex-wrap");
-    expect(row![2]).toContain("<BrandMark markOnly />");
+    expect(row![2]).toContain("/brand/nare-logo.webp");
     expect(row![2]).toContain("<button");
   });
 
-  it("shrinks and truncates the wordmark below 400px without changing larger screens", () => {
-    const wordmark = source.match(/<Link\s+href="\/"[\s\S]*?<\/Link>/);
-    const wordmarkText = source.match(
-      /<span className="([^"]*)">\{PRODUCT_NAME\}<\/span>/,
-    );
-
-    expect(wordmark, "the wordmark link").not.toBeNull();
-    expect(wordmark![0]).toContain("font-display");
-    expect(wordmark![0]).toContain("text-base");
-    expect(wordmark![0]).toContain("min-[400px]:text-lg");
-    expect(wordmark![0]).toContain("sm:text-xl");
-    expect(wordmarkText, "the wordmark text").not.toBeNull();
-    expect(wordmarkText![1]).toContain("min-w-0");
-    expect(wordmarkText![1]).toContain("truncate");
+  it("sizes the logo for phones and larger screens without wrapping", () => {
+    const logo = source.match(/<img[^>]*nare-logo\.webp[^>]*>/);
+    expect(logo, "the logo image").not.toBeNull();
+    expect(logo![0]).toContain("h-12");
+    expect(logo![0]).toContain("sm:h-14");
+    expect(logo![0]).toContain("w-auto");
   });
 
   it("gives the phone menu button a 44px tap area", () => {
@@ -289,8 +283,8 @@ describe("PublicFooter rendered", () => {
     const copyright = html.match(/<p[^>]*>[^<]*©[^<]*<\/p>/);
     expect(copyright, "the copyright line").not.toBeNull();
     expect(copyright![0].match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
-    expect(copyright![0]).toContain("text-[13px]");
-    expect(copyright![0]).toContain("text-muted-foreground");
+    expect(copyright![0]).toContain("text-sm");
+    expect(copyright![0]).toContain("text-white/55");
   });
 });
 

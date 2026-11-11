@@ -88,7 +88,7 @@ describe("no green or raw colours on the public pages (W5e)", () => {
         "components/landing/ServicesSection.tsx",
         "components/landing/Benefits.tsx",
         "components/landing/HowItWorks.tsx",
-        "components/landing/TrustStrip.tsx",
+        "components/landing/AboutNare.tsx",
         "components/public/PublicHeader.tsx",
         "components/public/PublicFooter.tsx",
       ]),

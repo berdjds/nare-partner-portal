@@ -60,3 +60,35 @@ describe("request details and new request", () => {
     expect(read("app/globals.css")).toMatch(/--radius-card:\s*1\.5rem/);
   });
 });
+
+describe("photo-led public shell (corrective pass)", () => {
+  it("local approved photos exist, are small, are not hotlinked, and their provenance is recorded", () => {
+    const { existsSync, statSync } = require("node:fs") as typeof import("node:fs");
+    for (const f of ["hero-expo.webp", "about-monastery.webp"]) {
+      const p = `public/brand/photos/${f}`;
+      expect(existsSync(p), p).toBe(true);
+      expect(statSync(p).size, p).toBeLessThan(200_000);
+    }
+    expect(existsSync("public/brand/photos/hero-aerial.webp")).toBe(false); // third-party watermark: not used
+    const sources = read("public/brand/photos/SOURCES.md");
+    expect(sources).toContain("staging.nare.am");
+    expect(sources).toContain("Armenian Explorer");
+    for (const rel of ["components/landing/Hero.tsx", "components/landing/AboutNare.tsx", "components/landing/ContactBlock.tsx", "app/login/page.tsx", "app/partners/apply/page.tsx"]) {
+      expect(read(rel), rel).not.toMatch(/https?:\/\/[^"')]*\.(webp|jpe?g|png)/i);
+      expect(read(rel), rel).not.toContain("hero-aerial");
+    }
+  });
+  it("the logo appears only in the header: footer, hero and about show no brand mark", () => {
+    for (const rel of ["components/public/PublicFooter.tsx", "components/landing/Hero.tsx", "components/landing/AboutNare.tsx", "components/landing/ContactBlock.tsx"]) {
+      expect(read(rel), rel).not.toMatch(/nare-(logo|icon)\.webp|BrandMark/);
+    }
+    expect(read("components/public/PublicHeader.tsx")).toContain("/brand/nare-logo.webp");
+  });
+  it("the footer takes contact facts and social links from the admin-managed contact, not from hard-coded values", () => {
+    const f = read("components/public/PublicFooter.tsx");
+    expect(f).toContain("usePublicContact");
+    expect(f).toContain("contact.social");
+    expect(f).not.toMatch(/@nare\.am|\+374|facebook\.com\/|instagram\.com\/|Teryan/);
+    expect(f).toContain("bg-footer");
+  });
+});

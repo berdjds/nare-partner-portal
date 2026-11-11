@@ -46,8 +46,9 @@ export default function PartnerApplyPage() {
     <main className="min-h-screen bg-background text-foreground">
       <PublicHeader active="apply" />
       <header className="relative overflow-hidden bg-gradient-to-br from-plum via-plum to-brand text-white">
-        <span aria-hidden="true" className="pointer-events-none absolute -bottom-20 -end-16 h-56 w-56 rounded-full border-[24px] border-white/10" />
-        <div className="mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-8 sm:py-12">
+        <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/about-monastery.webp")' }} />
+        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-plum/95 via-plum/85 to-brand/75" />
+        <div className="relative mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-10 sm:py-14">
           <h1 className="font-display relative text-3xl leading-tight sm:text-4xl">
             {PARTNER_APPLY.headline}
           </h1>

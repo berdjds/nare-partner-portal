@@ -256,7 +256,7 @@ describe("design and wording guards (source-level)", () => {
     const html = renderLogin();
     const images = html.match(/<img\b[^>]*>/g) ?? [];
     expect(images).toHaveLength(1);
-    expect(images[0]).toMatch(/(?:\/brand\/nare-icon\.webp|%2Fbrand%2Fnare-icon\.webp)/);
+    expect(images[0]).toContain("/brand/nare-logo.webp");
     expect(html).toContain("Sign in to the partner portal");
   });
 

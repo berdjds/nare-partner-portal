@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Table } from "@/components/ui/table";
 import { LocaleProvider } from "@/lib/i18n/react";
-import { TrustStrip } from "@/components/landing/TrustStrip";
+import { AboutNare } from "@/components/landing/AboutNare";
 import { B2B_SERVICES } from "@/lib/portal-content";
 import { MESSAGES } from "@/lib/i18n/messages";
 
@@ -15,12 +15,14 @@ describe("localized table region label", () => {
   });
 });
 
-describe("trust strip", () => {
+describe("About Nare section", () => {
   it("does not repeat the benefit sentences shown in the section above", () => {
-    const html = renderToStaticMarkup(createElement(TrustStrip));
+    const html = renderToStaticMarkup(createElement(AboutNare));
     expect(html).not.toContain("Each request is reviewed");
     expect(html).not.toContain("Access is granted");
     expect(html).toContain("2019");
+    expect(html).toContain("/brand/photos/about-monastery.webp");
+    expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(/\d+\+|\bleading\b|\bbest\b|award|thousands|largest/i);
   });
 });
 

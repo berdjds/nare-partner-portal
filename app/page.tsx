@@ -6,7 +6,7 @@ import { canUseInbox, getActiveUser } from "@/lib/access-policy";
 import { PAGE_TITLES, robotsDirective } from "@/lib/portal-content";
 import { Hero } from "@/components/landing/Hero";
 import { ServicesSection } from "@/components/landing/ServicesSection";
-import { TrustStrip } from "@/components/landing/TrustStrip";
+import { AboutNare } from "@/components/landing/AboutNare";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Benefits } from "@/components/landing/Benefits";
 import { ContactBlock } from "@/components/landing/ContactBlock";
@@ -53,7 +53,7 @@ export default async function HomePage() {
       <Benefits />
       <ServicesSection />
       <HowItWorks />
-      <TrustStrip />
+      <AboutNare />
       <ContactBlock />
       <PublicFooter />
     </main>

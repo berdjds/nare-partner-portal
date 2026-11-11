@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import type { PublicContact } from "@/lib/contact/service";
 import { CONTACT, OFFICE_ADDRESS } from "@/lib/portal-content";
+import { DEFAULT_CONTACT } from "@/lib/contact/schema";
 
 /** Without a provider (tests, previews) the static portal content is shown, exactly as before. */
 const DEFAULT_PUBLIC_CONTACT: PublicContact = {
@@ -11,6 +12,7 @@ const DEFAULT_PUBLIC_CONTACT: PublicContact = {
   b2bEmail: CONTACT.email,
   phones: CONTACT.phones.map((number) => ({ number })),
   address: OFFICE_ADDRESS,
+  social: DEFAULT_CONTACT.social,
 };
 
 const Ctx = createContext<PublicContact>(DEFAULT_PUBLIC_CONTACT);

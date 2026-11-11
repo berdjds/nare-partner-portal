@@ -78,8 +78,8 @@ function LoginForm() {
       <PublicHeader active="login" />
       <div className="grid flex-1 grid-rows-[auto_1fr] lg:grid-cols-2 lg:grid-rows-1">
       <aside className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-plum via-plum to-brand px-6 py-8 text-white lg:justify-center lg:gap-10 lg:px-16">
-        <span aria-hidden="true" className="pointer-events-none absolute -bottom-24 -end-20 h-72 w-72 rounded-full border-[28px] border-white/10" />
-        <span aria-hidden="true" className="pointer-events-none absolute -top-16 start-1/3 hidden h-40 w-40 rounded-full bg-warm/20 blur-2xl lg:block" />
+        <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/about-monastery.webp")' }} />
+        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-plum/95 via-plum/85 to-brand/75" />
         <h1 className="font-display relative max-w-md text-3xl leading-tight lg:text-5xl">
           {t("login.headline")}
         </h1>
