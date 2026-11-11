@@ -78,9 +78,9 @@ function LoginForm() {
       <PublicHeader active="login" />
       <div className="grid flex-1 grid-rows-[auto_1fr] lg:grid-cols-2 lg:grid-rows-1">
       <aside className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-plum via-plum to-brand px-6 py-8 text-white lg:justify-center lg:gap-10 lg:px-16">
-        <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/about-monastery.webp")' }} />
-        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-plum/95 via-plum/85 to-brand/75" />
-        <h1 className="font-display relative max-w-md text-3xl leading-tight lg:text-5xl">
+        <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/yerevan-market.webp")' }} />
+        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/75 to-black/55" />
+        <h1 className="relative max-w-md text-balance text-3xl font-bold leading-tight tracking-tight drop-shadow-lg lg:text-5xl">
           {t("login.headline")}
         </h1>
         <ul className="max-w-md space-y-2 relative text-base leading-relaxed text-white/90 lg:space-y-4 lg:text-lg">
@@ -183,7 +183,7 @@ function LoginForm() {
         </Link>
       </div>
       </div>
-      <PublicFooter />
+      <PublicFooter compact />
     </div>
   );
 }

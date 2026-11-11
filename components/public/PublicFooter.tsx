@@ -32,20 +32,36 @@ const ORDER: SocialPlatform[] = ["facebook", "instagram", "linkedin", "tiktok", 
 
 const link = "text-white/70 underline-offset-4 transition-colors hover:text-white hover:underline";
 
-export function PublicFooter() {
+/** `compact` is the slim bar used on the sign-in and application pages: no repeated contact block, just legal links and social icons. */
+export function PublicFooter({ compact = false }: { compact?: boolean } = {}) {
   const year = new Date().getFullYear();
   const contact = usePublicContact();
   const t = useT();
   const emails = [contact.b2bEmail, contact.generalEmail].filter((e, i, a): e is string => Boolean(e) && a.indexOf(e) === i);
   const socials = ORDER.filter((p) => contact.social?.[p]);
 
+  if (compact) {
+    return (
+      <footer className="bg-footer text-white">
+        <div className="mx-auto flex max-w-7xl flex-col items-start gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-white/60">{t("footer.rights", { year, name: PRODUCT_NAME })}</p>
+          <nav aria-label={t("footer.legalNav")} className="flex items-center gap-5 text-sm">
+            <Link href="/terms" className={link}>{t("footer.terms")}</Link>
+            <Link href="/privacy" className={link}>{t("footer.privacy")}</Link>
+          </nav>
+        </div>
+      </footer>
+    );
+  }
+
   return (
     <footer className="relative overflow-hidden bg-footer text-white">
+      <div aria-hidden="true" className="pointer-events-none absolute -top-40 -end-24 h-[26rem] w-[26rem] rounded-full bg-primary/20 blur-[120px]" />
       <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 -start-24 h-[30rem] w-[30rem] rounded-full bg-brand/20 blur-[120px]" />
       <div className="relative mx-auto max-w-7xl px-6 py-14 lg:py-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr_1.4fr]">
           <div className="space-y-5">
-            <p className="font-display text-2xl">{PRODUCT_NAME}</p>
+            <p className="font-display text-3xl">{PRODUCT_NAME}</p>
             <p className="max-w-sm leading-relaxed text-white/70">{t("footer.description")}</p>
             {contact.foundedYear && <p className="text-sm text-white/60">{t("footer.since", { year: contact.foundedYear })}</p>}
             {socials.length > 0 && (

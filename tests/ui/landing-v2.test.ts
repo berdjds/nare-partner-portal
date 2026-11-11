@@ -158,7 +158,7 @@ describe("Phase 5 landing sections", () => {
     const outline = headingOutline(await renderLanding());
     expect(outline.filter(([l]) => l === 1)).toHaveLength(1);
     expect(outline[0]).toEqual([1, HERO.headline]);
-    expect(outline.filter(([l]) => l === 2).map(([, t]) => t)).toEqual([LANDING_TITLES.benefits, LANDING_TITLES.services, LANDING_TITLES.steps, LANDING_TITLES.trust, LANDING_TITLES.contact]);
+    expect(outline.filter(([l]) => l === 2).map(([, t]) => t)).toEqual([LANDING_TITLES.benefits, LANDING_TITLES.services, LANDING_TITLES.steps, LANDING_TITLES.trust, "Ready to send your first request?"]);
   });
 });
 

@@ -301,7 +301,7 @@ describe("shared chrome on the three public pages", () => {
       expect(source, rel).toContain('from "@/components/public/PublicHeader"');
       expect(source, rel).toContain('from "@/components/public/PublicFooter"');
       expect(source, rel).toContain("<PublicHeader");
-      expect(source, rel).toContain("<PublicFooter />");
+      expect(source, rel).toMatch(/<PublicFooter( compact)? \/>/);
     }
   });
 
@@ -318,7 +318,7 @@ describe("shared chrome on the three public pages", () => {
 
     expect(html).toContain('id="public-header-nav"');
     expect(html).toContain('href="/terms"');
-    expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
+    expect(html).toContain("Developed by Hayk FZC"); // slim footer: legal links and attribution, no repeated contact block
   });
 
   it("the sign-in page renders shared chrome with developer attribution once", () => {
@@ -326,7 +326,7 @@ describe("shared chrome on the three public pages", () => {
 
     expect(html).toContain('id="public-header-nav"');
     expect(html).toContain('href="/terms"');
-    expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
+    expect(html).not.toContain(escapeHtml(OFFICE_ADDRESS));
     expect(html.match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
   });
 });

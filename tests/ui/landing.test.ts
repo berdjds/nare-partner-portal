@@ -165,7 +165,7 @@ describe("signed-out visitors get the landing page", () => {
     expect(html).not.toMatch(/<img[^>]*src="https?:/);
     expect(html).toContain('href="/login"');
     expect(html).toContain(
-      `href="mailto:${CONTACT.email}?subject=${encodeURIComponent(MAILTO_SUBJECTS.contact)}"`
+      `href="mailto:${CONTACT.email}"` // contact details live in the footer only (no repeated contact block above it)
     );
     for (const phone of CONTACT.phones) {
       expect(html).toContain(`href="tel:${phone.replace(/\s/g, "")}"`);
@@ -220,16 +220,15 @@ describe("no raw colours in the landing sources", () => {
     }
   });
 
-  it("Hero is a photo-led editorial layout: serif headline, filled Sign in, outlined secondary link, no repeated brand lockup, portal eyebrow", () => {
+  it("Hero is image-led in staging's system: full-bleed photo, dark overlay, glass panel, pill Sign in and ghost secondary, no repeated brand lockup, portal eyebrow", () => {
     const hero = readSource("components/landing/Hero.tsx");
-    expect(hero).toContain("bg-background");
-    expect(hero).toContain("font-display");
-    expect(hero).toContain("bg-primary");
-    expect(hero).toContain("/brand/photos/hero-expo.webp");
+    expect(hero).toContain("from-black/85"); // staging's dark overlay, stronger on phones
+    expect(hero).toContain("rounded-2xl bg-gradient-to-r from-black/45"); // staging's text panel over the overlay
+    expect(hero).toContain("pill-btn-primary");
+    expect(hero).toContain("pill-btn-ghost");
+    expect(hero).toContain("/brand/photos/hero-expo-1920.webp");
     expect(hero).toContain('t("landing.eyebrow")');
-    expect(hero).not.toContain("uppercase");
     expect(hero).not.toContain("{PRODUCT_NAME}");
-    expect(hero).toContain("border-2 border-plum/25");
     // The hero never repeats the brand mark or logo: the header carries the only lockup.
     expect(hero).not.toMatch(/nare-(icon|logo)\.webp/);
   });

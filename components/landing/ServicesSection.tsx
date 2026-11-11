@@ -8,24 +8,39 @@ const SERVICES = [
   ["landing.service3.title", "landing.service3.body"],
 ] as const;
 
-/** The three core service groups, as an editorial list (no card grid): numeral, serif title, one sentence. */
+/**
+ * The three core service groups in staging's services layout (components/services-premium): one large image-backed
+ * feature tile and two compact tiles. Photograph: staging home hero slide 2 (public/brand/photos/yerevan-market.webp).
+ */
 export function ServicesSection() {
   const t = useT();
   return (
     <section id="services" aria-labelledby="services-heading" className="bg-background">
-      <div className="mx-auto grid max-w-7xl gap-8 px-6 pb-14 lg:grid-cols-[0.75fr_1.25fr] lg:gap-16 lg:pb-20">
-        <div>
-          <h2 id="services-heading" className="font-display text-3xl leading-tight text-plum sm:text-4xl lg:sticky lg:top-24">{t("landing.title.services")}</h2>
-          <span aria-hidden="true" className="mt-4 block h-1 w-14 rounded-full bg-warm" />
-        </div>
-        <ul className="divide-y divide-border border-y border-border">
-          {SERVICES.map(([title, body], i) => (
-            <li key={title} className="grid grid-cols-[3.5rem_1fr] items-baseline gap-4 py-7 sm:grid-cols-[4.5rem_1fr_1.2fr] sm:gap-6">
-              <span aria-hidden="true" className="font-display text-3xl text-brand sm:text-4xl">0{i + 1}</span>
-              <p className="font-display text-2xl text-plum">{t(title)}</p>
-              <p className="col-start-2 text-[15px] leading-relaxed text-muted-foreground sm:col-start-3">{t(body)}</p>
-            </li>
-          ))}
+      <div className="mx-auto max-w-7xl px-6 pb-14 lg:pb-20">
+        <h2 id="services-heading" className="font-display max-w-2xl text-balance text-[clamp(2rem,4.2vw,3.4rem)] font-semibold leading-[1.05] text-plum">{t("landing.title.services")}</h2>
+        <ul className="mt-8 grid gap-5 lg:grid-cols-3 lg:grid-rows-2">
+          {SERVICES.map(([title, body], i) =>
+            i === 0 ? (
+              <li key={title} className="relative isolate flex min-h-[22rem] flex-col justify-end overflow-hidden rounded-[2rem] bg-footer text-white lg:col-span-2 lg:row-span-2 lg:min-h-[30rem]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/photos/yerevan-market.webp" alt="" width={1280} height={720} loading="lazy" className="absolute inset-0 -z-20 h-full w-full object-cover object-[50%_25%]" />
+                <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-black/85 via-black/35 to-black/5" />
+                <div className="p-7 md:p-10">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">01</p>
+                  <p className="font-display mt-2 text-[clamp(1.9rem,3.2vw,3rem)] font-semibold leading-tight">{t(title)}</p>
+                  <p className="mt-3 max-w-xl text-white/85">{t(body)}</p>
+                </div>
+              </li>
+            ) : (
+              <li key={title} className={`flex flex-col justify-between rounded-[2rem] p-7 md:p-9 ${i === 1 ? "bg-footer text-white" : "bg-plum text-white"}`}>
+                <p className="font-display text-4xl text-warm">0{i + 1}</p>
+                <div className="mt-10">
+                  <p className="font-display text-2xl font-semibold leading-tight">{t(title)}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-white/70">{t(body)}</p>
+                </div>
+              </li>
+            ),
+          )}
         </ul>
       </div>
     </section>

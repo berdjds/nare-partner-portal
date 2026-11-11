@@ -1,37 +1,45 @@
 "use client";
 
+import { B2B_SERVICES } from "@/lib/portal-content";
 import { useT } from "@/lib/i18n/react";
 import { usePublicContact } from "@/lib/contact/react";
 
 /**
- * About Nare: a photograph from staging.nare.am, the founding year (from the admin-managed contact settings, hidden when
- * the admin hides it) and three plain sentences built only from verified facts. No statistics or superlatives.
+ * About Nare: an asymmetric story section. Photograph: staging's About banner (public/brand/photos/about-monastery.webp).
+ * The founding year comes from the admin-managed contact settings (hidden when the admin hides it); every sentence restates
+ * approved wording or facts already shown elsewhere. No statistics, awards or superlatives.
  */
 export function AboutNare() {
   const t = useT();
   const c = usePublicContact();
   return (
     <section id="about" aria-labelledby="about-heading" className="bg-background">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 px-6 py-14 lg:grid-cols-[1fr_1fr] lg:gap-16 lg:py-20">
-        <div className="relative">
-          <div aria-hidden="true" className="absolute -start-4 -top-4 h-2/3 w-2/3 rounded-[28px] bg-warm/40" />
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-6 py-14 lg:grid-cols-12 lg:gap-14 lg:py-20">
+        <div className="relative lg:col-span-5 lg:pt-6">
+          <div aria-hidden="true" className="absolute -start-4 -bottom-4 h-2/3 w-2/3 rounded-[2rem] bg-plum" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/photos/about-monastery.webp" alt={t("about.photo.alt")} width={669} height={446} loading="lazy" className="relative aspect-[3/2] w-full rounded-[28px] object-cover shadow-[var(--shadow-lift)] md:aspect-[16/9] lg:aspect-[3/2]" />
+          <img src="/brand/photos/about-monastery.webp" alt={t("about.photo.alt")} width={669} height={446} loading="lazy" className="relative aspect-[5/4] w-full rounded-[2rem] object-cover shadow-[var(--shadow-lift)]" />
         </div>
-        <div>
-          <h2 id="about-heading" className="font-display text-3xl leading-tight text-plum sm:text-4xl">{t("landing.title.trust")}</h2>
-          <span aria-hidden="true" className="mt-4 block h-1 w-14 rounded-full bg-warm" />
-          <div className="mt-6 space-y-4 text-base leading-relaxed text-foreground">
-            <p>{c.foundedYear ? t("about.p1.year", { year: c.foundedYear }) : t("about.p1")}</p>
-            <p className="text-muted-foreground">{t("about.p2")}</p>
-            <p className="text-muted-foreground">{t("about.p3")}</p>
+        <div className="lg:col-span-7">
+          <h2 id="about-heading" className="font-display text-balance text-[clamp(2rem,4.2vw,3.4rem)] font-semibold leading-[1.05] text-plum">{t("landing.title.trust")}</h2>
+          <p className="mt-6 text-xl leading-relaxed text-foreground">{c.foundedYear ? t("about.p1.year", { year: c.foundedYear }) : t("about.p1")}</p>
+          <div className="mt-6 grid gap-6 text-base leading-relaxed text-muted-foreground md:grid-cols-2">
+            <p>{t("about.p2")}</p>
+            <p>{t("about.p3")}</p>
           </div>
-          {c.foundedYear ? (
-            <p className="mt-8 flex items-baseline gap-3 border-t border-border pt-6">
-              <span className="font-display text-5xl text-brand">{c.foundedYear}</span>
-              <span className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("about.founded")}</span>
-            </p>
-          ) : null}
+          <p className="mt-6 text-base font-medium text-foreground">{t("about.p4")}</p>
+          <dl className="mt-8 grid grid-cols-2 gap-6 border-t border-border pt-6 sm:max-w-md">
+            {c.foundedYear ? (
+              <div>
+                <dd className="font-display text-5xl font-semibold leading-none text-brand">{c.foundedYear}</dd>
+                <dt className="mt-2 text-sm text-muted-foreground">{t("about.founded")}</dt>
+              </div>
+            ) : null}
+            <div>
+              <dd className="font-display text-5xl font-semibold leading-none text-brand">{B2B_SERVICES.length}</dd>
+              <dt className="mt-2 text-sm text-muted-foreground">{t("about.groups")}</dt>
+            </div>
+          </dl>
         </div>
       </div>
     </section>

@@ -46,10 +46,10 @@ export default function PartnerApplyPage() {
     <main className="min-h-screen bg-background text-foreground">
       <PublicHeader active="apply" />
       <header className="relative overflow-hidden bg-gradient-to-br from-plum via-plum to-brand text-white">
-        <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/about-monastery.webp")' }} />
-        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-plum/95 via-plum/85 to-brand/75" />
+        <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/yerevan-market.webp")' }} />
+        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/75 to-black/55" />
         <div className="relative mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-10 sm:py-14">
-          <h1 className="font-display relative text-3xl leading-tight sm:text-4xl">
+          <h1 className="relative text-balance text-3xl font-bold leading-tight tracking-tight drop-shadow-lg sm:text-4xl">
             {PARTNER_APPLY.headline}
           </h1>
           <p className="max-w-xl leading-relaxed relative text-white/90">
@@ -68,7 +68,7 @@ export default function PartnerApplyPage() {
           <ApplyWizard formToken={formToken} />
         )}
       </div>
-      <PublicFooter />
+      <PublicFooter compact />
     </main>
   );
 }

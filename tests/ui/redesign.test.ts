@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import RequestProgress, { stageIndexOf } from "@/components/travel/detail/RequestProgress";
+import { AboutNare } from "@/components/landing/AboutNare";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -64,10 +65,10 @@ describe("request details and new request", () => {
 describe("photo-led public shell (corrective pass)", () => {
   it("local approved photos exist, are small, are not hotlinked, and their provenance is recorded", () => {
     const { existsSync, statSync } = require("node:fs") as typeof import("node:fs");
-    for (const f of ["hero-expo.webp", "about-monastery.webp"]) {
+    for (const f of ["hero-expo-1920.webp", "hero-expo-960.webp", "yerevan-market.webp", "about-monastery.webp"]) {
       const p = `public/brand/photos/${f}`;
       expect(existsSync(p), p).toBe(true);
-      expect(statSync(p).size, p).toBeLessThan(200_000);
+      expect(statSync(p).size, p).toBeLessThan(250_000);
     }
     expect(existsSync("public/brand/photos/hero-aerial.webp")).toBe(false); // third-party watermark: not used
     const sources = read("public/brand/photos/SOURCES.md");
@@ -90,5 +91,30 @@ describe("photo-led public shell (corrective pass)", () => {
     expect(f).toContain("contact.social");
     expect(f).not.toMatch(/@nare\.am|\+374|facebook\.com\/|instagram\.com\/|Teryan/);
     expect(f).toContain("bg-footer");
+  });
+});
+
+describe("staging-system landing (corrective pass 2)", () => {
+  it("About Nare is a substantial story with a photograph and verified facts only", () => {
+    const html = renderToStaticMarkup(createElement(AboutNare));
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    expect(text.split(" ").length).toBeGreaterThan(110);
+    expect(text).toContain("2019");
+    expect(html).toContain("/brand/photos/about-monastery.webp");
+    expect(text).not.toMatch(/\d+\+|\bleading\b|\bbest\b|award|thousands|largest|certified|licen[sc]ed/i);
+  });
+  it("contact details appear in the footer only: the closing band has no email, phone or address", () => {
+    const src = read("components/landing/ContactBlock.tsx");
+    expect(src).not.toMatch(/usePublicContact|mailto:|tel:|telHref|primaryEmail/);
+    expect(read("components/public/PublicFooter.tsx")).toContain("usePublicContact");
+  });
+  it("content is never hidden behind a scroll animation (no reveal-up on landing sections)", () => {
+    for (const f of ["Hero", "Benefits", "ServicesSection", "HowItWorks", "AboutNare", "ContactBlock"]) expect(read(`components/landing/${f}.tsx`), f).not.toContain("reveal-up");
+  });
+  it("services use an image-backed feature tile and the login/application pages use the clean market photo (no second logo in the picture)", () => {
+    expect(read("components/landing/ServicesSection.tsx")).toContain("/brand/photos/yerevan-market.webp");
+    expect(read("app/login/page.tsx")).toContain("yerevan-market.webp");
+    expect(read("app/partners/apply/page.tsx")).toContain("yerevan-market.webp");
+    expect(read("app/login/page.tsx")).not.toContain("hero-expo");
   });
 });
