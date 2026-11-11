@@ -9,6 +9,7 @@ const pw = (n) => readFileSync(`/home/aidev/previews/.pw_${n}`, "utf8").trim();
 const VIEWS = { desktop: { width: 1440, height: 900 }, tablet: { width: 820, height: 1100 }, mobile: { width: 390, height: 844 } };
 const results = []; const check = (name, ok, extra = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"} ${name}${extra ? " - " + extra : ""}`); };
 const browser = await chromium.launch();
+const autoScroll = async (page) => { await page.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 600) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 120)); } window.scrollTo(0, 0); }); await page.waitForTimeout(400); };
 async function audit(page, label) {
   await page.waitForSelector("main h1, main h2, main [role=tablist]", { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(1200);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -39,7 +40,7 @@ for (const [view, size] of Object.entries(VIEWS)) {
 // Armenian: landing, login and the sign-in card must fit (no overflow) at phone width, and reduced motion must not break layout.
 for (const [name, path] of [["landing", "/"], ["login", "/login"], ["apply", "/partners/apply"]]) {
   const ctx = await browser.newContext({ viewport: VIEWS.mobile, locale: "hy-AM", reducedMotion: "reduce", extraHTTPHeaders: { "accept-language": "hy" } }); const page = await ctx.newPage();
-  await page.goto(BASE + path); await page.waitForTimeout(1200);
+  await page.goto(BASE + path); await page.waitForTimeout(800); await autoScroll(page);
   const lang = await page.evaluate(() => document.documentElement.lang); const ov = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check(`hy mobile ${name}: lang=hy and no overflow`, lang === "hy" && ov <= 0, `lang=${lang} overflow=${ov}`);
   if (OUT) await page.screenshot({ path: `${OUT}/hy-${name}-mobile.png`, fullPage: true }); await ctx.close();

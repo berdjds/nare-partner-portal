@@ -10,8 +10,9 @@ mkdirSync(OUT, { recursive: true });
 const pw = (n) => readFileSync(`/home/aidev/previews/.pw_${n}`, "utf8").trim();
 const VIEWS = { desktop: { width: 1440, height: 900 }, tablet: { width: 820, height: 1100 }, mobile: { width: 390, height: 844 } };
 const browser = await chromium.launch();
+const autoScroll = async (page) => { await page.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 600) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 120)); } window.scrollTo(0, 0); }); await page.waitForTimeout(400); };
 const log = [];
-async function shot(page, name, view) { await page.waitForLoadState("networkidle").catch(() => {}); await page.waitForSelector("main h1, main h2, main [role=tablist]", { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(1500); await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true }); const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth); log.push(`${name}-${view}: overflow=${overflow}`); }
+async function shot(page, name, view) { await page.waitForLoadState("networkidle").catch(() => {}); await page.waitForSelector("main h1, main h2, main [role=tablist]", { timeout: 20000 }).catch(() => {}); await autoScroll(page); await page.waitForTimeout(800); await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true }); const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth); log.push(`${name}-${view}: overflow=${overflow}`); }
 async function signIn(ctx, email, password) {
   const page = await ctx.newPage(); await page.goto(`${BASE}/login`);
   await page.fill('input[type="email"], input[name="email"], #email', email); await page.fill("#password", password);

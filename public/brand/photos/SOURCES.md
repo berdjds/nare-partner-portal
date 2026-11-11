@@ -5,8 +5,8 @@ Copied once from the owner's staging site (staging.nare.am) content, optimised w
 | Local file | Staging source (path under https://staging.nare.am/api/serve-image/uploads/) | Staging use |
 |---|---|---|
 | hero-expo-1920.webp, hero-expo-960.webp | armenia-georgia-tour-destination-management-1764605124075.webp (1920x1440; resized to 1920 and 960 px wide) | home hero slide 1 |
-| yerevan-market.webp | armenian-christmas-traditions-celebration-1764605260802.webp (1280x720, unchanged size) | home hero slide 2 (checked: no watermark; public street scene). Used for the DMC service tile and the login/application panels |
-| about-monastery.webp | nare-travel-tours-about-us-1764605555849.webp (669x446, unchanged size) | About us page banner |
+| yerevan-market.webp | armenian-christmas-traditions-celebration-1764605260802.webp (1280x720, recompressed at 1200 px wide) | home hero slide 2 (checked: no watermark; public street scene). Used for the DMC service tile and the login/application panels |
+| about-monastery.webp | nare-travel-tours-about-us-1764605555849.webp (669x446, recompressed, same size) | About us page banner |
 
 Staging page-content references: `/api/content/heroSlides`, `/api/content/homeServices`, `/api/content/pageBanners`. The owner should confirm licence/ownership of these images for the production portal (staging marks some uploads as "licensed-image").
 
