@@ -47,3 +47,19 @@ describe("friendlyLoginError", () => {
     }
   });
 });
+
+import { validateLogin } from "@/lib/login-validation";
+describe("validateLogin (format only, never about accounts)", () => {
+  it("requires both fields and a plausible email", () => {
+    expect(validateLogin("", "")).toEqual({ email: "login.err.emailRequired", password: "login.err.passwordRequired" });
+    expect(validateLogin("  ", "x")).toEqual({ email: "login.err.emailRequired" });
+    expect(validateLogin("nope", "x")).toEqual({ email: "login.err.emailInvalid" });
+    expect(validateLogin("a@b", "x")).toEqual({ email: "login.err.emailInvalid" });
+    expect(validateLogin("a@b.co", "")).toEqual({ password: "login.err.passwordRequired" });
+    expect(validateLogin(" Name@Nare.am ", "pw")).toEqual({});
+  });
+  it("never returns a message that depends on an account: the keys are fixed format messages", () => {
+    const keys = new Set(Object.values({ ...validateLogin("", ""), ...validateLogin("x", "") }));
+    expect(Array.from(keys).every((k) => String(k).startsWith("login.err."))).toBe(true);
+  });
+});

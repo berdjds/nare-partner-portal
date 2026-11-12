@@ -1,0 +1,171 @@
+{
+  "passed": 33,
+  "failed": 0,
+  "results": [
+    {
+      "name": "desktop: English by default (lang=en dir=ltr)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: switching to Armenian sets lang=hy, keeps dir=ltr",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: login labels are Armenian",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: Armenian font stack leads with Noto Sans Armenian",
+      "ok": true,
+      "detail": "\"Noto Sans Armenian\", \"Noto Sans Armenian Fallback\", GeistSans, \"GeistSans Fallb"
+    },
+    {
+      "name": "desktop: no horizontal scroll in Armenian",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "axe login (Armenian)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "desktop: login failure message is Armenian and identical for unknown email and wrong password",
+      "ok": true,
+      "detail": "Էլ. փոստը կամ գաղտնաբառը սխալ է։"
+    },
+    {
+      "name": "desktop: choice persists on other public pages; footer in Armenian",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: a disabled locale (ar) falls back to English",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: English by default (lang=en dir=ltr)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: switching to Armenian sets lang=hy, keeps dir=ltr",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: login labels are Armenian",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tablet: Armenian font stack leads with Noto Sans Armenian",
+      "ok": true,
+      "detail": "\"Noto Sans Armenian\", \"Noto Sans Armenian Fallback\", GeistSans, \"GeistSans Fallb"
+    },
+    {
+      "name": "tablet: no horizontal scroll in Armenian",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: English by default (lang=en dir=ltr)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: switching to Armenian sets lang=hy, keeps dir=ltr",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: login labels are Armenian",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: Armenian font stack leads with Noto Sans Armenian",
+      "ok": true,
+      "detail": "\"Noto Sans Armenian\", \"Noto Sans Armenian Fallback\", GeistSans, \"GeistSans Fallb"
+    },
+    {
+      "name": "phone: no horizontal scroll in Armenian",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin: contact page loads global defaults (approved business data)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin: a saved draft is not public yet",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin: publishing makes hours and a keyless map embed public",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin: portal override starts inheriting (fields locked until overridden)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "public: landing contact block shows the published hours/map link and the approved emails",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "axe admin contact",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "admin: AI generation is off by default with an explanation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin: a draft is not published (state draft)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin: approval publishes it (state approved) and history records it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "axe admin translations",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "phone: admin translations has no horizontal scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "phone: admin contact has no horizontal scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "partner page renders in Armenian from the cookie",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "partner is refused by the admin APIs",
+      "ok": true,
+      "detail": "[401,401]"
+    }
+  ]
+}

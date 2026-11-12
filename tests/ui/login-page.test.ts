@@ -124,6 +124,7 @@ describe("rendered markup", () => {
     expect(asideClasses).not.toContain("hidden");
     expect(asideClasses).toEqual(
       expect.arrayContaining([
+        "relative",
         "flex",
         "flex-col",
         "gap-4",
@@ -134,8 +135,8 @@ describe("rendered markup", () => {
         "lg:px-16",
       ])
     );
-    expect(aside).toContain("text-2xl");
-    expect(aside).toContain("lg:text-4xl");
+    expect(aside).toContain("text-3xl");
+    expect(aside).toContain("lg:text-5xl");
     expect(aside).toContain("space-y-2");
     expect(aside).toContain("text-base");
     expect(aside).toContain("lg:space-y-4");
@@ -143,7 +144,7 @@ describe("rendered markup", () => {
     expect(aside?.match(/<li\b/g) ?? []).toHaveLength(LOGIN_PANEL.bullets.length);
     expect(aside?.match(/lucide-check/g) ?? []).toHaveLength(LOGIN_PANEL.bullets.length);
     expect(cardColumnClasses).toEqual(
-      expect.arrayContaining(["justify-start", "pt-12", "lg:justify-center", "lg:pt-4"])
+      expect.arrayContaining(["justify-start", "pt-10", "lg:justify-center", "lg:pt-4"])
     );
     expect(readSource("app/login/page.tsx")).not.toContain("lg:hidden");
   });
@@ -228,7 +229,7 @@ describe("submit and error handling contract (source-level)", () => {
 
   it("exposes the show/hide toggle state with aria-pressed", () => {
     expect(source).toContain("aria-pressed={showPassword}");
-    expect(source).toContain('showPassword ? "Hide password" : "Show password"');
+    expect(source).toContain('showPassword ? t("login.hidePassword") : t("login.showPassword")'); // English text lives in the catalogue (tests/i18n)
   });
 });
 
@@ -245,17 +246,17 @@ describe("design and wording guards (source-level)", () => {
     }
   });
 
-  it("uses the approved gradient and only the site header brand image", () => {
+  it("uses the plum-to-pomegranate gradient and only the site header brand image", () => {
     const source = readSource("app/login/page.tsx");
     expect(source).toContain("bg-gradient-to-br");
-    expect(source).toContain("from-primary");
-    expect(source).toContain("to-gradient-end");
+    expect(source).toContain("from-plum");
+    expect(source).toContain("to-brand");
     expect(source).not.toContain("BrandMark");
 
     const html = renderLogin();
     const images = html.match(/<img\b[^>]*>/g) ?? [];
     expect(images).toHaveLength(1);
-    expect(images[0]).toMatch(/(?:\/brand\/nare-icon\.webp|%2Fbrand%2Fnare-icon\.webp)/);
+    expect(images[0]).toContain("/brand/nare-logo-header.webp");
     expect(html).toContain("Sign in to the partner portal");
   });
 

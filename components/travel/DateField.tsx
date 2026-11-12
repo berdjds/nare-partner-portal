@@ -16,6 +16,9 @@ export interface DateFieldProps {
   disabled?: boolean;
   id?: string;
   className?: string;
+  /** Validation state: exposed as aria-invalid and linked to its message element. */
+  invalid?: boolean;
+  describedBy?: string;
 }
 
 const MONTH_NAMES = [
@@ -59,6 +62,8 @@ export default function DateField({
   disabled,
   id,
   className,
+  invalid,
+  describedBy,
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -123,10 +128,12 @@ export default function DateField({
       <button
         type="button"
         id={id}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openCalendar())}
         className={cn(
-          "flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-sm ring-offset-background transition-colors hover:border-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-11 w-full items-center sm:h-9 justify-between gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-sm ring-offset-background transition-colors hover:border-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50",
           !value && "text-muted-foreground",
         )}
       >

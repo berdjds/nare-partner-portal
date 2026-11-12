@@ -279,7 +279,7 @@ function SupplierSelect({
 }) {
   return (
     <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
-      <SelectTrigger>
+      <SelectTrigger aria-label="Select option">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -487,7 +487,7 @@ function RateDialog({
                   <Input value={form.occupancy || "—"} disabled />
                 ) : (
                   <Select value={form.occupancy || NONE} onValueChange={(v) => setForm({ ...form, occupancy: v === NONE ? "" : v })}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Occupancy">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -508,6 +508,7 @@ function RateDialog({
                 <Input value={form.board || "—"} disabled />
               ) : (
                 <Input
+                  aria-label="Board"
                   placeholder="BB / HB / FB (optional)"
                   value={form.board}
                   onChange={(e) => setForm({ ...form, board: e.target.value })}
@@ -526,7 +527,7 @@ function RateDialog({
                     value={form.vehicleTypeId || NONE}
                     onValueChange={(v) => setForm({ ...form, vehicleTypeId: v === NONE ? "" : v })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Vehicle type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -543,7 +544,7 @@ function RateDialog({
             )}
             <div>
               <Label>Amount (decimal string, empty = TBC)</Label>
-              <Input
+              <Input aria-label="Amount (decimal string, empty = TBC)"
                 placeholder="e.g. 45000 or 45000.00"
                 value={form.amount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })}
@@ -551,7 +552,7 @@ function RateDialog({
             </div>
             <div>
               <Label>Currency</Label>
-              <Input
+              <Input aria-label="Currency"
                 maxLength={3}
                 value={form.currency}
                 onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
@@ -572,11 +573,11 @@ function RateDialog({
             </div>
             <div>
               <Label>Min stay (nights, optional)</Label>
-              <Input type="number" min={1} value={form.minStay} onChange={(e) => setForm({ ...form, minStay: e.target.value })} />
+              <Input aria-label="Min stay (nights, optional)" type="number" min={1} value={form.minStay} onChange={(e) => setForm({ ...form, minStay: e.target.value })} />
             </div>
             <div>
               <Label>Priority (higher wins on overlap)</Label>
-              <Input type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} />
+              <Input aria-label="Priority (higher wins on overlap)" type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} />
             </div>
           </div>
           <div>
@@ -585,7 +586,7 @@ function RateDialog({
           </div>
           <div>
             <Label>Notes (optional)</Label>
-            <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <Input aria-label="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -621,7 +622,7 @@ function RateTable({
           {productType === "HOTEL" && <TableHead>Occupancy</TableHead>}
           {productType === "SERVICE" && <TableHead>Vehicle</TableHead>}
           <TableHead>Board</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
+          <TableHead className="text-end">Amount</TableHead>
           <TableHead>Validity</TableHead>
           <TableHead>Weekdays</TableHead>
           <TableHead>Min stay</TableHead>
@@ -635,7 +636,7 @@ function RateTable({
             {productType === "HOTEL" && <TableCell className="font-medium">{r.occupancy ?? "—"}</TableCell>}
             {productType === "SERVICE" && <TableCell>{r.vehicleType?.name ?? "—"}</TableCell>}
             <TableCell>{r.board ?? "—"}</TableCell>
-            <TableCell className="whitespace-nowrap text-right">{r.amount == null ? "TBC" : money(r.amount, r.currency)}</TableCell>
+            <TableCell className="whitespace-nowrap text-end">{r.amount == null ? "TBC" : money(r.amount, r.currency)}</TableCell>
             <TableCell className="whitespace-nowrap">{validityLabel(r.validFrom, r.validTo)}</TableCell>
             <TableCell>{weekdaysSummary(r.weekdays)}</TableCell>
             <TableCell>{r.minStay ?? "—"}</TableCell>
@@ -771,11 +772,11 @@ function ServiceDialog({
         <form onSubmit={save} className="space-y-4">
           <div>
             <Label>Name</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <Input aria-label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           </div>
           <div>
             <Label>Details (optional — long description shown on the client quotation; the name stays the short title)</Label>
-            <Textarea
+            <Textarea aria-label="Details (optional — long description shown on the client quotation; the name stays the short title)"
               rows={3}
               value={form.details}
               onChange={(e) => setForm({ ...form, details: e.target.value })}
@@ -786,7 +787,7 @@ function ServiceDialog({
             <div>
               <Label>Category</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Category">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -801,7 +802,7 @@ function ServiceDialog({
             <div>
               <Label>Pricing basis</Label>
               <Select value={form.basis} onValueChange={(v) => setForm({ ...form, basis: v })}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Pricing basis">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -833,7 +834,7 @@ function ServiceDialog({
             </div>
             <div>
               <Label>Language (optional)</Label>
-              <Input value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} />
+              <Input aria-label="Language (optional)" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} />
             </div>
             <div>
               <Label>Duration variant (optional)</Label>
@@ -841,7 +842,7 @@ function ServiceDialog({
                 value={form.durationVariant || NONE}
                 onValueChange={(v) => setForm({ ...form, durationVariant: v === NONE ? "" : v })}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Duration variant (optional)">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1012,16 +1013,16 @@ function HotelDialog({
         <form onSubmit={save} className="space-y-4">
           <div>
             <Label>Name</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <Input aria-label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>City (optional)</Label>
-              <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              <Input aria-label="City (optional)" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             </div>
             <div>
               <Label>Country</Label>
-              <Input
+              <Input aria-label="Country"
                 maxLength={3}
                 value={form.country}
                 onChange={(e) => setForm({ ...form, country: e.target.value.toUpperCase() })}
@@ -1030,12 +1031,12 @@ function HotelDialog({
             </div>
             <div>
               <Label>Stars (optional)</Label>
-              <Input type="number" min={1} max={5} value={form.stars} onChange={(e) => setForm({ ...form, stars: e.target.value })} />
+              <Input aria-label="Stars (optional)" type="number" min={1} max={5} value={form.stars} onChange={(e) => setForm({ ...form, stars: e.target.value })} />
             </div>
             <div>
               <Label>Kind</Label>
               <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v })}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Kind">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1046,7 +1047,7 @@ function HotelDialog({
             </div>
             <div>
               <Label>Room type (optional)</Label>
-              <Input
+              <Input aria-label="Room type (optional)"
                 placeholder="e.g. Standard / Cottage 2BR"
                 value={form.roomType}
                 onChange={(e) => setForm({ ...form, roomType: e.target.value })}
@@ -1054,11 +1055,11 @@ function HotelDialog({
             </div>
             <div>
               <Label>Beds (optional)</Label>
-              <Input placeholder="e.g. 1 DBL + 1 SGL" value={form.beds} onChange={(e) => setForm({ ...form, beds: e.target.value })} />
+              <Input aria-label="Beds (optional)" placeholder="e.g. 1 DBL + 1 SGL" value={form.beds} onChange={(e) => setForm({ ...form, beds: e.target.value })} />
             </div>
             <div>
               <Label>Capacity adults</Label>
-              <Input
+              <Input aria-label="Capacity adults"
                 type="number"
                 min={0}
                 value={form.capacityAdults}
@@ -1068,7 +1069,7 @@ function HotelDialog({
             </div>
             <div>
               <Label>Capacity children</Label>
-              <Input
+              <Input aria-label="Capacity children"
                 type="number"
                 min={0}
                 value={form.capacityChildren}
@@ -1078,7 +1079,7 @@ function HotelDialog({
             </div>
             <div>
               <Label>Capacity total</Label>
-              <Input
+              <Input aria-label="Capacity total"
                 type="number"
                 min={1}
                 value={form.capacityTotal}
@@ -1093,7 +1094,7 @@ function HotelDialog({
           </div>
           <div>
             <Label>Board options (comma-separated, e.g. BB, HB, FB)</Label>
-            <Input value={form.boardOptions} onChange={(e) => setForm({ ...form, boardOptions: e.target.value })} />
+            <Input aria-label="Board options (comma-separated, e.g. BB, HB, FB)" value={form.boardOptions} onChange={(e) => setForm({ ...form, boardOptions: e.target.value })} />
           </div>
           <div className="flex flex-wrap gap-6">
             <label className="flex items-center gap-2 text-sm">
@@ -1375,7 +1376,7 @@ function ServicesTab() {
           <div className="flex gap-2">
             <Input placeholder="Search services..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-56">
+              <SelectTrigger aria-label="Category filter" className="w-56">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1556,7 +1557,7 @@ function RatesTab() {
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger aria-label="Status filter" className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1569,7 +1570,7 @@ function RatesTab() {
             </SelectContent>
           </Select>
           <Select value={productType} onValueChange={setProductType}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Product type filter" className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1587,7 +1588,7 @@ function RatesTab() {
                 <TableHead>Product</TableHead>
                 <TableHead>Occ / board</TableHead>
                 <TableHead>Vehicle</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-end">Amount</TableHead>
                 <TableHead>Validity</TableHead>
                 <TableHead>Evidence</TableHead>
                 <TableHead>Notes</TableHead>
@@ -1600,14 +1601,14 @@ function RatesTab() {
                 <TableRow key={r.id}>
                   <TableCell>
                     {productName(r)}
-                    <span className="ml-1 text-xs text-muted-foreground">({r.productType})</span>
+                    <span className="ms-1 text-xs text-muted-foreground">({r.productType})</span>
                   </TableCell>
                   <TableCell>
                     {r.occupancy ?? "—"}
                     {r.board ? ` / ${r.board}` : ""}
                   </TableCell>
                   <TableCell>{r.productType === "VEHICLE" ? "—" : (r.vehicleType?.name ?? "—")}</TableCell>
-                  <TableCell className="text-right">{r.amount == null ? "TBC" : money(r.amount, r.currency)}</TableCell>
+                  <TableCell className="text-end">{r.amount == null ? "TBC" : money(r.amount, r.currency)}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs">{validityLabel(r.validFrom, r.validTo)}</TableCell>
                   <TableCell className="text-xs">{r.evidenceRef ?? "—"}</TableCell>
                   <TableCell className="text-xs">{r.notes ?? "—"}</TableCell>
@@ -1793,7 +1794,7 @@ function FxPolicyTab() {
               required
             />
             <Select value={policyForm.type} onValueChange={(v) => setPolicyForm({ ...policyForm, type: v })}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Policy type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

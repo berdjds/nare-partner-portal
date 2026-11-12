@@ -1,6 +1,6 @@
 /**
- * Landing v2 tests (W5e, REQ-2026-0005): the landing page renders the four
- * approved Nare B2B sections between the hero and the contact block — each
+ * Landing tests (B2B cycle 1, Phase 5): the concise B2B gateway renders benefits, three service
+ * groups, a four-step process and a verified-facts strip between the hero and the contact block — each
  * with its id and an accessible heading — and both the landing and the
  * sign-in page offer the two entry links side by side: the partner
  * application (/partners/apply) and Sign in (/login).
@@ -21,15 +21,12 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  ABOUT_NARE,
-  ARMENIA_GLANCE,
   B2B_SERVICES,
-  DMC_STRENGTHS,
+  BENEFITS,
   HERO,
   HOW_IT_WORKS_STEPS,
-  LANDING_SECTION_TITLES,
+  LANDING_TITLES,
   PARTNER_APPLY,
-  WHY_NARE,
 } from "@/lib/portal-content";
 
 const { sessionRef, activeUserRef, signInMock, searchParamsRef } = vi.hoisted(() => ({
@@ -125,100 +122,72 @@ function headingOutline(html: string): [number, string][] {
   return outline;
 }
 
-describe("W5e landing sections", () => {
+describe("Phase 5 landing sections", () => {
   it("renders each section with its id and an accessible labelled heading", async () => {
     const html = await renderLanding();
-
-    const sections: { id: string; headingId: string; title: string }[] = [
-      { id: "services", headingId: "services-heading", title: LANDING_SECTION_TITLES.services.title },
-      { id: "why-nare", headingId: "why-nare-heading", title: LANDING_SECTION_TITLES.whyNare.title },
-      { id: "about", headingId: "about-heading", title: ABOUT_NARE.title },
-      { id: "armenia", headingId: "armenia-heading", title: LANDING_SECTION_TITLES.armenia.title },
-    ];
-    for (const section of sections) {
-      // id and aria-labelledby on the same <section> tag (id first, as in JSX).
-      expect(
-        html,
-        section.id,
-      ).toMatch(
-        new RegExp(`<section[^>]*id="${section.id}"[^>]*aria-labelledby="${section.headingId}"`),
-      );
-      expect(html, section.id).toContain(`id="${section.headingId}"`);
-      expect(html, section.id).toContain(escapeHtml(section.title));
-    }
-    // The DMC strengths block is a labelled sub-section of the services
-    // section, with its own h3 heading.
-    expect(html).toContain('aria-labelledby="dmc-heading"');
-    expect(html).toContain('id="dmc-heading"');
-    expect(html).toContain(escapeHtml(LANDING_SECTION_TITLES.dmc.title));
-  });
-
-  it("renders every approved W5e content string from the content file", async () => {
-    const html = await renderLanding();
-
-    const copy = [
-      LANDING_SECTION_TITLES.services.subtitle,
-      ARMENIA_GLANCE.intro,
-      ABOUT_NARE.body,
-      ...B2B_SERVICES.flatMap((item) => [item.title, item.body]),
-      ...WHY_NARE.flatMap((item) => [item.title, item.body]),
-      ...DMC_STRENGTHS.flatMap((item) => [item.title, item.body]),
-      ...ARMENIA_GLANCE.items.flatMap((item) => [item.title, item.body]),
-    ];
-    for (const text of copy) {
-      expect(html, text).toContain(escapeHtml(text));
+    for (const [id, heading, title] of [
+      ["benefits", "benefits-heading", LANDING_TITLES.benefits],
+      ["services", "services-heading", LANDING_TITLES.services],
+      ["how-it-works", "how-heading", LANDING_TITLES.steps],
+      ["about", "about-heading", LANDING_TITLES.trust],
+    ] as const) {
+      expect(html, id).toMatch(new RegExp(`<section[^>]*id="${id}"[^>]*aria-labelledby="${heading}"`));
+      expect(html).toContain(`id="${heading}"`);
+      expect(html).toContain(escapeHtml(title));
     }
   });
 
-  it("renders the sections in order between the hero and the contact block", async () => {
+  it("shows at most three service groups and exactly four steps, in an ordered list", async () => {
     const html = await renderLanding();
-
-    const orderedIds = ['id="services"', 'id="why-nare"', 'id="about"', 'id="armenia"'];
-    const heroEnd = html.indexOf(escapeHtml(HERO.subline));
-    const contactStart = html.indexOf(">Contact</h2>");
-    let cursor = heroEnd;
-    expect(cursor).toBeGreaterThan(-1);
-    for (const marker of orderedIds) {
-      const at = html.indexOf(marker, cursor);
-      expect(at, `${marker} after the hero`).toBeGreaterThan(cursor);
-      expect(at, `${marker} before the contact block`).toBeLessThan(contactStart);
-      cursor = at;
-    }
+    expect(B2B_SERVICES.length).toBeLessThanOrEqual(3);
+    for (const s of B2B_SERVICES) expect(html).toContain(escapeHtml(s.title));
+    const steps = html.match(/<ol[^>]*>([\s\S]*?)<\/ol>/)![1];
+    expect(steps.match(/<li/g)).toHaveLength(4);
+    for (const step of HOW_IT_WORKS_STEPS) expect(html).toContain(escapeHtml(step.title));
+    for (const b of BENEFITS) expect(html).toContain(escapeHtml(b));
   });
 
-  it("exposes an accessible heading outline in order (h1, then h2/h3 per section)", async () => {
+  it("renders the sections in order: hero, benefits, services, steps, about, contact", async () => {
     const html = await renderLanding();
+    const at = (needle: string) => { const i = html.indexOf(needle); expect(i, needle).toBeGreaterThan(-1); return i; };
+    const order = [HERO.headline, 'id="benefits"', 'id="services"', 'id="how-it-works"', 'id="about"', escapeHtml(LANDING_TITLES.contact)].map((n) => at(escapeHtml(n) === n ? n : n));
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
 
-    expect(headingOutline(html)).toEqual([
-      [1, HERO.headline],
-      [2, LANDING_SECTION_TITLES.services.title],
-      [3, LANDING_SECTION_TITLES.dmc.title],
-      [2, LANDING_SECTION_TITLES.whyNare.title],
-      [2, ABOUT_NARE.title],
-      [2, LANDING_SECTION_TITLES.armenia.title],
-      [2, "How it works"],
-      ...HOW_IT_WORKS_STEPS.map((step): [number, string] => [3, step.title]),
-      [2, "Why the partner portal"],
-      [2, "Contact"],
-    ]);
+  it("exposes an accessible heading outline (one h1, then h2 per section)", async () => {
+    const outline = headingOutline(await renderLanding());
+    expect(outline.filter(([l]) => l === 1)).toHaveLength(1);
+    expect(outline[0]).toEqual([1, HERO.headline]);
+    expect(outline.filter(([l]) => l === 2).map(([, t]) => t)).toEqual([LANDING_TITLES.benefits, LANDING_TITLES.services, LANDING_TITLES.steps, LANDING_TITLES.trust, "Ready to send your first request?"]);
   });
 });
 
-describe("Register as a partner and Sign in, side by side", () => {
-  it("the landing page links both /partners/apply and /login", async () => {
+describe("verified facts only", () => {
+  it("states the founding year from the contact configuration (2019) and none of the retired claims", async () => {
     const html = await renderLanding();
-
-    expect(html).toContain('href="/partners/apply"');
-    expect(html).toContain('href="/login"');
-    expect(html).toContain(escapeHtml(PARTNER_APPLY.linkLabel));
+    expect(html).toContain("Founded in 2019");
+    const text = html.replace(/<[^>]+>/g, " "); // visible text only (class names such as leading-relaxed are not claims)
+    for (const retired of [/2014/, /24\s*\/\s*7/, /thousands/i, /\bleading\b/i, /licensed/i, /insured/i, /global network/i, /\bsince 20/i]) expect(text).not.toMatch(retired);
   });
+  it("shows only the approved contact data", async () => {
+    const html = await renderLanding();
+    for (const v of ["reservation@nare.am", "info@nare.am", "+374 91 005046", "+374 10 545046"]) expect(html).toContain(v);
+  });
+});
 
-  it("the sign-in page links both /partners/apply and /login", () => {
+describe("Sign in first, Become a partner second", () => {
+  it("the hero offers Sign in as the primary action and the partner application as the secondary one, in that order", async () => {
+    const html = await renderLanding();
+    const hero = html.slice(html.indexOf("<section"), html.indexOf("</section>"));
+    const signIn = hero.indexOf('href="/login"'), apply = hero.indexOf('href="/partners/apply"');
+    expect(signIn).toBeGreaterThan(-1);
+    expect(apply).toBeGreaterThan(signIn);
+    expect(hero).toContain(">Sign in<");
+    expect(hero).toContain(escapeHtml(PARTNER_APPLY.linkLabel));
+  });
+  it("the sign-in page still links both /partners/apply and /login", () => {
     const html = renderLogin();
-
     expect(html).toContain('href="/partners/apply"');
-    // The /login link is the active entry in the shared public header nav.
-    expect(html).toContain('href="/login"');
     expect(html).toContain(escapeHtml(PARTNER_APPLY.linkLabel));
   });
 });

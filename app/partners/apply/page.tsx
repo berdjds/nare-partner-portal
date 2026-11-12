@@ -14,7 +14,8 @@
  */
 
 import type { Metadata } from "next";
-import { CONTACT, PAGE_TITLES, PARTNER_APPLY, robotsDirective } from "@/lib/portal-content";
+import { PAGE_TITLES, PARTNER_APPLY, robotsDirective } from "@/lib/portal-content";
+import { ContactEmailLink } from "@/components/partners/ContactEmailLink";
 import { issueFormToken } from "@/lib/partners/abuse";
 import { ApplyWizard } from "@/components/partners/ApplyWizard";
 import { PublicHeader } from "@/components/public/PublicHeader";
@@ -44,12 +45,14 @@ export default function PartnerApplyPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <PublicHeader active="apply" />
-      <header className="bg-gradient-to-br from-primary to-gradient-end text-primary-foreground">
-        <div className="mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-8 sm:py-12">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+      <header className="relative overflow-hidden bg-gradient-to-br from-plum via-plum to-brand text-white">
+        <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/yerevan-market.webp")' }} />
+        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/75 to-black/55" />
+        <div className="relative mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-10 sm:py-14">
+          <h1 className="relative text-balance text-3xl font-bold leading-tight tracking-tight drop-shadow-lg sm:text-4xl">
             {PARTNER_APPLY.headline}
           </h1>
-          <p className="max-w-xl leading-relaxed text-primary-foreground/90">
+          <p className="max-w-xl leading-relaxed relative text-white/90">
             {PARTNER_APPLY.intro}
           </p>
         </div>
@@ -59,15 +62,13 @@ export default function PartnerApplyPage() {
         {formToken === null ? (
           <p role="alert" className="rounded-lg border border-border bg-card p-6 text-sm leading-relaxed">
             {PARTNER_APPLY.unavailable}{" "}
-            <a href={`mailto:${CONTACT.email}`} className="text-primary underline underline-offset-4">
-              {CONTACT.email}
-            </a>
+            <ContactEmailLink />
           </p>
         ) : (
           <ApplyWizard formToken={formToken} />
         )}
       </div>
-      <PublicFooter />
+      <PublicFooter compact />
     </main>
   );
 }

@@ -73,7 +73,7 @@ export default function PermissionsReport() {
         <p className="text-sm text-muted-foreground">
           This report lists the permissions every existing user would receive from their role preset. Until an
           admin confirms it, internal-cost permissions (travel.internal.view / travel.internal.download) stay
-          admin-only (D2/D3).
+          limited to administrators; validators hold them only for requests they are assigned to (D3).
         </p>
 
         {loading ? (
@@ -84,7 +84,7 @@ export default function PermissionsReport() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b text-left">
+                <thead className="border-b text-start">
                   <tr>
                     <th className="pb-2 font-medium">User</th>
                     <th className="pb-2 font-medium">Role</th>

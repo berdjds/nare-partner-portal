@@ -14,6 +14,7 @@
  */
 
 import { z } from "zod";
+import { ruleSchema } from "@/lib/travel/template-rules";
 
 export const templateDayServiceSchema = z.preprocess(
   (value) => (typeof value === "string" ? { label: value } : value),
@@ -22,6 +23,8 @@ export const templateDayServiceSchema = z.preprocess(
     label: z.string().min(1).max(200),
     quantity: z.number().int().min(1).nullish(),
     vehicleTypeId: z.string().min(1).nullish(),
+    /** Phase 2: optional, strict rule (traveller categories, group limits, departure weekdays). Absent = today's behaviour. */
+    rule: ruleSchema.nullish(),
   }),
 );
 export type TemplateDayService = z.infer<typeof templateDayServiceSchema>;

@@ -189,7 +189,7 @@ export default function AgenciesAdmin({ role }: AgenciesAdminProps) {
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <Label>Short code</Label>
-                <Input
+                <Input aria-label="Short code"
                   value={createForm.shortCode}
                   onChange={(e) => setCreateForm({ ...createForm, shortCode: e.target.value.toUpperCase() })}
                   placeholder="ACME"
@@ -200,7 +200,7 @@ export default function AgenciesAdmin({ role }: AgenciesAdminProps) {
               </div>
               <div>
                 <Label>Name</Label>
-                <Input
+                <Input aria-label="Name"
                   value={createForm.name}
                   onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
                   placeholder="Acme Travel LLC"
@@ -209,14 +209,14 @@ export default function AgenciesAdmin({ role }: AgenciesAdminProps) {
               </div>
               <div>
                 <Label>Contact name (optional)</Label>
-                <Input
+                <Input aria-label="Contact name (optional)"
                   value={createForm.contactName}
                   onChange={(e) => setCreateForm({ ...createForm, contactName: e.target.value })}
                 />
               </div>
               <div>
                 <Label>Contact email (optional)</Label>
-                <Input
+                <Input aria-label="Contact email (optional)"
                   type="email"
                   value={createForm.contactEmail}
                   onChange={(e) => setCreateForm({ ...createForm, contactEmail: e.target.value })}
@@ -224,7 +224,7 @@ export default function AgenciesAdmin({ role }: AgenciesAdminProps) {
               </div>
               <div>
                 <Label>Contact phone (optional)</Label>
-                <Input
+                <Input aria-label="Contact phone (optional)"
                   value={createForm.contactPhone}
                   onChange={(e) => setCreateForm({ ...createForm, contactPhone: e.target.value })}
                 />
@@ -248,7 +248,7 @@ export default function AgenciesAdmin({ role }: AgenciesAdminProps) {
           <form onSubmit={handleEditSave} className="space-y-4">
             <div>
               <Label>Short code</Label>
-              <Input
+              <Input aria-label="Short code"
                 value={editForm.shortCode}
                 onChange={(e) => setEditForm({ ...editForm, shortCode: e.target.value.toUpperCase() })}
                 maxLength={12}
@@ -257,7 +257,7 @@ export default function AgenciesAdmin({ role }: AgenciesAdminProps) {
             </div>
             <div>
               <Label>Name</Label>
-              <Input
+              <Input aria-label="Name"
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 required
@@ -265,14 +265,14 @@ export default function AgenciesAdmin({ role }: AgenciesAdminProps) {
             </div>
             <div>
               <Label>Contact name</Label>
-              <Input
+              <Input aria-label="Contact name"
                 value={editForm.contactName}
                 onChange={(e) => setEditForm({ ...editForm, contactName: e.target.value })}
               />
             </div>
             <div>
               <Label>Contact email</Label>
-              <Input
+              <Input aria-label="Contact email"
                 type="email"
                 value={editForm.contactEmail}
                 onChange={(e) => setEditForm({ ...editForm, contactEmail: e.target.value })}
@@ -280,7 +280,7 @@ export default function AgenciesAdmin({ role }: AgenciesAdminProps) {
             </div>
             <div>
               <Label>Contact phone</Label>
-              <Input
+              <Input aria-label="Contact phone"
                 value={editForm.contactPhone}
                 onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })}
               />

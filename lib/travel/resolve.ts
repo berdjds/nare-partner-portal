@@ -561,7 +561,9 @@ export async function buildEngineInputForVersion(
         issues,
       ),
     }));
-    const lines = [...sharedLines, ...version.serviceLines.filter((l) => l.scenarioId === sc.id)];
+    // Lines a template rule marked inactive (nobody eligible) are not part of the quotation at all:
+    // not charged, not listed as "included", and not rate-resolved.
+    const lines = [...sharedLines, ...version.serviceLines.filter((l) => l.scenarioId === sc.id)].filter((l) => !l.ruleInactive);
     return {
       ref: sc.id,
       label: sc.label,

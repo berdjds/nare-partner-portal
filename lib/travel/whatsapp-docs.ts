@@ -114,7 +114,7 @@ export async function sendQuoteDocument(
       select: { id: true, name: true, email: true, role: true, phone: true, active: true },
     });
     const label = user ? user.name || user.email : userId;
-    if (!user || !user.active) {
+    if (!user || !user.active || user.role === "PARTNER") {
       results.push({ to: label, ok: false, error: "user not found or inactive" });
       continue;
     }

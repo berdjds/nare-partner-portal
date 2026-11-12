@@ -22,18 +22,31 @@ const createSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   password: z.string(),
-  role: z.enum(["ADMIN", "USER", "ADVISOR", "VALIDATOR"]).default("USER"),
+  role: z.enum(["ADMIN", "USER", "ADVISOR", "VALIDATOR", "PARTNER"]).default("USER"),
   phone: phoneSchema,
+  agencyId: z.string().min(1).nullish(),
 });
+
+/**
+ * PARTNER accounts are bound to exactly one active Agency; every other role
+ * must carry no agency. Returns an error message or null.
+ */
+async function agencyBindingError(role: string, agencyId: string | null | undefined): Promise<string | null> {
+  if (role !== "PARTNER") return agencyId ? "agencyId is only valid for the PARTNER role" : null;
+  if (!agencyId) return "A PARTNER account requires an agencyId";
+  const agency = await prisma.agency.findUnique({ where: { id: agencyId }, select: { active: true } });
+  return agency?.active ? null : "agencyId must reference an active agency";
+}
 
 const updateSchema = z.object({
   id: z.string().min(1),
   email: z.string().email().optional(),
   name: z.string().min(1).optional(),
-  role: z.enum(["ADMIN", "USER", "ADVISOR", "VALIDATOR"]).optional(),
+  role: z.enum(["ADMIN", "USER", "ADVISOR", "VALIDATOR", "PARTNER"]).optional(),
   active: z.boolean().optional(),
   password: z.string().optional(),
   phone: phoneSchema,
+  agencyId: z.string().min(1).nullish(),
 });
 
 /**
@@ -61,7 +74,7 @@ export async function GET() {
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
-    select: { id: true, email: true, name: true, role: true, active: true, phone: true, createdAt: true, updatedAt: true },
+    select: { id: true, email: true, name: true, role: true, active: true, phone: true, agencyId: true, createdAt: true, updatedAt: true },
   });
 
   return NextResponse.json(users);
@@ -85,6 +98,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: policyError }, { status: 400 });
   }
 
+  const bindingError = await agencyBindingError(parsed.data.role, parsed.data.agencyId);
+  if (bindingError) return NextResponse.json({ error: bindingError }, { status: 400 });
+
   try {
     const hashed = await hashPassword(parsed.data.password);
     const created = await prisma.user.create({
@@ -94,8 +110,9 @@ export async function POST(req: NextRequest) {
         password: hashed,
         role: parsed.data.role,
         phone: parsed.data.phone ?? null,
+        agencyId: parsed.data.role === "PARTNER" ? parsed.data.agencyId ?? null : null,
       },
-      select: { id: true, email: true, name: true, role: true, active: true, phone: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, active: true, phone: true, agencyId: true, createdAt: true },
     });
 
     await writeAuditLog("USER_CREATED", user.id, `Created ${created.email}`);
@@ -131,7 +148,7 @@ export async function PATCH(req: NextRequest) {
   // account email even when this PATCH does not change it.
   const current = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, role: true, active: true },
+    select: { id: true, email: true, role: true, active: true, agencyId: true },
   });
 
   if (password) {
@@ -142,6 +159,13 @@ export async function PATCH(req: NextRequest) {
   }
 
   const data: any = { ...rest };
+  if (current && (rest.role !== undefined || rest.agencyId !== undefined)) {
+    const finalRole = rest.role ?? current.role;
+    const finalAgency = finalRole === "PARTNER" ? (rest.agencyId !== undefined ? rest.agencyId : current.agencyId) : null;
+    const bindingError = await agencyBindingError(finalRole, finalRole === "PARTNER" ? finalAgency : rest.agencyId);
+    if (bindingError) return NextResponse.json({ error: bindingError }, { status: 400 });
+    data.agencyId = finalAgency;
+  }
   if (password) data.password = await hashPassword(password);
 
   // W2 guards, evaluated before any update and without audit entries:
@@ -203,6 +227,7 @@ export async function PATCH(req: NextRequest) {
     current &&
     (password ||
       (parsed.data.role !== undefined && parsed.data.role !== current.role) ||
+      (data.agencyId !== undefined && data.agencyId !== current.agencyId) ||
       (parsed.data.active === false && current.active))
   ) {
     data.sessionVersion = { increment: 1 };
@@ -212,8 +237,13 @@ export async function PATCH(req: NextRequest) {
     const updated = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, email: true, name: true, role: true, active: true, phone: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, active: true, phone: true, agencyId: true, createdAt: true },
     });
+
+    if (updated.role === "PARTNER" && current && current.role !== "PARTNER") {
+      // A user who becomes a PARTNER must not keep validating other agencies' requests.
+      await prisma.validationAssignment.updateMany({ where: { validatorId: updated.id, active: true }, data: { active: false } });
+    }
 
     await writeAuditLog("USER_UPDATED", user.id, `Updated ${updated.email}`);
 

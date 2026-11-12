@@ -69,6 +69,12 @@ const contrastCases: ReadonlyArray<readonly [string, string, string]> = [
   ["--muted-foreground on --muted", "--muted-foreground", "--muted"],
   ["--muted-foreground on --card", "--muted-foreground", "--card"],
   ["--foreground on --background", "--foreground", "--background"],
+  ["--brand on --background", "--brand", "--background"],
+  ["--brand on --card", "--brand", "--card"],
+  ["--plum on --background", "--plum", "--background"],
+  ["--primary-foreground on --brand", "--primary-foreground", "--brand"],
+  ["--sidebar-primary on --sidebar-background", "--sidebar-primary", "--sidebar-background"],
+  ["--sidebar-accent-foreground on --sidebar-accent", "--sidebar-accent-foreground", "--sidebar-accent"],
 ];
 
 describe("WCAG color contrast", () => {
@@ -78,7 +84,7 @@ describe("WCAG color contrast", () => {
     });
   }
 
-  it("preserves the 203 89% 40% on 0 0% 93% contrast regression", () => {
+  it("preserves the 203 89% 40% on 0 0% 93% contrast regression (formula check)", () => {
     expect(contrastRatio(parseHsl("203 89% 40%"), parseHsl("0 0% 93%"))).toBeCloseTo(3.88, 1);
   });
 });

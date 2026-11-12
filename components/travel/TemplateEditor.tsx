@@ -34,6 +34,8 @@ interface ServiceDraft {
   label: string;
   quantity: number | null;
   vehicleTypeId: string | null;
+  /** Phase 2 template rule (strict, validated by the server). The editor does not author it yet but must carry it through a save. */
+  rule?: unknown;
 }
 
 interface DayDraft {
@@ -102,6 +104,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
           label: s.label,
           quantity: s.quantity ?? null,
           vehicleTypeId: s.vehicleTypeId ?? null,
+          rule: (s as { rule?: unknown }).rule ?? null,
         })),
       })),
     );
@@ -328,7 +331,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="w-72">
                     <Label>Template name</Label>
-                    <Input
+                    <Input aria-label="Template name"
                       value={name}
                       onChange={(e) => {
                         setName(e.target.value);
@@ -339,7 +342,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                   <div>
                     <Label>Version</Label>
                     <Select value={versionId} onValueChange={switchVersion}>
-                      <SelectTrigger className="w-48">
+                      <SelectTrigger aria-label="Version" className="w-48">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -422,10 +425,10 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                         <span className="flex-1">
                           {s.label}
                           {vehicleName(s.vehicleTypeId) && (
-                            <span className="ml-1 text-xs text-muted-foreground">· {vehicleName(s.vehicleTypeId)}</span>
+                            <span className="ms-1 text-xs text-muted-foreground">· {vehicleName(s.vehicleTypeId)}</span>
                           )}
                           {!s.serviceProductId && (
-                            <span className="ml-1 text-xs text-muted-foreground">(label only)</span>
+                            <span className="ms-1 text-xs text-muted-foreground">(label only)</span>
                           )}
                         </span>
                         <span className="text-xs text-muted-foreground">qty</span>
@@ -549,7 +552,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                       value={s.label}
                       onChange={(e) => patchScenario(si, { label: e.target.value })}
                     />
-                    <div className="ml-auto flex gap-1">
+                    <div className="ms-auto flex gap-1">
                       <Button
                         variant="outline"
                         size="sm"
@@ -609,7 +612,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                                 }
                               }}
                             >
-                              <SelectTrigger>
+                              <SelectTrigger aria-label="Select option">
                                 <SelectValue placeholder="Select hotel" />
                               </SelectTrigger>
                               <SelectContent>
@@ -685,7 +688,7 @@ export default function TemplateEditor({ templateId, role }: { templateId: strin
                               <div>
                                 <span className="text-xs text-muted-foreground">Room type</span>
                                 <Select value={a.roomType} onValueChange={(v) => patchAlloc(si, ti, ai, { roomType: v })}>
-                                  <SelectTrigger>
+                                  <SelectTrigger aria-label="Room type">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>

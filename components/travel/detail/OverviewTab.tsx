@@ -46,6 +46,7 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
     roomPrefs: detail.roomPrefs ?? "",
     flightDetails: detail.flightDetails ?? "",
     notes: detail.notes ?? "",
+    clientNotes: detail.clientNotes ?? "",
     travelers: parseJson<TravelerSetupView>(detail.travelers, {
       adults: 0,
       children: 0,
@@ -70,6 +71,7 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
         roomPrefs: detail.roomPrefs ?? "",
         flightDetails: detail.flightDetails ?? "",
         notes: detail.notes ?? "",
+        clientNotes: detail.clientNotes ?? "",
         travelers: parseJson(detail.travelers, form.travelers),
       });
     }
@@ -94,6 +96,7 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
           roomPrefs: form.roomPrefs || null,
           flightDetails: form.flightDetails || null,
           notes: form.notes || null,
+          clientNotes: form.clientNotes || null,
           travelers: form.travelers,
         },
       });
@@ -148,7 +151,8 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
             />
             <Field label="Room preferences" value={detail.roomPrefs} />
             <Field label="Flight details" value={detail.flightDetails} />
-            <Field label="Notes" value={detail.notes} />
+            <Field label="Client messages and notes" value={detail.clientNotes} />
+            <Field label="Internal notes (staff only)" value={detail.notes} />
             <Field label="Agency contact" value={
               [detail.agency.contactName, detail.agency.contactEmail, detail.agency.contactPhone]
                 .filter(Boolean)
@@ -160,15 +164,15 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>Title</Label>
-                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+                <Input aria-label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
               </div>
               <div>
                 <Label>Agency ref</Label>
-                <Input value={form.agencyRef} onChange={(e) => setForm({ ...form, agencyRef: e.target.value })} />
+                <Input aria-label="Agency ref" value={form.agencyRef} onChange={(e) => setForm({ ...form, agencyRef: e.target.value })} />
               </div>
               <div>
                 <Label>Destinations (comma separated)</Label>
-                <Input value={form.destinations} onChange={(e) => setForm({ ...form, destinations: e.target.value })} />
+                <Input aria-label="Destinations (comma separated)" value={form.destinations} onChange={(e) => setForm({ ...form, destinations: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -193,16 +197,21 @@ export default function OverviewTab({ ctx }: { ctx: DetailContext }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>Room preferences</Label>
-                <Textarea rows={2} value={form.roomPrefs} onChange={(e) => setForm({ ...form, roomPrefs: e.target.value })} />
+                <Textarea aria-label="Room preferences" rows={2} value={form.roomPrefs} onChange={(e) => setForm({ ...form, roomPrefs: e.target.value })} />
               </div>
               <div>
                 <Label>Flight details</Label>
-                <Textarea rows={2} value={form.flightDetails} onChange={(e) => setForm({ ...form, flightDetails: e.target.value })} />
+                <Textarea aria-label="Flight details" rows={2} value={form.flightDetails} onChange={(e) => setForm({ ...form, flightDetails: e.target.value })} />
               </div>
             </div>
             <div>
-              <Label>Notes</Label>
-              <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <Label htmlFor="ov-client-notes">Client messages and notes</Label>
+              <Textarea id="ov-client-notes" rows={2} value={form.clientNotes} onChange={(e) => setForm({ ...form, clientNotes: e.target.value })} />
+              <p className="mt-1 text-xs text-muted-foreground">Shared with the agency on this request.</p>
+            </div>
+            <div>
+              <Label htmlFor="ov-internal-notes">Internal notes (staff only)</Label>
+              <Textarea id="ov-internal-notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="flex gap-2">
               <Button type="submit" disabled={saving || invalidDates}>
@@ -242,16 +251,17 @@ function DeleteRequestCard({ ctx }: { ctx: DetailContext }) {
   }
 
   return (
-    <Card className="mt-4 border-destructive/40">
-      <CardHeader>
-        <CardTitle className="text-base">Danger zone</CardTitle>
-        <CardDescription>Hard-deletes this request with all versions, documents and notifications.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <details className="group mt-6 rounded-card border border-border/70 bg-card/60 open:border-destructive/40">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-card px-5 py-3 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <span>Danger zone</span>
+        <span aria-hidden="true" className="text-xs transition-transform group-open:rotate-180">⌄</span>
+      </summary>
+      <div className="space-y-3 px-5 pb-5">
+        <p className="text-sm text-muted-foreground">Hard-deletes this request with all versions, documents and notifications.</p>
         <Button variant="destructive" size="sm" onClick={() => setConfirmOpen(true)}>
           Delete request
         </Button>
-      </CardContent>
+      </div>
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
@@ -271,7 +281,7 @@ function DeleteRequestCard({ ctx }: { ctx: DetailContext }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </details>
   );
 }
 

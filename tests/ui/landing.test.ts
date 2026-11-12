@@ -20,14 +20,15 @@ process.env.DATABASE_URL ??= "file:/tmp/w5a-landing-test.db";
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import path, { resolve } from "node:path";
 import {
   BENEFITS,
   CONTACT,
   HERO,
   HOW_IT_WORKS_STEPS,
   INDEXABLE,
+  LANDING_TITLES,
   MAILTO_SUBJECTS,
   PAGE_TITLES,
   PRODUCT_NAME,
@@ -119,7 +120,8 @@ const LANDING_COMPONENT_SOURCES = [
   "components/landing/HowItWorks.tsx",
   "components/landing/Benefits.tsx",
   "components/landing/ContactBlock.tsx",
-  "components/landing/Footer.tsx",
+  "components/landing/ServicesSection.tsx",
+  "components/landing/AboutNare.tsx",
 ];
 
 describe("redirect branches kept", () => {
@@ -148,9 +150,7 @@ describe("signed-out visitors get the landing page", () => {
       CONTACT.email,
       ...CONTACT.phones,
       PRODUCT_NAME,
-      "How it works",
-      "Why the partner portal",
-      "Contact",
+      ...Object.values(LANDING_TITLES),
     ]) {
       expect(html).toContain(escapeHtml(copy));
     }
@@ -159,11 +159,13 @@ describe("signed-out visitors get the landing page", () => {
   it("links the sign-in CTA, the mailto and every phone, with no dangling assets", async () => {
     const html = await renderLanding();
 
-    // The hero shows one existing Nare brand asset and no dangling references.
-    expect(html.match(/\/brand\/nare-(?:icon|logo)\.webp/g) ?? []).toHaveLength(1);
+    // One brand lockup (the header logo, never repeated) and only local images that exist: no dangling references, nothing hotlinked.
+    expect(html.match(/<img[^>]*src="\/brand\/nare-logo-header\.webp"/g) ?? []).toHaveLength(1);
+    for (const src of html.match(/(?<=src=")\/brand\/[^"]+/g) ?? []) expect(existsSync(path.join(process.cwd(), "public", src.replace(/^\//, "")))).toBe(true);
+    expect(html).not.toMatch(/<img[^>]*src="https?:/);
     expect(html).toContain('href="/login"');
     expect(html).toContain(
-      `href="mailto:${CONTACT.email}?subject=${encodeURIComponent(MAILTO_SUBJECTS.contact)}"`
+      `href="mailto:${CONTACT.email}"` // contact details live in the footer only (no repeated contact block above it)
     );
     for (const phone of CONTACT.phones) {
       expect(html).toContain(`href="tel:${phone.replace(/\s/g, "")}"`);
@@ -210,7 +212,7 @@ describe("no raw colours in the landing sources", () => {
   const paletteUtility =
     /\b(?:bg|text|border|ring|from|via|to)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d/;
 
-  it("app/page.tsx and the five landing components use neither hex colours nor palette utilities", () => {
+  it("app/page.tsx and the landing components use neither hex colours nor palette utilities", () => {
     for (const rel of ["app/page.tsx", ...LANDING_COMPONENT_SOURCES]) {
       const source = readSource(rel);
       expect(source, rel).not.toMatch(hexColour);
@@ -218,33 +220,35 @@ describe("no raw colours in the landing sources", () => {
     }
   });
 
-  it("Hero uses the approved gradient, one existing brand asset, portal eyebrow and outlined secondary link", () => {
+  it("Hero is image-led in staging's system: full-bleed photo, dark overlay, glass panel, pill Sign in and ghost secondary, no repeated brand lockup, portal eyebrow", () => {
     const hero = readSource("components/landing/Hero.tsx");
-    expect(hero).toContain("bg-gradient-to-br");
-    expect(hero).toContain("from-primary");
-    expect(hero).toContain("to-gradient-end");
-    expect(hero).toContain("Partner portal");
-    expect(hero).not.toContain("uppercase");
+    expect(hero).toContain("from-black/85"); // staging's dark overlay, stronger on phones
+    expect(hero).toContain("rounded-2xl bg-gradient-to-r from-black/45"); // staging's text panel over the overlay
+    expect(hero).toContain("pill-btn-primary");
+    expect(hero).toContain("pill-btn-ghost");
+    expect(hero).toContain("/brand/photos/hero-expo-1920.webp");
+    expect(hero).toContain('t("landing.eyebrow")');
     expect(hero).not.toContain("{PRODUCT_NAME}");
-    expect(hero).toContain("border-2 border-primary-foreground");
-    expect(hero.match(/\/brand\/nare-icon\.webp/g) ?? []).toHaveLength(1);
+    // The hero never repeats the brand mark or logo: the header carries the only lockup.
+    expect(hero).not.toMatch(/nare-(icon|logo)\.webp/);
   });
 
-  it("public heroes do not use the retired to-brand gradient stop", () => {
+  it("public heroes do not use the retired blue gradient (from-primary / to-gradient-end)", () => {
     for (const rel of [
       "components/landing/Hero.tsx",
       "app/login/page.tsx",
       "app/partners/apply/page.tsx",
     ]) {
-      expect(readSource(rel), rel).not.toContain("to-brand");
+      expect(readSource(rel), rel).not.toContain("from-primary");
+      expect(readSource(rel), rel).not.toContain("to-gradient-end");
     }
   });
 });
 
-describe("copy comes from the content file", () => {
-  it("every landing component imports from @/lib/portal-content", () => {
-    for (const rel of LANDING_COMPONENT_SOURCES) {
-      expect(readSource(rel), rel).toMatch(/from "@\/lib\/portal-content"/);
+describe("copy comes from the catalogue", () => {
+  it("landing components read their text through the i18n catalogue (English text lives in lib/portal-content via lib/i18n/messages/en.ts)", () => {
+    for (const rel of ["components/landing/Hero.tsx", "components/landing/Benefits.tsx", "components/landing/ServicesSection.tsx", "components/landing/HowItWorks.tsx", "components/landing/AboutNare.tsx"]) {
+      expect(readSource(rel), rel).toContain("useT()");
     }
   });
 });

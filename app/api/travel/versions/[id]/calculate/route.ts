@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { POLICY_TYPES, ROLE_ADMIN, ROLE_ADVISOR, ROLE_VALIDATOR } from "@/lib/travel/contracts";
 import { calculate } from "@/lib/travel/engine";
-import { canViewInternal, redactScenarioResult } from "@/lib/travel/redact";
+import { redactScenarioResult } from "@/lib/travel/redact";
+import { canViewInternalFor } from "@/lib/travel/internal-access";
 import { buildEngineInputForVersion } from "@/lib/travel/resolve";
 import { buildTraceRows } from "@/lib/travel/trace-table";
 import { getTravelActor, travelError, unauthorized } from "../../../guard";
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const result = calculate(input);
     const quoteCurrency = input.fx.quoteCurrency;
 
-    if (!canViewInternal(actor)) {
+    if (!(await canViewInternalFor(actor, version.requestId))) {
       // int-lock: sell-side fields only — internal costing never leaves this
       // route without the travel.internal.view permission (D2: admin-only
       // preset; owners/validators need an explicit grant). traceRows carry the

@@ -36,11 +36,11 @@ export default async function AppShell({
   return (
     <div className="min-h-screen bg-background">
       <Sidebar {...navProps} />
-      <div className="lg:pl-60">
+      <div className="lg:ps-60">
         <MobileBar {...navProps} />
         <main
           className={
-            variant === "full" ? "w-full" : "mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-8"
+            variant === "full" ? "w-full" : "mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8 lg:py-7"
           }
         >
           {children}

@@ -208,12 +208,11 @@ describe("document kind authorization", () => {
     expect(clientRes.status).toBe(200);
     expect(clientRes.headers.get("Content-Type")).toBe("application/pdf");
 
-    // D2: travel.internal.download is in the ADMIN preset only, so a plain
-    // VALIDATOR (no grant) is now refused INTERNAL downloads.
+    // D3: the key alone never opens every request: an UNASSIGNED validator is refused.
     session(fx.validator);
     expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(403);
 
-    // ...but an explicit grant re-opens them for a VALIDATOR.
+    // An explicit grant does not bypass the assignment rule either.
     const grantedValidator = await prisma.user.create({
       data: {
         email: "validator-granted@test.io",
@@ -224,7 +223,7 @@ describe("document kind authorization", () => {
       },
     });
     session(grantedValidator);
-    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(200);
+    expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(403);
 
     session(fx.admin);
     expect((await documentsRoute.GET(req(`http://t/api/travel/documents/${internal.id}`), { params: Promise.resolve({ id: internal.id }) })).status).toBe(200);

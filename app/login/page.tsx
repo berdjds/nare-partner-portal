@@ -3,6 +3,9 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { useT } from "@/lib/i18n/react";
+import { validateLogin } from "@/lib/login-validation";
+import { badgeStatusTextStyles } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,10 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import { friendlyLoginError } from "@/lib/login-errors";
+import { FRIENDLY_CREDENTIALS_ERROR, friendlyLoginError } from "@/lib/login-errors";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
-import { FORGOT_ACCESS, LOGIN_PANEL, PARTNER_APPLY } from "@/lib/portal-content";
+import { FORGOT_ACCESS } from "@/lib/portal-content";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -21,10 +24,12 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const t = useT();
 
   const callbackUrl = searchParams.get("callbackUrl") || "/";
 
@@ -34,10 +39,19 @@ function LoginForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Format-only checks, done in the browser: they say nothing about whether an account exists.
+    const v = validateLogin(email, password);
+    const found = { email: v.email && t(v.email), password: v.password && t(v.password) };
+    setFieldErrors(found);
+    if (found.email || found.password) {
+      setError(null);
+      document.getElementById(found.email ? "email" : "password")?.focus();
+      return;
+    }
     setLoading(true);
     setError(null);
     const result = await signIn("credentials", {
-      email,
+      email: email.trim(),
       password,
       redirect: false,
       callbackUrl,
@@ -50,7 +64,10 @@ function LoginForm() {
     } else {
       // One identical message for every failure (lib/login-errors.ts): an
       // unknown email and a wrong password must stay indistinguishable.
-      const message = friendlyLoginError(result?.error);
+      // One identical, localised message for every failure (unknown email and wrong password stay
+      // indistinguishable); the catalogue text is the same sentence friendlyLoginError() returns in English.
+      const english = friendlyLoginError(result?.error);
+      const message = english === FRIENDLY_CREDENTIALS_ERROR ? t("login.error") : english;
       setError(message);
       toast(message, "error");
     }
@@ -60,32 +77,34 @@ function LoginForm() {
     <div className="flex min-h-screen flex-col">
       <PublicHeader active="login" />
       <div className="grid flex-1 grid-rows-[auto_1fr] lg:grid-cols-2 lg:grid-rows-1">
-      <aside className="flex flex-col gap-4 bg-gradient-to-br from-primary to-gradient-end px-6 py-8 text-primary-foreground lg:justify-center lg:gap-10 lg:px-16">
-        <h1 className="max-w-md text-2xl font-semibold tracking-tight lg:text-4xl">
-          {LOGIN_PANEL.headline}
+      <aside className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-plum via-plum to-brand px-6 py-8 text-white lg:justify-center lg:gap-10 lg:px-16">
+        <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/yerevan-market.webp")' }} />
+        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/75 to-black/55" />
+        <h1 className="relative max-w-md text-balance text-3xl font-bold leading-tight tracking-tight drop-shadow-lg lg:text-5xl">
+          {t("login.headline")}
         </h1>
-        <ul className="max-w-md space-y-2 text-base leading-relaxed text-primary-foreground/90 lg:space-y-4 lg:text-lg">
-          {LOGIN_PANEL.bullets.map((bullet) => (
-            <li key={bullet} className="flex items-start gap-3">
-              <Check className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />
-              <span>{bullet}</span>
+        <ul className="max-w-md space-y-2 relative text-base leading-relaxed text-white/90 lg:space-y-4 lg:text-lg">
+          {(["login.bullet1", "login.bullet2", "login.bullet3"] as const).map((k) => (
+            <li key={k} className="flex items-start gap-3">
+              <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-warm text-plum"><Check className="h-3.5 w-3.5" aria-hidden="true" /></span>
+              <span>{t(k)}</span>
             </li>
           ))}
         </ul>
       </aside>
 
-      <div className="flex flex-col items-center justify-start bg-background p-4 pt-12 lg:justify-center lg:pt-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl">Sign in to the partner portal</CardTitle>
+      <div className="flex flex-col items-center justify-start bg-background p-4 pt-10 lg:justify-center lg:pt-4">
+        <Card className="w-full max-w-md shadow-[var(--shadow-lift)]">
+          <CardHeader className="p-8 pb-4 text-center">
+            <CardTitle className="text-3xl">{t("login.title")}</CardTitle>
             <CardDescription>
-              Use the account provided by the Nare team.
+              {t("login.subtitle")}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <CardContent className="p-8 pt-2">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t("login.email")}</Label>
                 <Input
                   id="email"
                   name="email"
@@ -93,12 +112,16 @@ function LoginForm() {
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  required
+                  placeholder={t("login.emailPlaceholder")}
+                  aria-invalid={fieldErrors.email ? true : undefined}
+                  aria-describedby={fieldErrors.email ? "email-error" : undefined}
                 />
+                {fieldErrors.email && (
+                  <p id="email-error" className={`text-sm font-medium ${badgeStatusTextStyles.danger}`}>{fieldErrors.email}</p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t("login.password")}</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -108,15 +131,16 @@ function LoginForm() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyUp={handlePasswordKeyUp}
-                    required
-                    className="pr-10"
+                    aria-invalid={fieldErrors.password ? true : undefined}
+                    aria-describedby={fieldErrors.password ? "password-error" : undefined}
+                    className="pe-10"
                   />
                   <button
                     type="button"
                     aria-pressed={showPassword}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? t("login.hidePassword") : t("login.showPassword")}
                     onClick={() => setShowPassword((visible) => !visible)}
-                    className="absolute inset-y-0 right-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    className="absolute inset-y-0 end-0 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -125,8 +149,11 @@ function LoginForm() {
                     )}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <p id="password-error" className={`text-sm font-medium ${badgeStatusTextStyles.danger}`}>{fieldErrors.password}</p>
+                )}
                 {capsLockOn && (
-                  <p className="text-sm text-muted-foreground">Caps Lock is on.</p>
+                  <p className="text-sm text-muted-foreground">{t("login.capsLock")}</p>
                 )}
               </div>
               {error && (
@@ -134,8 +161,8 @@ function LoginForm() {
                   {error}
                 </p>
               )}
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing in..." : "Sign in"}
+              <Button type="submit" size="lg" className="w-full" disabled={loading}>
+                {loading ? t("login.submitting") : t("login.submit")}
               </Button>
             </form>
             <p className="mt-4 text-center text-sm">
@@ -143,7 +170,7 @@ function LoginForm() {
                 href={FORGOT_ACCESS.href}
                 className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
               >
-                {FORGOT_ACCESS.label}
+                {t("login.forgot")}
               </Link>
             </p>
           </CardContent>
@@ -152,11 +179,11 @@ function LoginForm() {
           href="/partners/apply"
           className="mt-4 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
-          {PARTNER_APPLY.linkLabel}
+          {t("nav.apply")}
         </Link>
       </div>
       </div>
-      <PublicFooter />
+      <PublicFooter compact />
     </div>
   );
 }

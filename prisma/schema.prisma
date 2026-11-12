@@ -12,7 +12,10 @@ model User {
   email     String   @unique
   name      String?
   password  String
-  role      String   @default("USER") // ADMIN | USER | ADVISOR | VALIDATOR
+  role      String   @default("USER") // ADMIN | USER | ADVISOR | VALIDATOR | PARTNER
+  // B2B cycle 1 (additive, nullable, no FK on purpose — same no-FK precedent as accountId):
+  // set only for role PARTNER; a partner belongs to exactly one Agency.
+  agencyId  String?
   active    Boolean  @default(true)
   sessionVersion Int @default(0) // W1b session version; bump with { increment: 1 } to revoke all issued tokens
   phone     String? // WhatsApp notification destination (international format, no +)
@@ -28,6 +31,8 @@ model User {
   validationAssignments    ValidationAssignment[] @relation("AssignmentValidator")
   reviewDecisions          ReviewDecision[]
   notificationDeliveries   NotificationDelivery[]
+
+  @@index([agencyId])
 }
 
 // W3: one row per WhatsApp business account (marhaba = existing account,
@@ -179,7 +184,8 @@ model TravelRequest {
   travelers          String // JSON TravelerSetup (contracts.ts)
   roomPrefs          String?
   flightDetails      String?
-  notes              String?
+  notes              String? // INTERNAL staff notes (never shown to partners)
+  clientNotes        String? // B2B cycle 1: client messages and notes, visible to the agency (additive, nullable)
   status             String   @default("DRAFT") // QuoteStatus of latest version
   revision           Int      @default(0) // optimistic locking
   currentValidatorId String?
@@ -286,6 +292,15 @@ model ServiceLine {
   serviceProductId String? // catalog link; rates resolve from RateVersion(productType: SERVICE)
   date             String? // YYYY-MM-DD of the itinerary day that spawned the line; null = not day-linked
   vehicleTypeId    String? // selected fleet vehicle; SERVICE rates resolve per vehicle (null = vehicle-agnostic base rate)
+  // B2B cycle 1, Phase 2 (all additive and nullable/defaulted): template provenance for the
+  // deterministic recalculation. origin null = manual/legacy line; "TEMPLATE" = derived from
+  // the request's template version under templateKey. derivedJson is the last derived
+  // {participants, inactive}; a line that no longer matches it was edited by hand and is kept.
+  origin           String?
+  templateKey      String?
+  derivedJson      String?
+  ruleInactive     Boolean  @default(false) // template rule says nobody eligible: not charged
+  reviewFlag       String? // comma-separated rule conflict codes needing human review
 
   version QuoteVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
@@ -735,4 +750,67 @@ model SecurityRequest {
   createdAt   DateTime @default(now())
 
   @@index([kind, createdAt])
+}
+
+// =============================================================================
+// B2B cycle 1, Phase 4 (additive): managed-content translations and the
+// admin-managed company/contact profile. Nothing here touches existing tables.
+// =============================================================================
+
+// One row per translation VERSION of one field of one admin-managed entity in one locale.
+// Published text = the latest APPROVED row. A DRAFT (human or AI) never replaces published
+// text until a person approves it; approving supersedes the previous APPROVED row, which
+// stays as history. English (the source) is never stored here: it is the entity itself.
+model Translation {
+  id           String    @id @default(cuid())
+  entity       String // allow-listed in lib/i18n/translations.ts
+  entityId     String
+  field        String
+  locale       String // "hy" now; "ar" later (RTL-ready)
+  version      Int
+  text         String
+  status       String    @default("DRAFT") // DRAFT | APPROVED | SUPERSEDED | REJECTED
+  source       String // HUMAN | AI
+  model        String? // AI provider/model identifier, null for HUMAN
+  sourceHash   String // sha256 of the English text this was written against (stale detection)
+  createdById  String?
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  events TranslationEvent[]
+
+  @@unique([entity, entityId, field, locale, version])
+  @@index([entity, entityId, field, locale, status])
+}
+
+model TranslationEvent {
+  id            String   @id @default(cuid())
+  translationId String
+  action        String // CREATED | EDITED | AI_GENERATED | APPROVED | SUPERSEDED | REJECTED
+  actorId       String?
+  detail        String? // JSON: provider/model, source hash, reason; never client data
+  createdAt     DateTime @default(now())
+
+  translation Translation @relation(fields: [translationId], references: [id], onDelete: Cascade)
+
+  @@index([translationId])
+}
+
+// Company/contact configuration with draft/publish. Each save is a new immutable version row,
+// so the table is also the audit history. scope: "global" defaults, "portal" overrides.
+model ContactProfile {
+  id            String    @id @default(cuid())
+  scope         String // global | portal
+  version       Int
+  status        String    @default("DRAFT") // DRAFT | PUBLISHED | SUPERSEDED
+  dataJson      String // validated ContactData (lib/contact/schema.ts)
+  note          String? // why this version was saved
+  createdById   String?
+  publishedById String?
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([scope, version])
+  @@index([scope, status])
 }

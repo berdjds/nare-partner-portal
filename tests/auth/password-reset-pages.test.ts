@@ -289,7 +289,7 @@ describe("sign-in page forgot-password link", () => {
 
   it("links to the reset page via FORGOT_ACCESS and no longer uses a mailto", () => {
     expect(loginSource).toContain("FORGOT_ACCESS.href");
-    expect(loginSource).toContain("FORGOT_ACCESS.label");
+    expect(loginSource).toContain('t("login.forgot")'); // the English text is FORGOT_ACCESS.label via the catalogue (tests/i18n)
     expect(loginSource).not.toContain("mailto:");
   });
 

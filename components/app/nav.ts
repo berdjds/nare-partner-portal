@@ -48,6 +48,17 @@ export interface NavUser {
 export function navGroupsForUser(user: NavUser | null | undefined): NavGroupModel[] {
   if (!user) return [];
 
+  // PARTNER (agency login): one item, nothing else. Never the staff nav, the
+  // calculator or any admin/travel-internal link.
+  if (user.role === "PARTNER") {
+    return [
+      {
+        label: "Quotations",
+        items: [{ href: "/partner", label: "My quotations", icon: "inbox", match: (p) => p === "/partner" || p.startsWith("/partner/") }],
+      },
+    ];
+  }
+
   const groups: NavGroupModel[] = [];
 
   // --- Inbox ---------------------------------------------------------------
@@ -137,17 +148,20 @@ export function navGroupsForUser(user: NavUser | null | undefined): NavGroupMode
   // --- Tools ---------------------------------------------------------------
   // app/calculator/page.tsx guards only on getActiveUser — any active user
   // may open it, so the link is always visible here.
-  groups.push({
-    label: "Tools",
-    items: [
-      {
-        href: "/calculator",
-        label: "Calculator",
-        icon: "calculator",
-        match: (p) => p === "/calculator" || p.startsWith("/calculator/"),
-      },
-    ],
-  });
+  // The calculator is an internal costing workbook: shown only with the central internal key.
+  if (hasPermission(user, "travel.internal.view")) {
+    groups.push({
+      label: "Tools",
+      items: [
+        {
+          href: "/calculator",
+          label: "Calculator",
+          icon: "calculator",
+          match: (p) => p === "/calculator" || p.startsWith("/calculator/"),
+        },
+      ],
+    });
+  }
 
   // --- Admin ---------------------------------------------------------------
   const adminItems: NavItemModel[] = [];
@@ -178,6 +192,14 @@ export function navGroupsForUser(user: NavUser | null | undefined): NavGroupMode
       icon: "building-2",
       match: (p) => p.startsWith("/admin/partners"),
     });
+  }
+  // Mirrors app/admin/contact/page.tsx: admin.settings.
+  if (hasPermission(user, "admin.settings")) {
+    adminItems.push({ href: "/admin/contact", label: "Company and contact", icon: "settings", match: (p) => p.startsWith("/admin/contact") });
+  }
+  // Mirrors app/admin/translations/page.tsx: content.translate or content.approve.
+  if (hasPermission(user, "content.translate") || hasPermission(user, "content.approve")) {
+    adminItems.push({ href: "/admin/translations", label: "Translations", icon: "library", match: (p) => p.startsWith("/admin/translations") });
   }
   if (adminItems.length > 0) groups.push({ label: "Admin", items: adminItems });
 

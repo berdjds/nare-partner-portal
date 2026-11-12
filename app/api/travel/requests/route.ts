@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ROLE_ADMIN, ROLE_ADVISOR, ROLE_VALIDATOR } from "@/lib/travel/contracts";
+import { ROLE_ADMIN, ROLE_ADVISOR, ROLE_PARTNER, ROLE_VALIDATOR } from "@/lib/travel/contracts";
+import { partnerRequestList } from "@/lib/travel/partner-view";
 import { createRequest, createRequestSchema } from "@/lib/travel/workflow";
-import { getTravelActor, travelError, unauthorized } from "../guard";
+import { getTravelActor, getTravelOrPartnerActor, travelError, unauthorized } from "../guard";
 
 // GET /api/travel/search?q=&status=&ownerId=&from=&to= — advisors see only
 // their own requests; ADMIN/VALIDATOR see all; any other role (a user
 // holding a validation assignment, v0.10.0) sees own + assigned requests.
 export async function GET(req: NextRequest) {
-  const actor = await getTravelActor();
+  const actor = await getTravelOrPartnerActor();
   if (!actor) return unauthorized();
 
   const { searchParams } = new URL(req.url);
+  if (actor.role === ROLE_PARTNER) {
+    // Own agency only, client-safe fields only (lib/travel/partner-view.ts).
+    try {
+      return NextResponse.json(
+        await partnerRequestList(actor.agencyId as string, {
+          q: searchParams.get("q")?.trim() || undefined,
+          status: searchParams.get("status")?.trim() || undefined,
+        }),
+      );
+    } catch (err) {
+      return travelError(err, "[API /travel/requests]");
+    }
+  }
   const q = searchParams.get("q")?.trim();
   const status = searchParams.get("status")?.trim();
   const ownerId = searchParams.get("ownerId")?.trim();

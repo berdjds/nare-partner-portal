@@ -25,7 +25,7 @@ describe("branded login page", () => {
     const page = readRepoFile("app/login/page.tsx");
     expect(page).not.toContain("BrandMark");
     expect(page).toContain(
-      '<CardTitle className="text-xl">Sign in to the partner portal</CardTitle>'
+      '<CardTitle className="text-3xl">{t("login.title")}</CardTitle>'
     );
     expect(page).not.toContain("PRODUCT_NAME");
     expect(page).not.toContain("uppercase tracking-[0.2em]");
@@ -47,7 +47,7 @@ describe("branded login page", () => {
     expect(page).toContain('<Suspense fallback={null}>');
     expect(page).toContain('type="email"');
     expect(page).toContain('type={showPassword ? "text" : "password"}');
-    expect(page).toContain('loading ? "Signing in..." : "Sign in"');
+    expect(page).toContain('loading ? t("login.submitting") : t("login.submit")');
   });
 
   it("uses only token-based colour classes (no raw hex or palette utilities)", () => {

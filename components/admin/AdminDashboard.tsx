@@ -298,7 +298,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
                   onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
                 />
                 <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v as typeof newUser.role })}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Role">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -313,7 +313,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="border-b text-left">
+                  <thead className="border-b text-start">
                     <tr>
                       <th className="pb-2 font-medium">Name</th>
                       <th className="pb-2 font-medium">Email</th>
@@ -348,7 +348,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
                                   <div>
                                     <Label>Role</Label>
                                     <Select value={editRole} onValueChange={setEditRole}>
-                                      <SelectTrigger>
+                                      <SelectTrigger aria-label="Role">
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -361,7 +361,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
                                   </div>
                                   <div>
                                     <Label>Phone (WhatsApp)</Label>
-                                    <Input
+                                    <Input aria-label="Phone (WhatsApp)"
                                       value={editPhone}
                                       onChange={(e) => setEditPhone(e.target.value)}
                                       placeholder="37499123456 (digits, optional +)"
@@ -415,7 +415,7 @@ export default function AdminDashboard({ canAdminWhatsApp, currentUserId }: { ca
             <CardContent>
               <div className="max-h-[600px] overflow-auto">
                 <table className="w-full text-sm">
-                  <thead className="border-b text-left">
+                  <thead className="border-b text-start">
                     <tr>
                       <th className="pb-2 font-medium">Time</th>
                       <th className="pb-2 font-medium">Action</th>

@@ -10,6 +10,7 @@ export default async function TravelPage() {
   const session = await getServerSession(authOptions);
   const user = await getActiveUser(session);
   if (!user) redirect("/login");
+  if (user.role === "PARTNER") redirect("/partner");
   // W2: the travel.access permission gates module entry; the role/assignment
   // rule (canAccessTravel) stays as the minimum on top.
   if (!hasPermission(user, "travel.access")) redirect("/dashboard");

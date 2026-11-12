@@ -97,6 +97,8 @@ export interface ServiceLineDetail {
   serviceProductId: string | null; // catalog link; rate resolves from SERVICE RateVersions
   date: string | null; // YYYY-MM-DD of the itinerary day that spawned the line
   vehicleTypeId: string | null; // selected fleet vehicle; per-vehicle SERVICE rate resolves for it
+  ruleInactive?: boolean; // Phase 2: a template rule says nobody is eligible (not charged)
+  reviewFlag?: string | null; // Phase 2: comma-separated template conflict codes
 }
 
 export interface SnapshotSummary {
@@ -179,6 +181,7 @@ export interface TravelRequestDetail {
   roomPrefs: string | null;
   flightDetails: string | null;
   notes: string | null;
+  clientNotes: string | null;
   status: string;
   revision: number;
   currentValidatorId: string | null;

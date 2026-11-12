@@ -55,20 +55,20 @@ export default function ReviewQueue({ role, userId }: ReviewQueueProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">Package code</TableHead>
+                <TableHead className="ps-4">Package code</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Agency</TableHead>
                 <TableHead>Dates</TableHead>
                 <TableHead>Owner</TableHead>
                 {role === "ADMIN" && <TableHead>Validator</TableHead>}
                 <TableHead>Status</TableHead>
-                <TableHead className="pr-4" />
+                <TableHead className="pe-4" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell className="pl-4 font-mono text-xs">{r.packageCode}</TableCell>
+                  <TableCell className="ps-4 font-mono text-xs">{r.packageCode}</TableCell>
                   <TableCell className="font-medium">{r.title}</TableCell>
                   <TableCell>{r.agency.shortCode}</TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
@@ -81,7 +81,7 @@ export default function ReviewQueue({ role, userId }: ReviewQueueProps) {
                   <TableCell>
                     <StatusBadge status={r.status} />
                   </TableCell>
-                  <TableCell className="pr-4 text-right">
+                  <TableCell className="pe-4 text-end">
                     <Button size="sm" onClick={() => (window.location.href = `/travel/requests/${r.id}`)}>
                       Review
                     </Button>

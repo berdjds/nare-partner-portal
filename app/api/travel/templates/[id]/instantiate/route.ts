@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { addDays } from "@/lib/travel/engine";
 import {
   createRequest,
+  recalculateFromTemplate,
   createRequestSchema,
   saveVersionContent,
   WorkflowError,
@@ -147,8 +148,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       data: { templateVersionId: templateVersion.id },
     });
 
+    // Stamp the template rules (participants, inactive lines, review flags) right away so the
+    // new request opens already consistent. A failure never fails the creation.
+    let recalculation: unknown = null;
+    try {
+      const fresh = await prisma.travelRequest.findUnique({ where: { id: request.id }, select: { revision: true } });
+      if (fresh) recalculation = await recalculateFromTemplate(actor, request.id, { expectedRevision: fresh.revision });
+    } catch (err) {
+      console.error("[API /travel/templates/instantiate] template rules were not applied:", err instanceof WorkflowError ? err.code : err);
+      recalculation = { error: err instanceof WorkflowError ? err.code : "RECALC_FAILED" };
+    }
+
     return NextResponse.json(
-      { request, versionId: version.id, templateVersionId: templateVersion.id },
+      { request, versionId: version.id, templateVersionId: templateVersion.id, recalculation },
       { status: 201 },
     );
   } catch (err) {

@@ -13,6 +13,7 @@ export default async function DashboardPage() {
 
   const user = await getActiveUser(session);
   if (!user) redirect("/login");
+  if (user.role === "PARTNER") redirect("/partner");
 
   // W3 per-account gate: the inbox shows every account whose view permission
   // the user holds (marhaba → whatsapp.inbox.view, nare → whatsapp.nare.view),

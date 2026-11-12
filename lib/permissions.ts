@@ -12,11 +12,12 @@
  * a deny always wins over both a grant of the same key and the role preset.
  *
  * Presets reproduce the interim W1 role behaviour exactly, with one decided
- * exception (D2): internal-cost viewing (travel.internal.view) and
- * internal-document download (travel.internal.download) default to ADMIN
- * only — today INTERNAL costing is also visible to validators, but until the
- * owner confirms the proposed-permissions migration (D3), non-admins get no
- * internal-cost access.
+ * exception (D3, owner decision of the B2B cycle 1): internal-cost viewing
+ * (travel.internal.view) and internal-document download
+ * (travel.internal.download) belong to ADMIN and VALIDATOR presets only, and
+ * a validator additionally needs an ACTIVE assignment to the request
+ * (lib/travel/internal-access.ts). Grants to other roles still wait for the
+ * proposed-permissions confirmation.
  *
  * Role-to-preset mapping (from the current enforcement sites):
  * - admin.users / admin.settings / whatsapp.admin: ADMIN-only today
@@ -80,6 +81,10 @@ export const PERMISSION_KEYS = [
   "travel.internal.download",
   /** Review B2B partner applications and download their KYC documents (W5b). */
   "partners.review",
+  /** Write translation drafts (human or AI-assisted) for admin-managed content. */
+  "content.translate",
+  /** Approve or reject translation drafts; only approved text is published. */
+  "content.approve",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -116,13 +121,28 @@ export const ROLE_PRESETS: Readonly<Record<string, ReadonlySet<PermissionKey>>> 
     "travel.client_docs.download",
     "travel.client_docs.send",
   ]),
+  // D3 (owner, B2B cycle 1): the VALIDATOR preset carries the internal keys, but
+  // every internal read/download additionally requires ADMIN or an ACTIVE
+  // assignment to that very request (lib/travel/internal-access.ts). The keys
+  // alone never open every request to a validator.
   VALIDATOR: new Set<PermissionKey>([
     "travel.access",
     "travel.review",
     "travel.client_docs.download",
     "travel.client_docs.send",
+    "travel.internal.view",
+    "travel.internal.download",
   ]),
+  // Agency login: read its own agency's requests and download issued client
+  // quotations. Nothing else, ever (see PARTNER_CEILING).
+  PARTNER: new Set<PermissionKey>(["travel.access", "travel.client_docs.download"]),
 };
+
+/** Hard ceiling for PARTNER: grants outside this set are ignored. */
+export const PARTNER_CEILING: ReadonlySet<PermissionKey> = new Set<PermissionKey>([
+  "travel.access",
+  "travel.client_docs.download",
+]);
 
 const EMPTY_PRESET: ReadonlySet<PermissionKey> = new Set();export function presetForRole(role: string | null | undefined): ReadonlySet<PermissionKey> {
   if (!role) return EMPTY_PRESET;
@@ -157,6 +177,9 @@ export function effectivePermissions(
   }
   for (const row of rows) {
     if (!row.allowed) effective.delete(row.key as PermissionKey);
+  }
+  if (role === "PARTNER") {
+    for (const key of Array.from(effective)) if (!PARTNER_CEILING.has(key)) effective.delete(key);
   }
   return effective;
 }

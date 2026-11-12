@@ -1,5 +1,7 @@
 "use client";
 
+import RequestProgress from "./RequestProgress";
+import TemplateReviewNotice from "./TemplateReviewNotice";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
@@ -35,7 +37,7 @@ interface RequestDetailProps {
 
 /** Underline-style trigger for page-level tab bars (segmented is the ui default). */
 const PAGE_TAB_CLASS =
-  "rounded-none border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-none";
+  "rounded-none border-b-2 border-transparent px-4 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-none";
 
 export interface DetailContext {
   detail: TravelRequestDetail;
@@ -221,26 +223,20 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
       {/* Sticky request header: identity + version switch stay visible while
           scrolling long itinerary/scenario tabs. top-14 clears the mobile top
           bar; on desktop the sidebar leaves the viewport top free. */}
-      <Card className="sticky top-14 z-30 mb-4 lg:top-3">
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <CardTitle className="font-mono text-lg">{detail.packageCode}</CardTitle>
+      <Card className="mb-4 overflow-hidden lg:sticky lg:top-3 lg:z-30">
+        <div aria-hidden="true" className="h-1.5 bg-gradient-to-r from-brand via-plum to-warm" />
+        <CardHeader className="gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-3">
+                <CardTitle className="font-mono text-xl text-plum">{detail.packageCode}</CardTitle>
                 <StatusBadge status={detail.status} />
               </div>
-              <p className="text-sm font-medium">{detail.title}</p>
-              <p className="text-[13px] text-muted-foreground">
-                {detail.agency.shortCode} — {detail.agency.name} · {formatDisplayDateRange(detail.startDate, detail.endDate)} (
-                {nights} night{nights === 1 ? "" : "s"} / {nights + 1} days) · Owner:{" "}
-                {detail.owner.name || detail.owner.email} · Validator:{" "}
-                {detail.validator ? detail.validator.name || detail.validator.email : "not assigned"}
-              </p>
+              <p className="font-display text-2xl leading-tight text-foreground">{detail.title}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {/* Version switch reads as a segmented control, not a row of
-                  primary buttons — the green accent stays off chrome. */}
-              <div className="flex items-center gap-0.5 rounded-lg bg-muted p-1">
+              {/* Version switch reads as a segmented control, not a row of primary buttons. */}
+              <div className="flex items-center gap-0.5 rounded-xl bg-muted p-1">
                 {detail.versions.map((v) => (
                   <button
                     key={v.id}
@@ -248,8 +244,8 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
                     onClick={() => setSelectedVersionId(v.id)}
                     className={
                       v.id === version.id
-                        ? "rounded-md bg-card px-3 py-1 text-[13px] font-medium text-foreground shadow-sm"
-                        : "rounded-md px-3 py-1 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        ? "rounded-lg bg-card px-3 py-1 text-[13px] font-medium text-foreground shadow-sm"
+                        : "rounded-lg px-3 py-1 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                     }
                   >
                     {versionLabel(v.versionNo)}
@@ -266,12 +262,26 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
               </Button>
             </div>
           </div>
+          <RequestProgress status={detail.status} />
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["Agency", `${detail.agency.shortCode} — ${detail.agency.name}`],
+              ["Dates", `${formatDisplayDateRange(detail.startDate, detail.endDate)} (${nights} night${nights === 1 ? "" : "s"} / ${nights + 1} days)`],
+              ["Owner", detail.owner.name || detail.owner.email],
+              ["Validator", detail.validator ? detail.validator.name || detail.validator.email : "Not assigned"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-border bg-muted/50 px-4 py-3">
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">{label}</dt>
+                <dd className="mt-1 font-medium text-foreground">{value}</dd>
+              </div>
+            ))}
+          </dl>
         </CardHeader>
         {compareOpen && (
           <CardContent>
             <div className="flex flex-wrap items-center gap-2">
               <Select value={compareA} onValueChange={setCompareA}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger aria-label="Compare version A" className="w-32">
                   <SelectValue placeholder="Version A" />
                 </SelectTrigger>
                 <SelectContent>
@@ -283,7 +293,7 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
                 </SelectContent>
               </Select>
               <Select value={compareB} onValueChange={setCompareB}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger aria-label="Compare version B" className="w-32">
                   <SelectValue placeholder="Version B" />
                 </SelectTrigger>
                 <SelectContent>
@@ -299,6 +309,8 @@ export default function RequestDetail({ requestId, role, userId, permissions }: 
           </CardContent>
         )}
       </Card>
+
+      <TemplateReviewNotice lines={version.serviceLines} failed={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("templateRules") === "failed"} requestId={detail.id} revision={detail.revision} onRetried={load} />
 
       <QuoteSummaryBar ctx={ctx} />
 

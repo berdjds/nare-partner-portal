@@ -45,6 +45,12 @@ import {
 import { calculate } from "@/lib/travel/engine";
 import { type PermissionKey } from "@/lib/permissions";
 import { buildEngineInputForVersion } from "@/lib/travel/resolve";
+import { templateDaysSchema } from "@/lib/travel/templates";
+import { canViewInternalFor } from "@/lib/travel/internal-access";
+import {
+  itemKey, itemsFromTemplateDays, lineEditInfo, mergeTemplateDays, planLines,
+  type Day as RecalcDay, type LineState as RecalcLineState,
+} from "@/lib/travel/recalc-plan";
 import { canonicalize, snapshotHash } from "@/lib/travel/snapshots";
 import { generatePackageCode } from "@/lib/travel/codes";
 import { getActivePolicy, getCompanyBranding, getFxMap, getTravelSettings } from "@/lib/travel/settings";
@@ -72,6 +78,8 @@ export class WorkflowError extends Error {
 export interface WorkflowActor {
   id: string;
   role: string;
+  /** PARTNER only: the one agency this actor may see. */
+  agencyId?: string | null;
   name?: string | null;
   email?: string | null;
   /**
@@ -187,6 +195,7 @@ export const createRequestSchema = z.object({
   roomPrefs: longString.nullish(),
   flightDetails: longString.nullish(),
   notes: longString.nullish(),
+  clientNotes: longString.nullish(),
 });
 export type CreateRequestInput = z.infer<typeof createRequestSchema>;
 
@@ -199,6 +208,7 @@ export const updateDraftSchema = z.object({
   roomPrefs: longString.nullish(),
   flightDetails: longString.nullish(),
   notes: longString.nullish(),
+  clientNotes: longString.nullish(),
   agencyRef: shortString.nullish(),
 });
 export type UpdateDraftInput = z.infer<typeof updateDraftSchema>;
@@ -515,7 +525,11 @@ async function validatorGroupIds(): Promise<string[]> {
   const settings = await getTravelSettings();
   try {
     const ids: unknown = JSON.parse(settings.validatorUserIds);
-    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+    const list = Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+    if (list.length === 0) return list;
+    const partners = await prisma.user.findMany({ where: { id: { in: list }, role: "PARTNER" }, select: { id: true } });
+    const banned = new Set(partners.map((p) => p.id));
+    return list.filter((id) => !banned.has(id));
   } catch {
     return [];
   }
@@ -569,6 +583,7 @@ async function createRequestOnce(
           roomPrefs: parsed.roomPrefs ?? null,
           flightDetails: parsed.flightDetails ?? null,
           notes: parsed.notes ?? null,
+          clientNotes: parsed.clientNotes ?? null,
           status: "DRAFT",
         },
       }),
@@ -633,6 +648,7 @@ export async function updateDraft(
   if (parsed.roomPrefs !== undefined) data.roomPrefs = parsed.roomPrefs;
   if (parsed.flightDetails !== undefined) data.flightDetails = parsed.flightDetails;
   if (parsed.notes !== undefined) data.notes = parsed.notes;
+  if (parsed.clientNotes !== undefined) data.clientNotes = parsed.clientNotes;
   if (parsed.agencyRef !== undefined) data.agencyRef = parsed.agencyRef;
 
   await tx(async (tx) => {
@@ -671,6 +687,9 @@ export async function saveVersionContent(
   const version = await loadVersion(versionId);
   assertOwnerOrAdmin(actor, version.request.ownerId);
   assertTransition(version.status, ["DRAFT", "CHANGES_REQUESTED"], "edit content of");
+  // An editor without internal access never receives supplier-side values authored by others
+  // (see the request-detail GET); the values they could not see are carried over on save.
+  const seesCosts = await canViewInternalFor(actor, version.requestId);
 
   const result = await tx(async (tx) => {
     const scenarioIdByKey = new Map<string, string>();
@@ -743,8 +762,17 @@ export async function saveVersionContent(
           }
         }
       }
+      // The editor round-trips only the fields it knows. Template provenance (Phase 2) is
+      // restored onto the recreated line that matches the old one by (product, date, vehicle).
+      const provenance = await tx.serviceLine.findMany({ where: { versionId } });
       await tx.serviceLine.deleteMany({ where: { versionId } });
       for (const line of parsed.serviceLines) {
+        const prevIdx = line.serviceProductId
+          ? provenance.findIndex(
+              (p) => p.serviceProductId === line.serviceProductId && p.date === (line.date ?? null) && (p.vehicleTypeId ?? null) === (line.vehicleTypeId ?? null),
+            )
+          : provenance.findIndex((p) => !p.serviceProductId && p.label === line.label && p.category === line.category && p.basis === line.basis);
+        const prev = prevIdx >= 0 ? provenance.splice(prevIdx, 1)[0] : null;
         const scenarioId = line.scenarioKey ? scenarioIdByKey.get(line.scenarioKey) ?? null : null;
         if (line.scenarioKey && !scenarioId) {
           throw new WorkflowError(
@@ -760,19 +788,29 @@ export async function saveVersionContent(
             label: line.label,
             basis: line.basis,
             currency: line.currency,
-            unitRate: line.unitRate ?? null,
+            // Values the editor was not shown (supplier side, authored by someone else) survive the save.
+            unitRate: line.unitRate ?? (!seesCosts && prev?.serviceProductId ? prev.unitRate : null),
             quantity: line.quantity,
             participants: line.participants ?? null,
             capacity: line.capacity ?? null,
             includedElsewhere: line.includedElsewhere,
             isStaffCost: line.isStaffCost,
-            overrideRate: line.overrideRate ?? null,
-            overrideReason: line.overrideRate != null ? line.overrideReason ?? null : null,
-            overrideById: line.overrideRate != null ? actor.id : null,
-            sourceRef: line.sourceRef ?? null,
+            ...(line.overrideRate == null && !seesCosts && prev?.overrideRate != null && prev.overrideById && prev.overrideById !== actor.id
+              ? { overrideRate: prev.overrideRate, overrideReason: prev.overrideReason, overrideById: prev.overrideById }
+              : {
+                  overrideRate: line.overrideRate ?? null,
+                  overrideReason: line.overrideRate != null ? line.overrideReason ?? null : null,
+                  overrideById: line.overrideRate != null ? actor.id : null,
+                }),
+            sourceRef: line.sourceRef ?? (!seesCosts && prev?.serviceProductId ? prev.sourceRef ?? null : null),
             serviceProductId: line.serviceProductId ?? null,
             date: line.date ?? null,
             vehicleTypeId: line.vehicleTypeId ?? null,
+            origin: prev?.origin ?? null,
+            templateKey: prev?.templateKey ?? null,
+            derivedJson: prev?.derivedJson ?? null,
+            ruleInactive: prev?.ruleInactive ?? false,
+            reviewFlag: prev?.reviewFlag ?? null,
           },
         });
       }
@@ -980,6 +1018,10 @@ export async function submit(actor: WorkflowActor, requestId: string) {
     where: { versionId: version.id },
     orderBy: { dayOffset: "asc" },
   });
+  const inactiveSlots = new Set(
+    (await prisma.serviceLine.findMany({ where: { versionId: version.id, ruleInactive: true, serviceProductId: { not: null } }, select: { serviceProductId: true, date: true, vehicleTypeId: true } }))
+      .map((l) => `${l.serviceProductId}|${l.date ?? ""}|${l.vehicleTypeId ?? ""}`),
+  );
   // Company branding is frozen the same way: editing TravelSettings later must
   // not retroactively restyle an issued document.
   const branding = await getCompanyBranding();
@@ -1030,7 +1072,10 @@ export async function submit(actor: WorkflowActor, requestId: string) {
       date: day.date,
       narrative: day.narrative,
       overnightCity: day.overnightCity,
-      services: normalizeDayServices(day.services),
+      // A service a template rule marked inactive (nobody eligible) is not promised to the client.
+      services: normalizeDayServices(day.services).filter(
+        (svc) => !inactiveSlots.has(`${svc.serviceProductId ?? ""}|${day.date}|${svc.vehicleTypeId ?? ""}`) || !svc.serviceProductId,
+      ),
     })),
     branding,
   });
@@ -1621,7 +1666,12 @@ async function assertAssignableValidator(targetId: string): Promise<User> {
     throw new WorkflowError("VALIDATOR_INVALID", `user ${targetId} does not exist or is inactive`, 400);
   }
   // Any active user may be assigned as validator (v0.10.0) — assignment is
-  // what grants review rights, not the VALIDATOR role.
+  // what grants review rights, not the VALIDATOR role. Exception: an agency
+  // (PARTNER) account is never a validator: it could not act (the guard rejects
+  // it) and would be sent other agencies' notifications and documents.
+  if (target.role === "PARTNER") {
+    throw new WorkflowError("VALIDATOR_INVALID", "partner accounts cannot be validators", 400);
+  }
   return target;
 }
 
@@ -1806,6 +1856,11 @@ export async function createRevision(actor: WorkflowActor, requestId: string) {
           serviceProductId: line.serviceProductId,
           date: line.date,
           vehicleTypeId: line.vehicleTypeId,
+          origin: line.origin,
+          templateKey: line.templateKey,
+          derivedJson: line.derivedJson,
+          ruleInactive: line.ruleInactive,
+          reviewFlag: line.reviewFlag,
         },
       });
     }
@@ -1821,4 +1876,167 @@ export async function createRevision(actor: WorkflowActor, requestId: string) {
     `Created ${versionLabel(newVersion.versionNo)} for ${request.packageCode} from ${versionLabel(latest.versionNo)}`,
   );
   return newVersion;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: deterministic recalculation from the template (B2B cycle 1)
+// ---------------------------------------------------------------------------
+
+export const recalculateSchema = z.object({
+  /** Optimistic lock on TravelRequest.revision, exactly like updateDraft/saveVersionContent. */
+  expectedRevision: z.number().int().min(0),
+  /** Switch the version to another template version; omitted = the version's current one. */
+  templateVersionId: z.string().min(1).max(200).optional(),
+});
+export type RecalculateInput = z.infer<typeof recalculateSchema>;
+
+export interface RecalculationResult {
+  revision: number;
+  templateVersionId: string;
+  changed: boolean;
+  daysChanged: boolean;
+  linesUpdated: number;
+  governedLines: number;
+  conflicts: Array<{ key: string; label: string; code: string; detail: string }>;
+}
+
+/**
+ * Re-derives the template-governed part of the latest (editable) version from
+ * the request's current travellers and dates. Server-authoritative, idempotent
+ * (a second call with unchanged inputs writes nothing and keeps the revision),
+ * audited, and conflict-aware: manual edits are kept and reported, never
+ * overwritten. Prices are not touched here; they come from the engine.
+ */
+export async function recalculateFromTemplate(actor: WorkflowActor, requestId: string, input: RecalculateInput): Promise<RecalculationResult> {
+  const parsed = recalculateSchema.parse(input);
+  const request = await loadRequest(requestId);
+  assertOwnerOrAdmin(actor, request.ownerId);
+  const version = await loadLatestVersion(requestId);
+  if (!version) throw new WorkflowError("VERSION_NOT_FOUND", "request has no versions", 404);
+  assertTransition(version.status, ["DRAFT", "CHANGES_REQUESTED"], "recalculate");
+  if (request.revision !== parsed.expectedRevision) {
+    throw new WorkflowError("CONFLICT", `revision mismatch: expected ${parsed.expectedRevision}, request was modified concurrently`, 409);
+  }
+
+  const targetId = parsed.templateVersionId ?? version.templateVersionId;
+  if (!targetId) throw new WorkflowError("NO_TEMPLATE", "this version was not built from a template", 400);
+  const [target, previous] = await Promise.all([
+    prisma.templateVersion.findUnique({ where: { id: targetId } }),
+    version.templateVersionId && version.templateVersionId !== targetId
+      ? prisma.templateVersion.findUnique({ where: { id: version.templateVersionId } })
+      : Promise.resolve(null),
+  ]);
+  if (!target) throw new WorkflowError("TEMPLATE_NOT_FOUND", "template version not found", 404);
+  if (target.status !== "ACTIVE" && target.id !== version.templateVersionId) {
+    throw new WorkflowError("TEMPLATE_ARCHIVED", "archived template versions cannot be selected", 400);
+  }
+  const parseDays = (raw: string) => {
+    try { return templateDaysSchema.parse(JSON.parse(raw)); }
+    catch { throw new WorkflowError("TEMPLATE_CONTENT_INVALID", "template content is not valid", 400); }
+  };
+  const newTemplateDays = parseDays(target.daysJson);
+  const newItems = itemsFromTemplateDays(newTemplateDays);
+  const prevItems = previous
+    ? itemsFromTemplateDays(parseDays(previous.daysJson))
+    : version.templateVersionId === target.id ? newItems : null;
+
+  const travelers = JSON.parse(request.travelers) as TravelerSetup;
+
+  // ---- current content
+  const dayRows = await prisma.itineraryDay.findMany({ where: { versionId: version.id }, orderBy: { dayOffset: "asc" } });
+  const currentDays: RecalcDay[] = dayRows.map((d) => ({
+    dayOffset: d.dayOffset, date: d.date, narrative: d.narrative, overnightCity: d.overnightCity,
+    services: d.services ? (JSON.parse(d.services) as RecalcDay["services"]) : [],
+  }));
+  const dayOffsetByDate = new Map(currentDays.map((d) => [d.date, d.dayOffset]));
+  const lineRows = await prisma.serviceLine.findMany({ where: { versionId: version.id, scenarioId: null, serviceProductId: { not: null } } });
+  const toState = (l: (typeof lineRows)[number]): RecalcLineState => ({
+    id: l.id, label: l.label, serviceProductId: l.serviceProductId, date: l.date, vehicleTypeId: l.vehicleTypeId,
+    participants: l.participants, ruleInactive: l.ruleInactive, origin: l.origin, templateKey: l.templateKey,
+    derivedJson: l.derivedJson, reviewFlag: l.reviewFlag, overrideRate: l.overrideRate, unitRate: l.unitRate,
+  });
+  const lineEdits = new Map<string, { edited: boolean }>();
+  for (const l of lineRows) {
+    const off = l.date ? dayOffsetByDate.get(l.date) : undefined;
+    if (off === undefined || !l.serviceProductId) continue;
+    const info = lineEditInfo(toState(l));
+    lineEdits.set(itemKey(off, l.serviceProductId, l.vehicleTypeId), { edited: info.edited || l.overrideRate != null || l.unitRate != null });
+  }
+
+  // ---- 1. days (re-dated, template items added/removed, manual items kept)
+  const merged = mergeTemplateDays({ currentDays, prevItems, newItems, newTemplateDays, startDate: request.startDate, lineEdits });
+  const sameDays = JSON.stringify(merged.days) === JSON.stringify(currentDays);
+  let revision = request.revision;
+  if (!sameDays) {
+    await saveVersionContent(actor, version.id, {
+      expectedRevision: revision,
+      itineraryDays: merged.days.map((d) => ({
+        dayOffset: d.dayOffset, date: d.date, narrative: d.narrative ?? null, overnightCity: d.overnightCity ?? null,
+        services: (d.services ?? []).map((s) => ({ serviceProductId: s.serviceProductId ?? null, label: s.label, details: s.details ?? null, vehicleTypeId: s.vehicleTypeId ?? null, quantity: s.quantity ?? null })),
+      })),
+    });
+    revision += 1;
+  }
+
+  // ---- 2. lines (participants / inactive / review flags from the rules)
+  const after = await prisma.serviceLine.findMany({ where: { versionId: version.id, scenarioId: null, serviceProductId: { not: null } } });
+  const plan = planLines({ items: newItems, lines: after.map(toState), travelers, startDate: request.startDate });
+  const switched = version.templateVersionId !== target.id;
+  const conflicts: RecalculationResult["conflicts"] = [...merged.conflicts, ...plan.conflicts];
+
+  // Cheap, honest checks on what rules cannot decide (owner decision O-ROOMS): flag, never edit.
+  const scenarios = await prisma.scenario.findMany({ where: { versionId: version.id }, include: { stays: true } });
+  for (const sc of scenarios) {
+    for (const st of sc.stays) {
+      if (st.checkIn < request.startDate || st.checkOut > request.endDate) {
+        conflicts.push({ key: `stay:${st.id}`, label: st.hotelName, code: "STAYS_NEED_REVIEW", detail: "stay dates fall outside the request dates" });
+      }
+      try {
+        const allocs = JSON.parse(st.allocations) as Array<{ adults: number; children: number }>;
+        const a = allocs.reduce((n, x) => n + (x.adults ?? 0), 0);
+        const c = allocs.reduce((n, x) => n + (x.children ?? 0), 0);
+        if (a !== travelers.adults || c !== travelers.children) {
+          conflicts.push({ key: `stay:${st.id}`, label: st.hotelName, code: "ROOMS_NEED_REVIEW", detail: "room allocation does not match the traveller counts" });
+        }
+      } catch { /* malformed allocations are reported by the engine */ }
+    }
+  }
+
+  const changed = !sameDays || plan.updates.length > 0 || switched;
+  if (plan.updates.length > 0 || switched) {
+    try { await tx(async (t) => {
+      const lock = await t.travelRequest.updateMany({ where: { id: requestId, revision }, data: { revision: { increment: 1 } } });
+      if (lock.count === 0) throw new WorkflowError("CONFLICT", "request was modified concurrently", 409);
+      // submit()/review() do not bump the revision, so the version's own status is the second lock:
+      // a version that left DRAFT/CHANGES_REQUESTED meanwhile (submitted, frozen snapshot) is never written.
+      const stillEditable = await t.quoteVersion.updateMany({
+        where: { id: version.id, status: { in: ["DRAFT", "CHANGES_REQUESTED"] } },
+        data: { status: version.status },
+      });
+      if (stillEditable.count === 0) throw new WorkflowError("CONFLICT", "the version is no longer editable", 409);
+      for (const u of plan.updates) await t.serviceLine.update({ where: { id: u.id }, data: u.data });
+      if (switched) await t.quoteVersion.update({ where: { id: version.id }, data: { templateVersionId: target.id } });
+      await t.calculationSnapshot.deleteMany({ where: { versionId: version.id } });
+    }); } catch (err) {
+      if (!sameDays) {
+        // Step 1 (re-dating) is already committed; leave a trace so the partial result is auditable.
+        await writeAuditLog("travel.recalc", actor.id, JSON.stringify({ requestId, versionId: version.id, partial: true, daysChanged: true, revisionTo: revision, error: err instanceof WorkflowError ? err.code : "ERROR" }));
+      }
+      throw err;
+    }
+    revision += 1;
+  }
+
+  if (changed) {
+    await writeAuditLog(
+      "travel.recalc",
+      actor.id,
+      JSON.stringify({
+        requestId, versionId: version.id, templateVersionId: target.id, switchedFrom: switched ? version.templateVersionId : null,
+        revisionFrom: request.revision, revisionTo: revision, daysChanged: !sameDays, linesUpdated: plan.updates.length,
+        conflicts: conflicts.map((c) => c.code),
+      }),
+    );
+  }
+  return { revision, templateVersionId: target.id, changed, daysChanged: !sameDays, linesUpdated: plan.updates.length, governedLines: plan.governed, conflicts };
 }

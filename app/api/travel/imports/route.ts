@@ -1,3 +1,4 @@
+import { canViewInternal } from "@/lib/travel/redact";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTravelActor, travelError, unauthorized } from "../guard";
@@ -6,6 +7,8 @@ import { getTravelActor, travelError, unauthorized } from "../guard";
 export async function GET() {
   const actor = await getTravelActor();
   if (!actor) return unauthorized();
+  // Workbook import rows carry supplier costs: internal permission only (D3).
+  if (!canViewInternal(actor)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
     const batches = await prisma.importBatch.findMany({

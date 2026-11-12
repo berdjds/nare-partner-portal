@@ -154,7 +154,7 @@ export default function TemplatesList({ role }: TemplatesListProps) {
                       <TableCell>
                         {v.legacyMarkup ?? "—"}
                         {v.legacyMarkup && (
-                          <span className="ml-1 text-xs text-muted-foreground">(legacy markup, informational only)</span>
+                          <span className="ms-1 text-xs text-muted-foreground">(legacy markup, informational only)</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -250,7 +250,7 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label>Code</Label>
-              <Input
+              <Input aria-label="Code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="ARM-S26-0405A"
@@ -260,7 +260,7 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
             </div>
             <div>
               <Label>Nights</Label>
-              <Input
+              <Input aria-label="Nights"
                 type="number"
                 min={1}
                 max={59}
@@ -271,7 +271,7 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
             </div>
             <div className="sm:col-span-2">
               <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Armenia highlights" required />
+              <Input aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Armenia highlights" required />
             </div>
           </div>
           <DialogFooter>
@@ -409,7 +409,7 @@ function InstantiateDialog({
             <div>
               <Label>Template version</Label>
               <Select value={versionId} onValueChange={setVersionId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Template version">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -424,7 +424,7 @@ function InstantiateDialog({
             <div>
               <Label>Agency</Label>
               <Select value={form.agencyId} onValueChange={(v) => setForm({ ...form, agencyId: v })}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Agency">
                   <SelectValue placeholder="Select agency" />
                 </SelectTrigger>
                 <SelectContent>
@@ -438,7 +438,7 @@ function InstantiateDialog({
             </div>
             <div className="sm:col-span-2">
               <Label>Title</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+              <Input aria-label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
             </div>
             <div>
               <Label>Start date</Label>
@@ -450,7 +450,7 @@ function InstantiateDialog({
             </div>
             <div>
               <Label>Adults</Label>
-              <Input
+              <Input aria-label="Adults"
                 type="number"
                 min={0}
                 value={form.adults}
@@ -459,7 +459,7 @@ function InstantiateDialog({
             </div>
             <div>
               <Label>Paying travelers</Label>
-              <Input
+              <Input aria-label="Paying travelers"
                 type="number"
                 min={0}
                 value={form.paying}
@@ -469,7 +469,7 @@ function InstantiateDialog({
           </div>
           <div>
             <Label>Notes</Label>
-            <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <Textarea aria-label="Notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={saving || !form.agencyId || !form.startDate || !form.endDate}>
@@ -534,7 +534,7 @@ function BatchDialog({
           <div>
             <Label>Version</Label>
             <Select value={versionId} onValueChange={setVersionId}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger aria-label="Version" className="w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -552,7 +552,7 @@ function BatchDialog({
           </div>
           <div>
             <Label>Pax bands</Label>
-            <Input value={bands} onChange={(e) => setBands(e.target.value)} placeholder="2,4,6" />
+            <Input aria-label="Pax bands" value={bands} onChange={(e) => setBands(e.target.value)} placeholder="2,4,6" />
           </div>
           <Button type="submit" disabled={busy || !startDate}>
             {busy ? "Running..." : "Run"}
@@ -565,8 +565,8 @@ function BatchDialog({
                 <TableRow>
                   <TableHead>Pax</TableHead>
                   <TableHead>Valid</TableHead>
-                  <TableHead className="text-right">Sell</TableHead>
-                  <TableHead className="text-right">Per person</TableHead>
+                  <TableHead className="text-end">Sell</TableHead>
+                  <TableHead className="text-end">Per person</TableHead>
                   <TableHead>Issues</TableHead>
                 </TableRow>
               </TableHeader>
@@ -577,8 +577,8 @@ function BatchDialog({
                     <TableCell>
                       <StateBadge value={r.valid ? "READY" : "FAILED"} />
                     </TableCell>
-                    <TableCell className="text-right">{r.sell ? money(r.sell, quoteCurrency) : "—"}</TableCell>
-                    <TableCell className="text-right">{r.perPayingPerson ? money(r.perPayingPerson, quoteCurrency) : "—"}</TableCell>
+                    <TableCell className="text-end">{r.sell ? money(r.sell, quoteCurrency) : "—"}</TableCell>
+                    <TableCell className="text-end">{r.perPayingPerson ? money(r.perPayingPerson, quoteCurrency) : "—"}</TableCell>
                     <TableCell className="text-xs">
                       {r.issues.map((i, j) => (
                         <div key={j}>

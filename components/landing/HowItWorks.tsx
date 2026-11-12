@@ -1,29 +1,28 @@
-import { HOW_IT_WORKS_STEPS } from "@/lib/portal-content";
+"use client";
 
+import { useT } from "@/lib/i18n/react";
+
+const STEPS = [
+  ["landing.step1.title", "landing.step1.body"],
+  ["landing.step2.title", "landing.step2.body"],
+  ["landing.step3.title", "landing.step3.body"],
+  ["landing.step4.title", "landing.step4.body"],
+] as const;
+
+/** The four-step process on staging's charcoal section (glow, hairline-divided cells); an ordered list so the sequence is announced. */
 export function HowItWorks() {
+  const t = useT();
   return (
-    <section className="bg-background">
-      <div className="mx-auto max-w-4xl px-6 py-20 sm:py-24">
-        <h2 className="text-center text-3xl font-semibold tracking-tight text-foreground">
-          How it works
-        </h2>
-        <ol className="mt-12 space-y-10">
-          {HOW_IT_WORKS_STEPS.map((step, index) => (
-            <li key={step.title} className="flex gap-6">
-              <span
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground"
-              >
-                {index + 1}
-              </span>
-              <div>
-                <h3 className="text-xl font-semibold text-foreground">
-                  {step.title}
-                </h3>
-                <p className="mt-2 text-base leading-relaxed text-muted-foreground">
-                  {step.body}
-                </p>
-              </div>
+    <section id="how-it-works" aria-labelledby="how-heading" className="relative overflow-hidden bg-footer text-white">
+      <div aria-hidden="true" className="pointer-events-none absolute -top-40 -end-24 h-[32rem] w-[32rem] rounded-full bg-brand/25 blur-[120px]" />
+      <div className="relative mx-auto max-w-7xl px-6 section-y">
+        <h2 id="how-heading" className="font-display max-w-xl text-balance text-[clamp(2.1rem,4.6vw,4rem)] font-semibold leading-[1.05]">{t("landing.title.steps")}</h2>
+        <ol className="mt-10 grid gap-px overflow-hidden rounded-[2rem] bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+          {STEPS.map(([title, body], i) => (
+            <li key={title} className="bg-footer p-7 transition-colors duration-300 hover:bg-white/[0.04] md:p-8">
+              <span aria-hidden="true" className="font-display text-5xl font-semibold leading-none text-warm">{i + 1}</span>
+              <p className="font-display mt-6 text-2xl font-semibold">{t(title)}</p>
+              <p className="mt-3 text-base leading-relaxed text-white/70">{t(body)}</p>
             </li>
           ))}
         </ol>

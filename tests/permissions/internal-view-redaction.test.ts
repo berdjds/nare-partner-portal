@@ -287,17 +287,33 @@ describe("stored service-line/stay internals (int-lock: unitRate, overrides, sou
     const line = body.versions[0].serviceLines[0];
     expect(line.label).toBe("Museum tickets"); // sell-side display fields stay
     for (const key of INTERNAL_LINE_KEYS) expect(line).not.toHaveProperty(key);
-    expect(body.versions[0].scenarios[0].stays[0].rateOverrides).toBeNull();
+    // Owner decision 3: the assigned (owning) advisor still sees the stay rate overrides, nothing else internal.
+    expect(JSON.parse(body.versions[0].scenarios[0].stays[0].rateOverrides).DBL.rate).toBe("90");
 
-    // No internal rate, note or provenance survives anywhere in the payload.
     const serialized = JSON.stringify(body);
     expect(serialized).not.toContain("Group discount negotiated with the supplier");
-    expect(serialized).not.toContain("Negotiated corporate rate");
     expect(serialized).not.toContain("Tour Calculator!C58");
   });
 
-  it("ungranted assigned validator (fx.validator2) gets them stripped", async () => {
+  it("rateOverrides are advisor-owner only: an ungranted validator, and an advisor who does not own the request, never get them", async () => {
     const { request } = await submittedRequestWithInternalFields(fx.advisor);
+    await prisma.userPermission.upsert({ where: { userId_key: { userId: fx.validator2.id, key: "travel.internal.view" } }, update: { allowed: false }, create: { userId: fx.validator2.id, key: "travel.internal.view", allowed: false } });
+    session(fx.validator2);
+    const asValidator = await getDetail(request.id);
+    expect(asValidator.status).toBe(200);
+    expect(JSON.stringify(await asValidator.json())).not.toContain("Negotiated corporate rate");
+    await prisma.userPermission.deleteMany({ where: { userId: fx.validator2.id, key: "travel.internal.view" } });
+
+    const other = await prisma.user.create({ data: { email: "other-advisor@t.io", name: "Other", password: "x", role: "ADVISOR" } });
+    session(other);
+    const asOther = await getDetail(request.id);
+    expect(asOther.status).toBe(404);
+    expect(JSON.stringify(await asOther.json())).not.toContain("Negotiated corporate rate");
+  });
+
+  it("an assigned validator whose internal key is explicitly DENIED (fx.validator2) gets them stripped", async () => {
+    const { request } = await submittedRequestWithInternalFields(fx.advisor);
+    await prisma.userPermission.create({ data: { userId: fx.validator2.id, key: "travel.internal.view", allowed: false } });
     session(fx.validator2);
     const res = await getDetail(request.id);
     expect(res.status).toBe(200);

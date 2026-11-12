@@ -13,23 +13,26 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import { BrandMark } from "@/components/app/BrandMark";
-import { PARTNER_APPLY, PRODUCT_NAME } from "@/lib/portal-content";
+import { PRODUCT_NAME } from "@/lib/portal-content";
+import { useT } from "@/lib/i18n/react";
+import type { MessageKey } from "@/lib/i18n/messages";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 export type PublicPageKey = "home" | "apply" | "login";
 
-const NAV_LINKS: readonly { key: PublicPageKey; href: string; label: string }[] = [
-  { key: "home", href: "/", label: "Home" },
-  { key: "apply", href: "/partners/apply", label: PARTNER_APPLY.linkLabel },
-  { key: "login", href: "/login", label: "Sign in" },
+const NAV_LINKS: readonly { key: PublicPageKey; href: string; label: MessageKey }[] = [
+  { key: "home", href: "/", label: "nav.home" },
+  { key: "apply", href: "/partners/apply", label: "nav.apply" },
+  { key: "login", href: "/login", label: "common.signIn" },
 ];
 
 export function PublicHeader({ active }: { active?: PublicPageKey }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   return (
     <header
-      className="border-b border-border bg-background"
+      className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur"
       onKeyDown={(event) => {
         // Escape closes the mobile menu from anywhere inside the header.
         if (event.key === "Escape") {
@@ -37,23 +40,21 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
         }
       }}
     >
-      <div className="mx-auto max-w-5xl px-6 py-4 sm:flex sm:items-center sm:justify-between sm:gap-6">
+      <div className="mx-auto max-w-7xl px-6 py-3 sm:flex sm:items-center sm:justify-between sm:gap-6">
         <div className="flex items-center justify-between gap-3">
-          <Link
-            href="/"
-            className="flex min-w-0 items-center gap-2.5 text-[13px] font-bold uppercase tracking-[0.08em] text-foreground min-[400px]:text-sm min-[400px]:tracking-[0.2em] sm:text-lg"
-          >
-            <BrandMark markOnly />
-            <span className="min-w-0 truncate">{PRODUCT_NAME}</span>
+          {/* The one brand lockup on public pages: the approved script logo from staging.nare.am. */}
+          <Link href="/" className="flex shrink-0 items-center" aria-label={PRODUCT_NAME}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/nare-logo-header.webp" alt={PRODUCT_NAME} width={118} height={56} className="h-12 w-auto sm:h-14" />
           </Link>
 
           <button
             type="button"
             aria-expanded={open}
             aria-controls="public-header-nav"
-            aria-label={open ? "Close menu" : "Open menu"}
+            aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
             onClick={() => setOpen((visible) => !visible)}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted sm:hidden"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-foreground hover:bg-muted sm:hidden"
           >
             {open ? (
               <X className="h-5 w-5" aria-hidden="true" />
@@ -65,10 +66,10 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
 
         <nav
           id="public-header-nav"
-          aria-label="Primary"
+          aria-label={t("nav.primary")}
           className={`${
             open ? "flex" : "hidden"
-          } mt-4 w-full flex-col gap-4 text-sm font-medium sm:mt-0 sm:flex sm:w-auto sm:flex-row sm:items-center sm:gap-6`}
+          } mt-4 w-full flex-col gap-4 text-[15px] font-medium sm:mt-0 sm:flex sm:w-auto sm:flex-row sm:items-center sm:gap-6`}
         >
           {NAV_LINKS.map((link) => (
             <Link
@@ -76,14 +77,17 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
               href={link.href}
               aria-current={active === link.key ? "page" : undefined}
               className={
-                active === link.key
-                  ? "text-primary underline underline-offset-4"
-                  : "text-muted-foreground hover:text-foreground"
+                link.key === "login"
+                  ? "inline-flex h-10 items-center justify-center rounded-xl bg-primary px-5 text-primary-foreground shadow-sm transition hover:bg-primary/90"
+                  : active === link.key
+                    ? "text-brand underline decoration-2 underline-offset-8"
+                    : "text-muted-foreground transition-colors hover:text-plum"
               }
             >
-              {link.label}
+              {t(link.label)}
             </Link>
           ))}
+          <LanguageSwitcher />
         </nav>
       </div>
     </header>

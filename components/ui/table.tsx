@@ -1,12 +1,20 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/react";
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
+type TableProps = React.HTMLAttributes<HTMLTableElement> & { regionLabel?: string };
+// The scroll wrapper is a keyboard-focusable named region (WCAG 2.1.1); callers should pass a specific regionLabel.
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, regionLabel, ...props }, ref) => {
+    const t = useT();
+    return (
+    <div className="relative w-full overflow-auto" tabIndex={0} role="region" aria-label={regionLabel ?? t("table.region")}>
       <table ref={ref} className={cn("w-full caption-bottom text-[13px] [font-variant-numeric:tabular-nums]", className)} {...props} />
     </div>
-  )
+    );
+  }
 );
 Table.displayName = "Table";
 
@@ -45,7 +53,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
     <th
       ref={ref}
       className={cn(
-        "h-9 px-3 text-left align-middle text-xs font-medium uppercase tracking-wider text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "h-9 px-3 text-start align-middle text-xs font-medium uppercase tracking-wider text-muted-foreground [&:has([role=checkbox])]:pe-0",
         className
       )}
       {...props}
@@ -56,7 +64,7 @@ TableHead.displayName = "TableHead";
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
-    <td ref={ref} className={cn("px-3 py-2.5 align-middle [&:has([role=checkbox])]:pr-0", className)} {...props} />
+    <td ref={ref} className={cn("px-3 py-2.5 align-middle [&:has([role=checkbox])]:pe-0", className)} {...props} />
   )
 );
 TableCell.displayName = "TableCell";

@@ -2,19 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { unlink } from "node:fs/promises";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { ROLE_ADMIN, ROLE_ADVISOR, ROLE_VALIDATOR } from "@/lib/travel/contracts";
+import { ROLE_ADMIN, ROLE_ADVISOR, ROLE_PARTNER, ROLE_VALIDATOR } from "@/lib/travel/contracts";
+import { canViewInternalFor } from "@/lib/travel/internal-access";
+import { partnerRequestDetail } from "@/lib/travel/partner-view";
 import type { EngineInput, ScenarioResult } from "@/lib/travel/contracts";
 import {
-  canViewInternal,
   publicDocumentView,
   redactScenarioResultJson,
   redactServiceLine,
   redactStay,
 } from "@/lib/travel/redact";
 import { buildTraceRows, type TraceRow } from "@/lib/travel/trace-table";
-import { updateDraft, updateDraftSchema } from "@/lib/travel/workflow";
+import { recalculateFromTemplate, updateDraft, updateDraftSchema, WorkflowError } from "@/lib/travel/workflow";
 import { writeAuditLog } from "@/lib/audit";
-import { getTravelActor, travelError, unauthorized } from "../../guard";
+import { getTravelActor, getTravelOrPartnerActor, travelError, unauthorized } from "../../guard";
 
 const patchBodySchema = z.object({
   expectedRevision: z.number().int().min(0),
@@ -29,10 +30,14 @@ const patchBodySchema = z.object({
 // (int-lock; D2: admin-only preset until the permissions migration).
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const actor = await getTravelActor();
+  const actor = await getTravelOrPartnerActor();
   if (!actor) return unauthorized();
 
   try {
+    if (actor.role === ROLE_PARTNER) {
+      const view = await partnerRequestDetail(actor.agencyId as string, id);
+      return view ? NextResponse.json(view) : NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const request = await prisma.travelRequest.findUnique({
       where: { id: id },
       include: {
@@ -88,7 +93,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // travel.internal.view permission, not on role or ownership (D2: only
     // ADMIN's preset carries the key; owners/validators need an explicit
     // UserPermission grant).
-    const redactResults = !canViewInternal(actor);
+    const redactResults = !(await canViewInternalFor(actor, request.id));
 
     // Fallback paying-pax for trace rows when a frozen scenario input lacks
     // its own traveler counts (mirrors the PDF renderer's request-level fallback).
@@ -145,11 +150,28 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           (actor.id === request.ownerId || actor.role === ROLE_ADMIN) &&
           ["DRAFT", "CHANGES_REQUESTED"].includes(v.status);
         const redactCostFields = redactResults && !versionEditable;
+        // Owner decision 3: the advisor assigned to (owning) this request may see the stay rate overrides they
+        // negotiated, at any status. Nobody else without travel.internal.view does.
+        const ownsAsAdvisor = actor.role === ROLE_ADVISOR && actor.id === request.ownerId;
         return {
           ...v,
           quoteCurrency,
           snapshot: snapshotPublic,
-          serviceLines: redactCostFields ? v.serviceLines.map(redactServiceLine) : v.serviceLines,
+          serviceLines: redactCostFields
+            ? v.serviceLines.map(redactServiceLine)
+            : redactResults
+              ? // Editable draft of an actor without internal access (advisor): keep what they entered themselves,
+                // hide supplier provenance, catalog-priced unit rates and overrides set by someone else.
+                v.serviceLines.map((l) => {
+                  const foreign = Boolean(l.overrideById) && l.overrideById !== actor.id;
+                  return {
+                    ...l,
+                    sourceRef: l.serviceProductId ? null : l.sourceRef,
+                    unitRate: l.serviceProductId ? null : l.unitRate,
+                    ...(foreign ? { overrideRate: null, overrideReason: null, overrideById: null } : {}),
+                  };
+                })
+              : v.serviceLines,
           scenarios: v.scenarios.map((sc) => {
             // traceRows (v0.15.0): the frozen calculation breakdown, rebuilt
             // from the snapshot's inputs + this scenario's frozen result —
@@ -173,7 +195,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             }
             return {
               ...sc,
-              stays: redactCostFields ? sc.stays.map(redactStay) : sc.stays,
+              stays: redactCostFields && !ownsAsAdvisor ? sc.stays.map(redactStay) : sc.stays,
               resultJson: redactResults ? redactScenarioResultJson(sc.resultJson) : sc.resultJson,
               traceRows,
             };
@@ -205,6 +227,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const updated = await updateDraft(actor, id, parsed.data.expectedRevision, parsed.data.patch);
+    // Phase 2: travellers or dates changed on a template-built version -> re-derive it now,
+    // on the server, so the client never has to remember to ask. A failure here never
+    // fails the save; it is reported next to the saved request.
+    const p = parsed.data.patch;
+    if ((p.travelers !== undefined || p.startDate !== undefined || p.endDate !== undefined) && updated) {
+      const latest = await prisma.quoteVersion.findFirst({ where: { requestId: id }, orderBy: { versionNo: "desc" }, select: { templateVersionId: true } });
+      if (latest?.templateVersionId) {
+        try {
+          const recalculation = await recalculateFromTemplate(actor, id, { expectedRevision: updated.revision });
+          const fresh = await prisma.travelRequest.findUnique({ where: { id } });
+          return NextResponse.json({ ...(fresh ?? updated), recalculation });
+        } catch (err) {
+          return NextResponse.json({ ...updated, recalculation: { error: err instanceof WorkflowError ? err.code : "RECALC_FAILED" } });
+        }
+      }
+    }
     return NextResponse.json(updated);
   } catch (err) {
     return travelError(err, "[API /travel/requests/[id]]");

@@ -1,50 +1,65 @@
+/* Fonts: the exact files staging.nare.am serves (Inter, Fraunces, Noto Sans/Serif Armenian; SIL Open Font Licence), self-hosted in
+   public/fonts (see public/fonts/SOURCES.md). Nothing is fetched from a font service. Variable weights 100-900. */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/inter-latin.woff2") format("woff2"); unicode-range: U+??,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+304,U+308,U+329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/inter-latin-ext.woff2") format("woff2"); unicode-range: U+100-2BA,U+2BD-2C5,U+2C7-2CC,U+2CE-2D7,U+2DD-2FF,U+304,U+308,U+329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/fraunces-latin.woff2") format("woff2"); unicode-range: U+??,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+304,U+308,U+329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/fraunces-latin-ext.woff2") format("woff2"); unicode-range: U+100-2BA,U+2BD-2C5,U+2C7-2CC,U+2CE-2D7,U+2DD-2FF,U+304,U+308,U+329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Noto Sans Armenian"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/noto-sans-armenian.woff2") format("woff2"); unicode-range: U+308,U+530-58F,U+2010,U+2024,U+25CC,U+FB13-FB17; }
+@font-face { font-family: "Noto Serif Armenian"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/noto-serif-armenian.woff2") format("woff2"); unicode-range: U+308,U+530-58F,U+2010,U+2024,U+25CC,U+FB13-FB17; }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /* Nare Travel and Tours brand (W4), taken from the Nare Travel and Tours
-     website repository (blue primary, warm orange secondary, lucide icons).
-     The whole palette lives in these CSS variables — a palette change touches
-     this file only. --brand is the exact brand blue (203 89% 53%) for decorative
-     accents; --primary (203 89% 35%) and --gradient-end (203 89% 38%) are
-     deepened blues of the same hue so white text and link text meet WCAG AA.
-     --warm is the brand orange, for rare highlights. Destructive keeps its own
-     red, visibly distinct from the blue. Badges, pills and status tints carry
-     their own hues (see the badge status map) so the accent stays rare. */
+  /* Nare Travel and Tours portal palette (redesign). Taken from the Nare logo and staging.nare.am: warm ivory
+     canvas, charcoal ink, pomegranate red (--brand, sampled from the logo) and aubergine (--plum), with a
+     bright blue reserved for actions (--primary, used by buttons, links and focus) and a restrained amber (--warm) for
+     small highlights. The whole palette lives in these CSS variables; components use tokens only.
+     Contrast (WCAG AA, checked in tests/ui/contrast.test.ts) is above 4.5:1 for every text pairing. */
   :root {
-    --background: 0 0% 96%;
-    --foreground: 0 0% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    --brand: 203 89% 53%; /* exact Nare brand blue */
-    --warm: 27 96% 61%; /* Nare brand orange */
-    --primary: 203 89% 35%; /* deepened brand blue, AA with white text */
+    --background: 38 40% 97%; /* ivory */
+    --foreground: 222 32% 11%; /* charcoal */
+    --card: 40 33% 99%;
+    --card-foreground: 222 32% 11%;
+    --popover: 40 33% 99%;
+    --popover-foreground: 222 32% 11%;
+    --brand: 358 68% 40%; /* pomegranate red from the logo */
+    --plum: 330 47% 20%; /* aubergine from the logo wordmark */
+    --footer: 222 32% 9%; /* staging.nare.am dark footer */
+    --warm: 35 88% 52%; /* restrained amber */
+    --primary: 214 90% 42%; /* bright blue: actions */
     --primary-foreground: 0 0% 100%;
-    --gradient-end: 203 89% 38%;
-    --secondary: 0 0% 93%;
-    --secondary-foreground: 0 0% 10%;
-    --muted: 0 0% 93%;
-    --muted-foreground: 0 0% 40%;
-    --accent: 203 87% 95%; /* light brand-blue tint */
-    --accent-foreground: 203 89% 28%;
-    --destructive: 0 84% 60%; /* alert red — distinct from brand blue */
+    --gradient-end: 330 47% 20%;
+    --secondary: 36 30% 92%;
+    --secondary-foreground: 222 32% 11%;
+    --muted: 36 28% 93%;
+    --muted-foreground: 220 12% 38%;
+    --accent: 214 90% 96%; /* light blue tint */
+    --accent-foreground: 214 80% 26%;
+    --destructive: 0 72% 45%; /* alert red, AA with white text */
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 88%;
-    --input: 0 0% 78%;
-    --ring: 203 89% 35%;
-    --radius: 0.75rem;
-    /* Sidebar: slim white rail; the active item is tinted in brand blue. */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 10%;
-    --sidebar-primary: 203 89% 35%;
+    --border: 34 22% 86%;
+    --input: 34 16% 72%;
+    --ring: 214 90% 42%;
+    --radius: 1rem;
+    --radius-card: 1.5rem; /* 24px cards */
+    --shadow-soft: 0 1px 2px hsl(222 32% 11% / 0.05), 0 14px 34px -16px hsl(330 47% 20% / 0.22);
+    --shadow-lift: 0 2px 4px hsl(222 32% 11% / 0.06), 0 30px 60px -24px hsl(330 47% 20% / 0.36);
+    /* Sidebar: warm white rail; the active item carries the pomegranate accent. */
+    --sidebar-background: 40 33% 99%;
+    --sidebar-foreground: 222 32% 11%;
+    --sidebar-primary: 358 68% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 203 87% 95%;
-    --sidebar-accent-foreground: 203 89% 28%;
-    --sidebar-border: 0 0% 93%;
-    --sidebar-ring: 203 89% 40%;
+    --sidebar-accent: 358 60% 96%;
+    --sidebar-accent-foreground: 358 68% 30%;
+    --sidebar-border: 34 22% 90%;
+    --sidebar-ring: 214 90% 42%;
+    /* Local/system font stacks only: nothing is fetched from a font service. */
+    --font-display-stack: "Fraunces", "Noto Serif Armenian", Georgia, "Times New Roman", serif; /* staging's display face */
+    --font-sans-stack: "Inter", "Noto Sans Armenian", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif; /* staging's body face */
+    --font-armenian-stack: "Inter", "Noto Sans Armenian", "Sylfaen", ui-sans-serif, system-ui, sans-serif;
+    --font-display-hy-stack: "Noto Serif Armenian", "Sylfaen", Georgia, serif; /* staging uses Noto Serif Armenian for Armenian headings */
   }
 }
 
@@ -65,3 +80,36 @@
     @apply accent-primary;
   }
 }
+
+/* Armenian text: put Noto Sans Armenian first so glyphs never fall back to tofu or a mismatched face. */
+html:lang(hy) body, html:lang(hy) button, html:lang(hy) input, html:lang(hy) textarea, html:lang(hy) select { font-family: var(--font-armenian-stack); }
+html:lang(hy) .font-display { font-family: var(--font-display-hy-stack); letter-spacing: 0; font-weight: 600; line-height: 1.12; }
+
+/* Editorial serif display type for headings and big numbers (local fonts). */
+.font-display { font-family: var(--font-display-stack); font-weight: 600; font-optical-sizing: auto; letter-spacing: -0.02em; }
+body { font-family: var(--font-sans-stack); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Motion is decoration: honour the OS setting everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* A calm focus ring that is visible on ivory, white and burgundy surfaces alike. */
+:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+
+/* Utilities mirrored from staging.nare.am (app/globals.css: .eyebrow, .section-y, .pill-btn*, .reveal-up). */
+@layer components {
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.18em] text-brand; }
+  [lang="ar"] .eyebrow, [lang="hy"] .eyebrow { letter-spacing: 0.04em; }
+  .section-y { @apply py-16 md:py-24; }
+  .pill-btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-sm font-semibold transition-all duration-300; }
+  .pill-btn-primary { @apply bg-primary text-primary-foreground hover:bg-primary/90; box-shadow: 0 10px 28px -10px hsl(var(--primary) / 0.7); }
+  .pill-btn-ghost { @apply border border-white/40 bg-white/10 text-white backdrop-blur-md hover:bg-white/20; }
+  .pill-btn-light { @apply bg-white text-plum hover:bg-white/90; }
+}
+/* Scroll reveal: transform and opacity only, only where the browser supports scroll timelines; off for reduced motion. */
+@supports (animation-timeline: view()) {
+  .reveal-up { animation: reveal-up linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
+  @keyframes reveal-up { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+}
+@media (prefers-reduced-motion: reduce) { .reveal-up { animation: none !important; } }

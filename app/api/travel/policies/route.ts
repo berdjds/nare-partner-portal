@@ -1,3 +1,4 @@
+import { canViewInternal, redactPolicy } from "@/lib/travel/redact";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -25,7 +26,7 @@ export async function GET() {
     const policies = await prisma.pricingPolicyVersion.findMany({
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json(policies);
+    return NextResponse.json(canViewInternal(actor) ? policies : policies.map(redactPolicy));
   } catch (err) {
     return travelError(err, "[API /travel/policies]");
   }
