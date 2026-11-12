@@ -45,7 +45,7 @@ export function PublicHeader({ active }: { active?: PublicPageKey }) {
           {/* The one brand lockup on public pages: the approved script logo from staging.nare.am. */}
           <Link href="/" className="flex shrink-0 items-center" aria-label={PRODUCT_NAME}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/nare-logo.webp" alt={PRODUCT_NAME} width={118} height={56} className="h-12 w-auto sm:h-14" />
+            <img src="/brand/nare-logo-header.webp" alt={PRODUCT_NAME} width={118} height={56} className="h-12 w-auto sm:h-14" />
           </Link>
 
           <button

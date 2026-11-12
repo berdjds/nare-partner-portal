@@ -26,6 +26,8 @@ export function Hero() {
         className="absolute inset-0 -z-20 h-full w-full object-cover object-[72%_30%] md:object-[60%_28%]"
       />
       <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-black/85 via-black/65 to-black/40 md:from-black/80 md:via-black/50 md:to-black/10 rtl:bg-gradient-to-l" />
+      {/* Soft floor so the stand signage at the photo's lower edge never reads as a second logo when the crop is tall (tablet, phone). */}
+      <div aria-hidden="true" className="absolute inset-x-0 bottom-0 -z-10 h-1/3 bg-gradient-to-t from-black/80 to-transparent lg:hidden" />
       <div className="mx-auto flex min-h-[32rem] max-w-7xl items-center px-6 py-14 sm:min-h-[36rem] lg:min-h-[40rem] lg:py-20">
         <div className="relative max-w-2xl rounded-2xl bg-gradient-to-r from-black/45 via-black/25 to-transparent p-6 sm:p-9 rtl:bg-gradient-to-l">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/85">{t("landing.eyebrow")}</p>

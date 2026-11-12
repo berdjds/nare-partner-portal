@@ -82,9 +82,9 @@ describe("photo-led public shell (corrective pass)", () => {
   });
   it("the logo appears only in the header: footer, hero and about show no brand mark", () => {
     for (const rel of ["components/public/PublicFooter.tsx", "components/landing/Hero.tsx", "components/landing/AboutNare.tsx", "components/landing/ContactBlock.tsx"]) {
-      expect(read(rel), rel).not.toMatch(/nare-(logo|icon)\.webp|BrandMark/);
+      expect(read(rel), rel).not.toMatch(/nare-(logo|logo-header|icon)\.webp|BrandMark/);
     }
-    expect(read("components/public/PublicHeader.tsx")).toContain("/brand/nare-logo.webp");
+    expect(read("components/public/PublicHeader.tsx")).toContain("/brand/nare-logo-header.webp");
   });
   it("the footer takes contact facts and social links from the admin-managed contact, not from hard-coded values", () => {
     const f = read("components/public/PublicFooter.tsx");

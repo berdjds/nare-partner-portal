@@ -192,7 +192,7 @@ describe("PublicHeader rendered (initial closed state)", () => {
 
     const images = html.match(/<img\b[^>]*>/g) ?? [];
     expect(images).toHaveLength(1);
-    expect(images[0]).toContain('src="/brand/nare-logo.webp"');
+    expect(images[0]).toContain('src="/brand/nare-logo-header.webp"');
     expect(images[0]).toContain(`alt="${PRODUCT_NAME}"`);
   });
 });
@@ -229,12 +229,12 @@ describe("PublicHeader menu toggle (source-level)", () => {
     expect(row, "the mobile header row").not.toBeNull();
     expect(row![1]).toContain("gap-3");
     expect(row![1]).not.toContain("flex-wrap");
-    expect(row![2]).toContain("/brand/nare-logo.webp");
+    expect(row![2]).toContain("/brand/nare-logo-header.webp");
     expect(row![2]).toContain("<button");
   });
 
   it("sizes the logo for phones and larger screens without wrapping", () => {
-    const logo = source.match(/<img[^>]*nare-logo\.webp[^>]*>/);
+    const logo = source.match(/<img[^>]*nare-logo-header\.webp[^>]*>/);
     expect(logo, "the logo image").not.toBeNull();
     expect(logo![0]).toContain("h-12");
     expect(logo![0]).toContain("sm:h-14");

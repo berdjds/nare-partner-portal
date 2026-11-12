@@ -14,3 +14,6 @@ Staging page-content references: `/api/content/heroSlides`, `/api/content/homeSe
 * armenian-business-travel-guide-1764608358014.webp (paramotor over a lake): it carries a third-party "Armenian Explorer" watermark, so it is not Nare's own imagery and is not used.
 * traditional-armenian-wedding-ceremony / armenian-business-travel-marriage-ceremony: identifiable private individuals.
 * beautiful-armenian-nature-tour: byte-identical to the Christmas market file on staging.
+
+## Header logo derivative (2026-11-12)
+`public/brand/nare-logo-header.webp` (235x112, ~7.6 KB) is a resize of the approved `public/brand/nare-logo.webp` (identical to staging's `Nare_logo_menu_web.webp`) for the header lockup at 2x density. Same artwork, no changes to colour or shape. The full-size file is kept as the source.

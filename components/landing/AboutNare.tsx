@@ -18,7 +18,7 @@ export function AboutNare() {
         <div className="relative lg:col-span-5 lg:pt-6">
           <div aria-hidden="true" className="absolute -start-4 -bottom-4 h-2/3 w-2/3 rounded-[2rem] bg-plum" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/photos/about-monastery.webp" alt={t("about.photo.alt")} width={669} height={446} loading="lazy" className="relative aspect-[5/4] w-full rounded-[2rem] object-cover shadow-[var(--shadow-lift)]" />
+          <img src="/brand/photos/about-monastery.webp" alt={t("about.photo.alt")} width={669} height={446} loading="lazy" className="relative aspect-[5/4] max-h-[26rem] w-full rounded-[2rem] object-cover shadow-[var(--shadow-lift)]" />
         </div>
         <div className="lg:col-span-7">
           <h2 id="about-heading" className="font-display text-balance text-[clamp(2.1rem,4.6vw,4rem)] font-semibold leading-[1.05] text-plum">{t("landing.title.trust")}</h2>

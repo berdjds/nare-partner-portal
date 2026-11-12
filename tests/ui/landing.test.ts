@@ -160,7 +160,7 @@ describe("signed-out visitors get the landing page", () => {
     const html = await renderLanding();
 
     // One brand lockup (the header logo, never repeated) and only local images that exist: no dangling references, nothing hotlinked.
-    expect(html.match(/<img[^>]*src="\/brand\/nare-logo\.webp"/g) ?? []).toHaveLength(1);
+    expect(html.match(/<img[^>]*src="\/brand\/nare-logo-header\.webp"/g) ?? []).toHaveLength(1);
     for (const src of html.match(/(?<=src=")\/brand\/[^"]+/g) ?? []) expect(existsSync(path.join(process.cwd(), "public", src.replace(/^\//, "")))).toBe(true);
     expect(html).not.toMatch(/<img[^>]*src="https?:/);
     expect(html).toContain('href="/login"');
