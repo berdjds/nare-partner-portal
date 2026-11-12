@@ -24,3 +24,8 @@ Rate data quality: `validFrom` is empty on all 332 rates; 96 carry seasonality o
 
 ## Decision needed from the owner
 Name the business rules (child and infant age bands and percentages, free-for-leader and free-ratio items, min/max travellers, optional items, per-item rounding) for a reference template, or confirm that today's behaviour (children pay as guests, infants by `infantMaxAge`) is the intended production behaviour. Then each rule gets a focused test and the proof can close.
+
+## Owner decision (2026-11-12): accept current behaviour
+The owner accepted the engine's current behaviour as the intended production behaviour: children pay as guests, infants follow the age limit and only affect the minimum-profit multiplier, staff lines are never multiplied by guest count, group/capacity-block/per-person bases as implemented, the active policy (markup on cost, minimum profit, round up to the increment). No new traveller rules are added.
+
+Proof: `tests/engine/production-pricing-proof.test.ts` runs every verified production service rate (three traveller mixes) and the active production policy through the engine and compares each result with an independent Decimal calculation. It reads the export from `PRICING_EXPORT` or `~/inbox/templates-export.json` (kept out of git) and skips when the file is absent. Not covered by this proof, by the owner's decision: any child, free-ratio, leader, min/max, optional-item or per-item rounding rule, because production defines none.
