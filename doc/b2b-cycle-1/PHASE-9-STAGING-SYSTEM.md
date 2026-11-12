@@ -24,3 +24,6 @@ See the final report in the conversation for exact counts: typecheck, full suite
 
 ## Open items
 Licence/ownership of the three photographs for the production portal; native review of Armenian; pricing proof (release blocker).
+
+## Follow-up (2026-11-12): image budget and tablet polish
+Code commit `60f425e`. A 235x112 header derivative of the approved logo (`public/brand/nare-logo-header.webp`, 7.6 KB; same artwork, original kept) replaces the 78 KB file in the header; landing image weight 442 KB -> 373 KB (budget 400 KB). A bottom gradient below `lg` dims the stand signage at the hero photo's lower edge on tall crops, and the About photo is height-capped on tablet. Gates: tsc clean, 135 files / 1707 tests, build OK, browser audit 60/60, permission smoke 40/40, perf script all pass. Evidence refreshed in `evidence/redesign3/after`.
