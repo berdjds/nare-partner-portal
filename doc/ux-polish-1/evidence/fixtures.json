@@ -1,0 +1,78 @@
+{
+  "company": {
+    "valid": {
+      "companyLegalName": "FIXTURE Partner Company",
+      "tradingName": "FIXTURE Travel",
+      "country": "Armenia",
+      "city": "FIXTURE City",
+      "address": "1 FIXTURE Street, FIXTURE City",
+      "website": "https://fixture.example.test",
+      "notes": "FIXTURE application notes; not a real application."
+    },
+    "invalid": {
+      "companyLegalName": "",
+      "tradingName": "FIXTURE Travel",
+      "country": "Armenia",
+      "city": "FIXTURE City",
+      "address": "1 FIXTURE Street, FIXTURE City",
+      "website": "not-a-valid-url",
+      "notes": "FIXTURE invalid company stage."
+    }
+  },
+  "licence": {
+    "valid": {
+      "licenceNumber": "FIXTURE-LICENCE-000",
+      "licenceAuthority": "FIXTURE Licensing Authority",
+      "licenceExpiry": "2099-12-31",
+      "files": {
+        "licenceFile": {
+          "name": "FIXTURE-licence.pdf",
+          "type": "application/pdf",
+          "size": 1024
+        },
+        "signatoryIdFile": null,
+        "otherFile": null
+      }
+    },
+    "invalid": {
+      "licenceNumber": "",
+      "licenceAuthority": "FIXTURE Licensing Authority",
+      "licenceExpiry": "2026-02-30",
+      "files": {
+        "licenceFile": null,
+        "signatoryIdFile": null,
+        "otherFile": null
+      }
+    }
+  },
+  "contacts": {
+    "valid": {
+      "contactName": "FIXTURE Applicant",
+      "contactRole": "FIXTURE Contact",
+      "contactEmail": "applicant@example.test",
+      "contactPhone": "+374 91 000000",
+      "secondContactName": "FIXTURE Second Contact",
+      "secondContactEmail": "second@example.test",
+      "secondContactPhone": "+374 91 000001"
+    },
+    "invalid": {
+      "contactName": "",
+      "contactRole": "FIXTURE Contact",
+      "contactEmail": "not-an-email",
+      "contactPhone": "not-a-phone",
+      "secondContactName": "FIXTURE Second Contact",
+      "secondContactEmail": "second@example.test",
+      "secondContactPhone": "+374 91 000001"
+    }
+  },
+  "review": {
+    "valid": {
+      "consentKyc": "true",
+      "consentChannels": "true"
+    },
+    "invalid": {
+      "consentKyc": "",
+      "consentChannels": ""
+    }
+  }
+}
