@@ -34,6 +34,101 @@ pre-release checks and sign-offs must be recorded before the owner's explicit
   `package-lock.json`, `.env`, `prisma/schema.prisma`, `prisma/migrations/`,
   `AGENTS.md`, `.claude/` or `.mcp.json`.
 
+- [ ] **TR-UX-002 — Unchanged B2B redesign audit:** I ran the original
+  `doc/b2b-cycle-1/evidence/redesign-audit.mjs`, without editing it, against
+  the branch local production build on `http://localhost:3000`. The run is
+  acceptable only when its terminal summary is exactly `60/60 passed`. Actual
+  result, recorded verbatim (not a generic audit check): ____________________
+
+### Owner / PO local evidence runbook
+
+These browser scripts are **owner/PO manual pre-release gates, not CI**. Use
+only throwaway local worktrees and SQLite files, with no staging or production
+deployment. “Seeded database only” means a newly created database followed only
+by the seed commands below: do not import an existing database and do not submit
+a fixture application. Run the steps in order and keep only one server running
+at a time. Stop a server with `Ctrl+C` in its terminal before starting the next
+one.
+
+1. From the repository root, create two new worktrees. Replace
+   `<review-branch>` with the review branch name; use previously unused `/tmp`
+   paths rather than reusing worktrees or databases.
+
+   ```bash
+   git worktree add --detach /tmp/wacontrol-ux-before ac4e78d
+   git worktree add /tmp/wacontrol-ux-after <review-branch>
+   ```
+
+2. Build and seed the detached baseline. In the baseline server terminal, run:
+
+   ```bash
+   cd /tmp/wacontrol-ux-before
+   export DATABASE_URL='file:/tmp/wacontrol-ux-before.db'
+   export NEXTAUTH_URL='http://localhost:3000'
+   export NEXTAUTH_SECRET='local-ux-evidence-only-0123456789abcdef'
+   export ADMIN_EMAIL='admin@example.com'
+   export ADMIN_PASSWORD='admin123'
+   npm ci
+   npx prisma generate
+   npm run db:push
+   npm run db:seed
+   npm run build
+   npm start
+   ```
+
+   Leave this local production server running on port 3000. In a second
+   terminal, invoke the branch-only evidence scripts from the branch worktree
+   against the baseline server:
+
+   ```bash
+   cd /tmp/wacontrol-ux-after
+   node doc/ux-polish-1/evidence/ux-audit.mjs --base http://localhost:3000 --label before
+   node doc/ux-polish-1/evidence/headers-fetch.mjs --base http://localhost:3000 --label before
+   ```
+
+   Stop the baseline server with `Ctrl+C` and confirm that its terminal has
+   returned before continuing.
+
+3. Build and seed the review branch separately. In the branch server terminal,
+   run:
+
+   ```bash
+   cd /tmp/wacontrol-ux-after
+   export DATABASE_URL='file:/tmp/wacontrol-ux-after.db'
+   export NEXTAUTH_URL='http://localhost:3000'
+   export NEXTAUTH_SECRET='local-ux-evidence-only-0123456789abcdef'
+   export ADMIN_EMAIL='admin@example.com'
+   export ADMIN_PASSWORD='admin123'
+   npm ci
+   npx prisma generate
+   npm run db:push
+   npm run db:seed
+   npm run build
+   npm start
+   ```
+
+4. With only the branch production server running on port 3000, capture the
+   after evidence in a second terminal, then run the unchanged original B2B
+   redesign audit. Its existing local browser, seeded-preview-account and
+   password-file prerequisites remain mandatory; do not edit the script or add
+   fixture submissions to make it pass.
+
+   ```bash
+   cd /tmp/wacontrol-ux-after
+   node doc/ux-polish-1/evidence/ux-audit.mjs --base http://localhost:3000 --label after
+   node doc/ux-polish-1/evidence/headers-fetch.mjs --base http://localhost:3000 --label after
+   node doc/ux-polish-1/evidence/headers-fetch.mjs --diff
+   mkdir -p /tmp/wacontrol-ux-after/doc/ux-polish-1/evidence/redesign-after
+   set -o pipefail
+   node doc/b2b-cycle-1/evidence/redesign-audit.mjs http://localhost:3000 /tmp/wacontrol-ux-after/doc/ux-polish-1/evidence/redesign-after 2>&1 | tee /tmp/wacontrol-ux-after/doc/ux-polish-1/evidence/redesign-audit-after.txt
+   ```
+
+   The original audit must finish with the actual summary **`60/60 passed`**;
+   any other count or a failed run blocks this gate. Record that actual summary
+   verbatim in the PO and independent-reviewer TR-UX-002 checklist lines and retain
+   `redesign-audit-after.txt`. A generic statement that the audit ran is not
+   sufficient. Stop the branch server with `Ctrl+C` when all captures finish.
+
 ### Release and rollback
 
 - [ ] **TR-UX-005 — Release path:** the ledger phase for UX SP-1 is complete;
@@ -86,6 +181,12 @@ Post-deploy smoke date and result: ____________________
   `docker-compose.yml`, `deploy.sh`, `deploy-vps.sh`, `package.json`,
   `package-lock.json`, `.env`, `prisma/schema.prisma`, `prisma/migrations/`,
   `AGENTS.md`, `.claude/` or `.mcp.json`.
+- [ ] **TR-UX-002 — Unchanged B2B redesign audit:** I independently verified
+  that the unedited original `doc/b2b-cycle-1/evidence/redesign-audit.mjs` ran
+  against the branch local production build on `http://localhost:3000`, and
+  checked its retained output. The required result is exactly `60/60 passed`.
+  Actual result, recorded verbatim (not a generic audit check):
+  ____________________
 - [ ] **TR-UX-005 — Release controls:** I confirmed the completed UX SP-1
   ledger phase, one PR with CI green as for PR #20, no direct push to `main`,
   and the owner's explicit `release` approval as sole approver before merge.
