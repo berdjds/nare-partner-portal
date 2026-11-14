@@ -15,8 +15,8 @@ export function AboutNare() {
   return (
     <section id="about" aria-labelledby="about-heading" className="bg-background">
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-6 py-14 lg:grid-cols-12 lg:gap-14 lg:py-20">
-        <div className="relative lg:col-span-5 lg:pt-6">
-          <div aria-hidden="true" className="absolute -start-4 -bottom-4 h-2/3 w-2/3 rounded-[2rem] bg-plum" />
+        <div className="relative p-4 lg:col-span-5 lg:pt-6">
+          <div data-testid="about-decoration" aria-hidden="true" className="absolute bottom-0 start-0 h-2/3 w-2/3 rounded-[2rem] bg-plum" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/photos/about-monastery.webp" alt={t("about.photo.alt")} width={669} height={446} loading="lazy" className="relative aspect-[5/4] max-h-[26rem] w-full rounded-[2rem] object-cover shadow-[var(--shadow-lift)]" />
         </div>

@@ -29,7 +29,7 @@ export function Hero() {
       {/* Soft floor so the stand signage at the photo's lower edge never reads as a second logo when the crop is tall (tablet, phone). */}
       <div aria-hidden="true" className="absolute inset-x-0 bottom-0 -z-10 h-1/3 bg-gradient-to-t from-black/80 to-transparent lg:hidden" />
       <div className="mx-auto flex min-h-[32rem] max-w-7xl items-center px-6 py-14 sm:min-h-[36rem] lg:min-h-[40rem] lg:py-20">
-        <div className="relative max-w-2xl rounded-2xl bg-gradient-to-r from-black/45 via-black/25 to-transparent p-6 sm:p-9 rtl:bg-gradient-to-l">
+        <div data-testid="hero-text-panel" className="relative max-w-md rounded-2xl bg-gradient-to-r from-black/45 via-black/25 to-transparent p-6 sm:p-9 md:max-w-sm xl:max-w-2xl rtl:bg-gradient-to-l">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/85">{t("landing.eyebrow")}</p>
           <h1 className="mt-4 text-balance font-display hero-h1 text-3xl leading-[1.1] tracking-tight drop-shadow-lg sm:text-4xl lg:text-5xl">{t("landing.headline")}</h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-white/90 drop-shadow-md sm:text-xl">{t("landing.subline")}</p>
