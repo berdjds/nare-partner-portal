@@ -30,37 +30,22 @@ const SOCIAL: Record<SocialPlatform, { Icon: Icon; label: string }> = {
 };
 const ORDER: SocialPlatform[] = ["facebook", "instagram", "linkedin", "tiktok", "youtube", "twitter", "tripadvisor"];
 
-const link = "text-base text-white/70 underline-offset-4 transition-colors hover:text-white hover:underline";
+const link = "min-w-0 break-words text-base text-white/70 underline-offset-4 transition-colors hover:text-white hover:underline";
 
-/** `compact` is the slim bar used on the sign-in and application pages: no repeated contact block, just legal links and social icons. */
-export function PublicFooter({ compact = false }: { compact?: boolean } = {}) {
+export function PublicFooter() {
   const year = new Date().getFullYear();
   const contact = usePublicContact();
   const t = useT();
   const emails = [contact.b2bEmail, contact.generalEmail].filter((e, i, a): e is string => Boolean(e) && a.indexOf(e) === i);
   const socials = ORDER.filter((p) => contact.social?.[p]);
 
-  if (compact) {
-    return (
-      <footer className="bg-footer text-white">
-        <div className="mx-auto flex max-w-7xl flex-col items-start gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-white/60">{t("footer.rights", { year, name: PRODUCT_NAME })}</p>
-          <nav aria-label={t("footer.legalNav")} className="flex items-center gap-5 text-sm">
-            <Link href="/terms" className={link}>{t("footer.terms")}</Link>
-            <Link href="/privacy" className={link}>{t("footer.privacy")}</Link>
-          </nav>
-        </div>
-      </footer>
-    );
-  }
-
   return (
-    <footer className="relative overflow-hidden bg-footer text-white">
+    <footer className="relative overflow-hidden break-words bg-footer text-white">
       <div aria-hidden="true" className="pointer-events-none absolute -top-40 -end-24 h-[26rem] w-[26rem] rounded-full bg-primary/20 blur-[120px]" />
       <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 -start-24 h-[30rem] w-[30rem] rounded-full bg-brand/20 blur-[120px]" />
       <div className="relative mx-auto max-w-7xl px-6 py-14 lg:py-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr_1.4fr]">
-          <div className="space-y-5">
+          <div className="min-w-0 space-y-5">
             <p className="font-display text-3xl">{PRODUCT_NAME}</p>
             <p className="max-w-sm text-base leading-relaxed text-white/70">{t("footer.description")}</p>
             {contact.foundedYear && <p className="text-sm text-white/60">{t("footer.since", { year: contact.foundedYear })}</p>}
@@ -83,7 +68,7 @@ export function PublicFooter({ compact = false }: { compact?: boolean } = {}) {
             )}
           </div>
 
-          <nav aria-label={t("footer.portal")}>
+          <nav aria-label={t("footer.portal")} className="min-w-0">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-white/50">{t("footer.portal")}</p>
             <ul className="space-y-3">
               <li><Link href="/" className={link}>{t("nav.home")}</Link></li>
@@ -92,7 +77,7 @@ export function PublicFooter({ compact = false }: { compact?: boolean } = {}) {
             </ul>
           </nav>
 
-          <nav aria-label={t("footer.legalNav")}>
+          <nav aria-label={t("footer.legalNav")} className="min-w-0">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-white/50">{t("footer.legalNav")}</p>
             <ul className="space-y-3">
               <li><Link href="/terms" className={link}>{t("footer.terms")}</Link></li>
@@ -100,25 +85,25 @@ export function PublicFooter({ compact = false }: { compact?: boolean } = {}) {
             </ul>
           </nav>
 
-          <div>
+          <div className="min-w-0">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-white/50">{t("footer.contact")}</p>
             <ul className="space-y-4">
               {emails.map((email) => (
-                <li key={email} className="flex items-center gap-3">
+                <li key={email} className="flex min-w-0 items-center gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-warm"><Mail className="h-4 w-4" aria-hidden="true" /></span>
                   <a href={`mailto:${email}`} className={link}>{email}</a>
                 </li>
               ))}
               {(contact.phones ?? []).map((phone) => (
-                <li key={phone.number} className="flex items-center gap-3">
+                <li key={phone.number} className="flex min-w-0 items-center gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-warm"><Phone className="h-4 w-4" aria-hidden="true" /></span>
                   <a href={telHref(phone.number)} className={link}>{phone.number}</a>
                 </li>
               ))}
               {contact.address && (
-                <li className="flex items-start gap-3">
+                <li className="flex min-w-0 items-start gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-warm"><MapPin className="h-4 w-4" aria-hidden="true" /></span>
-                  <span className="pt-1.5 text-white/70">
+                  <span className="min-w-0 pt-1.5 text-white/70">
                     {contact.address}
                     {contact.mapLinkUrl && <> · <a href={contact.mapLinkUrl} target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-4">{t("footer.map")}</a></>}
                   </span>

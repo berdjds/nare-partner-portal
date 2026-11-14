@@ -183,7 +183,7 @@ function LoginForm() {
         </Link>
       </div>
       </div>
-      <PublicFooter compact />
+      <PublicFooter />
     </div>
   );
 }

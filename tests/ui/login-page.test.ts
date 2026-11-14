@@ -28,8 +28,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  CONTACT,
   FORGOT_ACCESS,
   LOGIN_PANEL,
+  OFFICE_ADDRESS,
   PAGE_TITLES,
   PRODUCT_NAME,
 } from "@/lib/portal-content";
@@ -55,6 +57,22 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ toast: toastMock }),
 }));
+
+vi.mock("@/lib/contact/react", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/contact/react")>();
+  const { CONTACT, OFFICE_ADDRESS } = await import("@/lib/portal-content");
+
+  return {
+    ...actual,
+    usePublicContact: () => ({
+      b2bEmail: CONTACT.email,
+      generalEmail: CONTACT.email,
+      phones: CONTACT.phones.map((number) => ({ number })),
+      address: OFFICE_ADDRESS,
+      social: {},
+    }),
+  };
+});
 
 let LoginPage: typeof import("@/app/login/page").default;
 let LoginLayout: typeof import("@/app/login/layout").default;
@@ -169,12 +187,17 @@ describe("rendered markup", () => {
     expect(toggle![0]).toContain("focus-visible:ring-ring");
   });
 
-  it("links forgot access without a duplicate home link or local credit", () => {
+  it("links forgot access and renders the shared footer without a duplicate home link", () => {
     const html = renderLogin();
 
     expect(html).toContain('href="/forgot-password"');
     expect(html).toContain(escapeHtml(FORGOT_ACCESS.label));
     expect(html).not.toContain("Back to home");
+    expect(html).toContain('href="/terms"');
+    expect(html).toContain('href="/privacy"');
+    expect(html).toContain(`href="mailto:${CONTACT.email}"`);
+    expect(html).toContain(escapeHtml(CONTACT.email));
+    expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
     expect(html.match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
   });
 

@@ -68,7 +68,7 @@ export default function PartnerApplyPage() {
           <ApplyWizard formToken={formToken} />
         )}
       </div>
-      <PublicFooter compact />
+      <PublicFooter />
     </main>
   );
 }

@@ -1,8 +1,8 @@
 /**
  * Shared public chrome tests (W5f, task pub-chrome) —
  * components/public/PublicHeader.tsx and components/public/PublicFooter.tsx,
- * and their wiring into the three public pages (app/page.tsx,
- * app/partners/apply/page.tsx, app/login/page.tsx).
+ * and their wiring into all seven public pages, with rendered coverage for
+ * app/page.tsx, app/partners/apply/page.tsx and app/login/page.tsx.
  *
  * Contract under test:
  *
@@ -20,12 +20,16 @@
  *   copyright line with the current year and developer attribution.
  * - Both components use token colours only (no hex, no Tailwind palette
  *   utilities) and take all copy from "@/lib/portal-content".
- * - All three public pages import and render both chrome components; each
- *   page is rendered in its initial (signed-out) state and asserted for the
- *   header nav id, the terms link and the office address.
+ * - All seven public pages import and render exactly one PublicHeader and one
+ *   <PublicFooter />. Their active props implement the per-route aria-current
+ *   contract. Landing, apply and login are also rendered in their initial
+ *   signed-out state and checked for the rich footer content.
+ * - The obsolete-footer scan covers only app/, components/, lib/ and tests/.
+ *   It excludes this test file; doc/ux-polish-1/ and doc/design-system.md are
+ *   outside the search scope.
  *
- * The three pages need different mocks, so they are combined here: the
- * NextAuth session and the DB-backed getActiveUser() gate for the landing
+ * The three rendered pages need different mocks, so they are combined here:
+ * the NextAuth session and the DB-backed getActiveUser() gate for the landing
  * page (as in tests/ui/landing.test.ts), next-auth/react + next/navigation +
  * the toast context for the client login page (as in
  * tests/ui/login-page.test.ts). next/navigation is mocked with importActual
@@ -43,7 +47,7 @@ process.env.DATABASE_URL ??= "file:/tmp/w5f-pub-chrome-test.db";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   CONTACT,
@@ -99,6 +103,22 @@ vi.mock("next/navigation", async (importActual) => {
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ toast: toastMock }),
 }));
+
+vi.mock("@/lib/contact/react", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/contact/react")>();
+  const { CONTACT, OFFICE_ADDRESS } = await import("@/lib/portal-content");
+
+  return {
+    ...actual,
+    usePublicContact: () => ({
+      b2bEmail: CONTACT.email,
+      generalEmail: CONTACT.email,
+      phones: CONTACT.phones.map((number) => ({ number })),
+      address: OFFICE_ADDRESS,
+      social: {},
+    }),
+  };
+});
 
 // lib/partners/abuse.ts fails closed when NEXTAUTH_SECRET is unset (it signs
 // the form token), so the page needs one — set before the page module loads.
@@ -172,13 +192,17 @@ describe("PublicHeader rendered (initial closed state)", () => {
     expect(html).toContain('id="public-header-nav"');
   });
 
-  it("marks exactly the /partners/apply link with aria-current when active=apply", () => {
-    const html = renderToStaticMarkup(createElement(PublicHeader, { active: "apply" }));
+  it.each([
+    { active: "home", href: "/" },
+    { active: "apply", href: "/partners/apply" },
+    { active: "login", href: "/login" },
+  ] as const)("marks only the $href link with aria-current", ({ active, href }) => {
+    const html = renderToStaticMarkup(createElement(PublicHeader, { active }));
 
     expect(html.match(/aria-current="page"/g) ?? []).toHaveLength(1);
-    const applyLink = html.match(/<a[^>]*href="\/partners\/apply"[^>]*>/);
-    expect(applyLink, "the /partners/apply link tag").not.toBeNull();
-    expect(applyLink![0]).toContain('aria-current="page"');
+    const currentLinks = html.match(/<a\b[^>]*aria-current="page"[^>]*>/g) ?? [];
+    expect(currentLinks).toHaveLength(1);
+    expect(currentLinks[0]).toContain(`href="${href}"`);
   });
 
   it("emits no aria-current at all without an active page", () => {
@@ -288,20 +312,36 @@ describe("PublicFooter rendered", () => {
   });
 });
 
-describe("shared chrome on the three public pages", () => {
-  const PAGE_SOURCES = [
-    "app/page.tsx",
-    "app/partners/apply/page.tsx",
-    "app/login/page.tsx",
-  ];
+const PUBLIC_PAGES = [
+  { route: "/", source: "app/page.tsx", header: '<PublicHeader active="home" />' },
+  { route: "/partners/apply", source: "app/partners/apply/page.tsx", header: '<PublicHeader active="apply" />' },
+  { route: "/login", source: "app/login/page.tsx", header: '<PublicHeader active="login" />' },
+  { route: "/forgot-password", source: "app/forgot-password/page.tsx", header: "<PublicHeader />" },
+  { route: "/reset-password", source: "app/reset-password/page.tsx", header: "<PublicHeader />" },
+  { route: "/terms", source: "app/terms/page.tsx", header: "<PublicHeader />" },
+  { route: "/privacy", source: "app/privacy/page.tsx", header: "<PublicHeader />" },
+] as const;
 
-  it("each page imports and renders PublicHeader and PublicFooter (source-level)", () => {
-    for (const rel of PAGE_SOURCES) {
+function expectRichFooter(html: string): void {
+  expect(html).toContain('href="/terms"');
+  expect(html).toContain('href="/privacy"');
+  expect(html.split(`href="mailto:${CONTACT.email}"`)).toHaveLength(2);
+  expect(html).toContain(escapeHtml(CONTACT.email));
+  expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
+  expect(html.match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
+}
+
+describe("shared chrome on all seven public pages", () => {
+  it("each page has exactly one route-correct PublicHeader and one <PublicFooter />", () => {
+    for (const { route, source: rel, header } of PUBLIC_PAGES) {
       const source = readSource(rel);
+      const headers = source.match(/<PublicHeader\b[^>]*\/>/g) ?? [];
+      const footers = source.match(/<PublicFooter\b[^>]*\/>/g) ?? [];
+
       expect(source, rel).toContain('from "@/components/public/PublicHeader"');
       expect(source, rel).toContain('from "@/components/public/PublicFooter"');
-      expect(source, rel).toContain("<PublicHeader");
-      expect(source, rel).toMatch(/<PublicFooter( compact)? \/>/);
+      expect(headers, `${route} PublicHeader`).toEqual([header]);
+      expect(footers, `${route} PublicFooter`).toEqual(["<PublicFooter />"]);
     }
   });
 
@@ -313,21 +353,50 @@ describe("shared chrome on the three public pages", () => {
     expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
   });
 
-  it("the partner apply page renders the header nav and the footer content", () => {
+  it("the partner apply page renders the header nav and one rich footer", () => {
     const html = renderApplyPage();
 
     expect(html).toContain('id="public-header-nav"');
-    expect(html).toContain('href="/terms"');
-    expect(html).toContain("Developed by Hayk FZC"); // slim footer: legal links and attribution, no repeated contact block
+    expectRichFooter(html);
   });
 
-  it("the sign-in page renders shared chrome with developer attribution once", () => {
+  it("the sign-in page renders the header nav and one rich footer", () => {
     const html = renderLogin();
 
     expect(html).toContain('id="public-header-nav"');
-    expect(html).toContain('href="/terms"');
-    expect(html).not.toContain(escapeHtml(OFFICE_ADDRESS));
-    expect(html.match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
+    expectRichFooter(html);
+  });
+});
+
+const SEARCH_SCOPE = ["app", "components", "lib", "tests"] as const;
+const SEARCH_TEST_FILE = "tests/ui/pub-chrome.test.ts";
+
+function sourceFiles(relativeDir: string): string[] {
+  return readdirSync(resolve(process.cwd(), relativeDir), { withFileTypes: true }).flatMap((entry) => {
+    const rel = `${relativeDir}/${entry.name}`;
+    if (entry.isDirectory()) return sourceFiles(rel);
+    return /\.(?:ts|tsx|js|jsx)$/.test(entry.name) ? [rel] : [];
+  });
+}
+
+describe("legacy footer removal (source-level)", () => {
+  it("PublicFooter has no compact variant and wraps narrow contact content", () => {
+    const source = readSource("components/public/PublicFooter.tsx");
+
+    expect(source).not.toContain("compact");
+    expect(source).toContain("min-w-0");
+    expect(source).toContain("break-words");
+  });
+
+  it("deletes the legacy footer and finds no obsolete references in the code-only scope", () => {
+    expect(existsSync(resolve(process.cwd(), "components/landing/Footer.tsx"))).toBe(false);
+
+    const obsolete = /landing\/Footer|PublicFooter\s+compact\b/;
+    const offenders = SEARCH_SCOPE.flatMap((dir) => sourceFiles(dir))
+      .filter((rel) => rel !== SEARCH_TEST_FILE)
+      .filter((rel) => obsolete.test(readSource(rel)));
+
+    expect(offenders).toEqual([]);
   });
 });
 

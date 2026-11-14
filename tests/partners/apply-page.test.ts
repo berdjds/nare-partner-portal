@@ -43,7 +43,7 @@
  * elements are built with createElement instead of JSX.
  */
 
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
@@ -51,6 +51,7 @@ import { resolve } from "node:path";
 import {
   CONTACT,
   INDEXABLE,
+  OFFICE_ADDRESS,
   PAGE_TITLES,
   PARTNER_APPLY,
   PRODUCT_NAME,
@@ -59,6 +60,22 @@ import {
 import { CONSENT_VERSION } from "@/lib/partners/validation";
 import { HONEYPOT_FIELD, verifyFormToken } from "@/lib/partners/abuse";
 import { Hero } from "@/components/landing/Hero";
+
+vi.mock("@/lib/contact/react", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/contact/react")>();
+  const { CONTACT, OFFICE_ADDRESS } = await import("@/lib/portal-content");
+
+  return {
+    ...actual,
+    usePublicContact: () => ({
+      b2bEmail: CONTACT.email,
+      generalEmail: CONTACT.email,
+      phones: CONTACT.phones.map((number) => ({ number })),
+      address: OFFICE_ADDRESS,
+      social: {},
+    }),
+  };
+});
 
 // lib/partners/abuse.ts fails closed when NEXTAUTH_SECRET is unset (it signs
 // the form token), so the page needs one — set before the page module loads.
@@ -125,6 +142,17 @@ describe("rendered markup", () => {
     ]) {
       expect(html).toContain(escapeHtml(copy));
     }
+  });
+
+  it("renders the shared public footer", () => {
+    const html = renderApplyPage();
+
+    expect(html).toContain('href="/terms"');
+    expect(html).toContain('href="/privacy"');
+    expect(html).toContain(`href="mailto:${CONTACT.email}"`);
+    expect(html).toContain(escapeHtml(CONTACT.email));
+    expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
+    expect(html.match(/Developed by Hayk FZC/g) ?? []).toHaveLength(1);
   });
 
   it("shows no error and no success state before any interaction", () => {
