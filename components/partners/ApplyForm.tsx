@@ -17,10 +17,9 @@
  * because lib/partners/abuse.ts is a node-only module (node:crypto) and
  * cannot be imported from a client component; tests assert they match.
  *
- * Error contract of the endpoint: `{ reference }` on success, otherwise
- * either `{ error: <ZodIssue[]> }` (mapped onto the matching fields) or
- * `{ error: <generic string> }` (shown once, with role="alert"). The generic
- * messages deliberately say nothing about which check failed.
+ * Error contract of the endpoint: `{ reference }` on success. Every rejection
+ * shows a localised generic message with role="alert"; response error text is
+ * never rendered. Upload messages are also selected from the locale catalogue.
  *
  * Client-side file checks (extension + 10 MB) only save a round trip — the
  * server re-checks by magic bytes. The size limit mirrors
@@ -38,6 +37,7 @@ import { PARTNER_APPLY } from "@/lib/portal-content";
 import { primaryEmail, usePublicContact } from "@/lib/contact/react";
 import { CONSENT_VERSION } from "@/lib/partners/validation";
 import { useT } from "@/lib/i18n/react";
+import type { MessageKey } from "@/lib/i18n/messages";
 
 // Mirrors KYC_MAX_FILE_BYTES (lib/partners/kyc-storage.ts, node-only).
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -50,6 +50,12 @@ export const HONEYPOT_FIELD_NAME = "companyFax";
 export const FILE_FIELD_NAMES = ["licenceFile", "signatoryIdFile", "otherFile"] as const;
 
 export type FileFieldName = (typeof FILE_FIELD_NAMES)[number];
+
+const FILE_ERROR_KEYS: Record<FileFieldName, MessageKey> = {
+  licenceFile: "partnerApply.errors.licenceFile",
+  signatoryIdFile: "partnerApply.errors.signatoryIdFile",
+  otherFile: "partnerApply.errors.otherFile",
+};
 
 export const GENERIC_SUBMIT_ERROR =
   "Your application could not be submitted. Please check the form and try again.";
@@ -104,7 +110,7 @@ export function ApplySuccess({ reference }: { reference: string }) {
 export function ApplyForm({ formToken }: { formToken: string }) {
   const t = useT();
   const [submitting, setSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, MessageKey>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
 
@@ -113,11 +119,11 @@ export function ApplyForm({ formToken }: { formToken: string }) {
   }
 
   function fieldError(name: string) {
-    const message = fieldErrors[name];
-    if (!message) return null;
+    const messageKey = fieldErrors[name];
+    if (!messageKey) return null;
     return (
       <p id={errorId(name)} className="text-sm font-medium text-destructive">
-        {message}
+        {t(messageKey)}
       </p>
     );
   }
@@ -138,12 +144,12 @@ export function ApplyForm({ formToken }: { formToken: string }) {
     const data = new FormData(event.currentTarget);
 
     // Client-side file checks only spare a round trip; the server re-checks.
-    const uploadErrors: Record<string, string> = {};
+    const uploadErrors: Record<string, MessageKey> = {};
     for (const name of FILE_FIELD_NAMES) {
       const value = data.get(name);
       if (isPresentFile(value)) {
         const problem = validateUpload(value);
-        if (problem) uploadErrors[name] = problem;
+        if (problem) uploadErrors[name] = FILE_ERROR_KEYS[name];
       }
     }
     if (Object.keys(uploadErrors).length > 0) {
@@ -161,18 +167,7 @@ export function ApplyForm({ formToken }: { formToken: string }) {
         return;
       }
 
-      if (body && Array.isArray(body.error)) {
-        const next: Record<string, string> = {};
-        for (const issue of body.error) {
-          const key = Array.isArray(issue?.path) ? String(issue.path[0] ?? "") : "";
-          if (key && !(key in next)) next[key] = String(issue?.message ?? "Invalid value");
-        }
-        setFieldErrors(next);
-        if (Object.keys(next).length === 0) setFormError(GENERIC_SUBMIT_ERROR);
-        return;
-      }
-
-      setFormError(body && typeof body.error === "string" ? body.error : GENERIC_SUBMIT_ERROR);
+      setFormError(GENERIC_SUBMIT_ERROR);
     } catch {
       setFormError(NETWORK_ERROR);
     } finally {
@@ -354,7 +349,11 @@ export function ApplyForm({ formToken }: { formToken: string }) {
 
       {formError && (
         <p role="alert" className="text-sm font-medium text-destructive">
-          {formError}
+          {t(
+            formError === NETWORK_ERROR
+              ? "partnerApply.errors.network"
+              : "partnerApply.errors.genericSubmit",
+          )}
         </p>
       )}
 

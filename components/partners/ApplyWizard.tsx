@@ -20,8 +20,8 @@
  * Only client-safe modules are imported here (portal content, the zod schema,
  * location data, legal titles, the shared pieces re-exported by ApplyForm);
  * node-only modules (abuse, kyc-storage, prisma) must stay out of the client
- * bundle. Nothing is persisted to localStorage/sessionStorage and no personal
- * data goes into the URL.
+ * bundle. Nothing is persisted to web storage and no personal data goes into
+ * the URL.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -36,6 +36,7 @@ import { applicationFieldsSchema, CONSENT_VERSION } from "@/lib/partners/validat
 import { COUNTRIES, getCitySuggestions } from "@/lib/partners/locations";
 import { TERMS_OF_USE, PRIVACY_NOTICE } from "@/lib/legal-content";
 import { useT } from "@/lib/i18n/react";
+import type { MessageKey } from "@/lib/i18n/messages";
 import {
   ApplySuccess,
   FILE_FIELD_NAMES,
@@ -127,6 +128,52 @@ const FIELD_LABELS: Record<string, string> = { ...PARTNER_APPLY.labels };
 
 const CONSENT_FIELD_NAMES = ["consentKyc", "consentChannels"] as const;
 
+const FIELD_ERROR_KEYS: Record<string, MessageKey> = {
+  companyLegalName: "partnerApply.errors.companyLegalName",
+  tradingName: "partnerApply.errors.tradingName",
+  country: "partnerApply.errors.country",
+  city: "partnerApply.errors.city",
+  address: "partnerApply.errors.address",
+  website: "partnerApply.errors.website",
+  notes: "partnerApply.errors.notes",
+  licenceNumber: "partnerApply.errors.licenceNumber",
+  licenceAuthority: "partnerApply.errors.licenceAuthority",
+  licenceExpiry: "partnerApply.errors.licenceExpiry",
+  licenceFile: "partnerApply.errors.licenceFile",
+  signatoryIdFile: "partnerApply.errors.signatoryIdFile",
+  otherFile: "partnerApply.errors.otherFile",
+  contactName: "partnerApply.errors.contactName",
+  contactRole: "partnerApply.errors.contactRole",
+  contactEmail: "partnerApply.errors.contactEmail",
+  contactPhone: "partnerApply.errors.contactPhone",
+  secondContactName: "partnerApply.errors.secondContactName",
+  secondContactEmail: "partnerApply.errors.secondContactEmail",
+  secondContactPhone: "partnerApply.errors.secondContactPhone",
+  consentKyc: "partnerApply.errors.consentKyc",
+  consentChannels: "partnerApply.errors.consentChannels",
+};
+
+function localiseErrors(errors: Record<string, string>): Record<string, MessageKey> {
+  const localised: Record<string, MessageKey> = {};
+  for (const [field, message] of Object.entries(errors)) {
+    if (message && FIELD_ERROR_KEYS[field]) localised[field] = FIELD_ERROR_KEYS[field];
+  }
+  return localised;
+}
+
+function stageForField(name: string): StageKey {
+  if (FILE_FIELD_NAMES.includes(name as FileFieldName)) return "licence";
+  if (CONSENT_FIELD_NAMES.includes(name as (typeof CONSENT_FIELD_NAMES)[number])) return "review";
+  return STAGES.find((stage) => stage.fields.includes(name))?.key ?? "company";
+}
+
+function isImmediateField(name: string): boolean {
+  return (
+    FILE_FIELD_NAMES.includes(name as FileFieldName) ||
+    CONSENT_FIELD_NAMES.includes(name as (typeof CONSENT_FIELD_NAMES)[number])
+  );
+}
+
 function RequiredMarker({ text }: { text: string }) {
   return (
     <span className="ms-1">
@@ -212,12 +259,16 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
   });
   const [stageIndex, setStageIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [formError, setFormError] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, MessageKey>>({});
+  const [showErrorSummary, setShowErrorSummary] = useState(false);
+  const [formErrorKey, setFormError] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
   const [announce, setAnnounce] = useState("");
 
+  const formRef = useRef<HTMLFormElement | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const focusFirstInvalidRef = useRef(false);
   // Focus and the screen-reader announcement only make sense on a stage
   // change; moving focus on first mount would hijack the page load.
   const firstRenderRef = useRef(true);
@@ -230,12 +281,56 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
     setAnnounce(stepText(stageIndex));
   }, [stageIndex]);
 
+  useEffect(() => {
+    if (!focusFirstInvalidRef.current) return;
+    focusFirstInvalidRef.current = false;
+    const firstInvalid = Array.from(
+      formRef.current?.querySelectorAll<HTMLElement>('[aria-invalid="true"]') ?? [],
+    ).find(
+      (element) =>
+        !element.classList.contains("hidden") && element.closest("section[hidden]") === null,
+    );
+    firstInvalid?.focus();
+  }, [fieldErrors, stageIndex]);
+
+  function validateField(
+    name: string,
+    nextValues: Record<string, string> = values,
+    nextFiles: Record<FileFieldName, File | null> = files,
+  ) {
+    const errors = validateStage(stageForField(name), nextValues, nextFiles);
+    const messageKey = errors[name] ? FIELD_ERROR_KEYS[name] : undefined;
+    setFieldErrors((previous) => {
+      const next = { ...previous };
+      if (messageKey) next[name] = messageKey;
+      else delete next[name];
+      return next;
+    });
+  }
+
   function setValue(name: string, value: string) {
-    setValues((prev) => ({ ...prev, [name]: value }));
+    setValues((previous) => ({ ...previous, [name]: value }));
+    setTouched((previous) => ({ ...previous, [name]: true }));
+    if (fieldErrors[name]) validateField(name, { ...values, [name]: value });
   }
 
   function setFile(name: FileFieldName, file: File | null) {
-    setFiles((prev) => ({ ...prev, [name]: file }));
+    setFiles((previous) => ({ ...previous, [name]: file }));
+    setTouched((previous) => ({ ...previous, [name]: true }));
+  }
+
+  function handleBlur(name: string) {
+    if (touched[name] && FIELD_ERROR_KEYS[name] && !isImmediateField(name)) validateField(name);
+  }
+
+  function showValidationErrors(errors: Record<string, string>) {
+    const localised = localiseErrors(errors);
+    const count = Object.keys(localised).length;
+    setFieldErrors(localised);
+    setShowErrorSummary(true);
+    setFormError(null);
+    setAnnounce(t("partnerApply.errors.summary", { count }));
+    focusFirstInvalidRef.current = true;
   }
 
   function errorId(name: string): string {
@@ -243,11 +338,11 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
   }
 
   function fieldError(name: string) {
-    const message = fieldErrors[name];
-    if (!message) return null;
+    const messageKey = fieldErrors[name];
+    if (!messageKey) return null;
     return (
       <p id={errorId(name)} className="text-sm font-medium text-destructive">
-        {message}
+        {t(messageKey)}
       </p>
     );
   }
@@ -273,13 +368,20 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
 
   function handleNext() {
     const key = STAGES[stageIndex].key;
+    const fields = key === "review" ? CONSENT_FIELD_NAMES : STAGES[stageIndex].fields;
+    setTouched((previous) => {
+      const next = { ...previous };
+      for (const field of fields) next[field] = true;
+      return next;
+    });
     const errors = validateStage(key, values, files);
     if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setAnnounce(PARTNER_APPLY.fixErrorsNotice);
+      showValidationErrors(errors);
       return;
     }
     setFieldErrors({});
+    setShowErrorSummary(false);
+    setFormError(null);
     goToStage(stageIndex + 1);
   }
 
@@ -294,13 +396,18 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
       return;
     }
 
+    setTouched((previous) => ({
+      ...previous,
+      consentKyc: true,
+      consentChannels: true,
+    }));
     const reviewErrors = validateStage("review", values, files);
     if (Object.keys(reviewErrors).length > 0) {
-      setFieldErrors(reviewErrors);
-      setAnnounce(PARTNER_APPLY.fixErrorsNotice);
+      showValidationErrors(reviewErrors);
       return;
     }
     setFieldErrors({});
+    setShowErrorSummary(false);
 
     // Hidden sections still submit with noValidate, so the FormData captures
     // the hidden inputs, the honeypot and every mounted text field.
@@ -323,9 +430,8 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
       }
     }
     if (Object.keys(uploadErrors).length > 0) {
-      setFieldErrors(uploadErrors);
+      showValidationErrors(uploadErrors);
       setStageIndex(STAGES.findIndex((stage) => stage.key === "licence"));
-      setAnnounce(PARTNER_APPLY.fixErrorsNotice);
       return;
     }
 
@@ -339,30 +445,35 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
         return;
       }
 
+      setFormError(GENERIC_SUBMIT_ERROR);
       if (body && Array.isArray(body.error)) {
-        const next: Record<string, string> = {};
+        const next: Record<string, MessageKey> = {};
         for (const issue of body.error) {
           const key = Array.isArray(issue?.path) ? String(issue.path[0] ?? "") : "";
-          if (key && !(key in next)) next[key] = String(issue?.message ?? "Invalid value");
+          const messageKey = FIELD_ERROR_KEYS[key];
+          if (messageKey && !(key in next)) next[key] = messageKey;
         }
         setFieldErrors(next);
-        if (Object.keys(next).length === 0) {
-          setFormError(GENERIC_SUBMIT_ERROR);
-        } else {
+        setShowErrorSummary(Object.keys(next).length > 0);
+        if (Object.keys(next).length > 0) {
+          setAnnounce(t("partnerApply.errors.summary", { count: Object.keys(next).length }));
+          focusFirstInvalidRef.current = true;
           // Show the stage that holds the first rejected field.
           const target = STAGES.findIndex(
             (stage) =>
               stage.fields.some((field) => field in next) ||
               (stage.key === "licence" && FILE_FIELD_NAMES.some((name) => name in next)),
           );
-          if (target >= 0) goToStage(target);
+          if (target >= 0) setStageIndex(target);
         }
-        return;
+      } else {
+        setAnnounce(t("partnerApply.errors.genericSubmit"));
       }
-
-      setFormError(body && typeof body.error === "string" ? body.error : GENERIC_SUBMIT_ERROR);
+      return;
     } catch {
+      setShowErrorSummary(false);
       setFormError(NETWORK_ERROR);
+      setAnnounce(t("partnerApply.errors.network"));
     } finally {
       setSubmitting(false);
     }
@@ -372,6 +483,14 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
     return <ApplySuccess reference={reference} />;
   }
 
+  const formError =
+    formErrorKey === null
+      ? null
+      : t(
+          formErrorKey === NETWORK_ERROR
+            ? "partnerApply.errors.network"
+            : "partnerApply.errors.genericSubmit",
+        );
   const inputClass = "h-11";
   // Mirrors ui Input so the native select and file buttons share its border,
   // radius, focus ring and 44 px height.
@@ -566,7 +685,9 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
                   accept={FILE_INPUT_ACCEPT}
                   className="hidden"
                   onChange={(event) => {
-                    setFile(name, event.target.files?.[0] ?? null);
+                    const file = event.target.files?.[0] ?? null;
+                    setFile(name, file);
+                    validateField(name, values, { ...files, [name]: file });
                     requestAnimationFrame(() => document.getElementById(`${name}-replace`)?.focus());
                   }}
                   {...validityProps(name)}
@@ -595,8 +716,10 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
                   className={`${controlClass} items-center text-start leading-tight`}
                   onClick={() => {
                     setFile(name, null);
+                    validateField(name, values, { ...files, [name]: null });
                     requestAnimationFrame(() => document.getElementById(`${name}-choose`)?.focus());
                   }}
+                  {...validityProps(name)}
                 >
                   {PARTNER_APPLY.replaceFileLabel} {PARTNER_APPLY.labels[name]}
                 </button>
@@ -778,7 +901,11 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
                 value="true"
                 required
                 checked={values[name] === "true"}
-                onChange={(event) => setValue(name, event.target.checked ? "true" : "")}
+                onChange={(event) => {
+                  const value = event.target.checked ? "true" : "";
+                  setValue(name, value);
+                  validateField(name, { ...values, [name]: value });
+                }}
                 className="mt-0.5 h-5 w-5 shrink-0 rounded border border-input accent-primary"
                 {...validityProps(name)}
               />
@@ -811,12 +938,6 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
         ))}
       </fieldset>
 
-      {formError && (
-        <p role="alert" className="text-sm font-medium text-destructive">
-          {formError}
-        </p>
-      )}
-
       <Button type="submit" disabled={submitting} className="h-12 w-full px-8 text-base font-semibold sm:w-auto">
         {submitting ? PARTNER_APPLY.submittingLabel : PARTNER_APPLY.submitLabel}
       </Button>
@@ -832,8 +953,10 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
 
   return (
     <form
+      ref={formRef}
       noValidate
       onSubmit={handleSubmit}
+      onBlur={(event) => handleBlur(event.target.getAttribute("name") ?? "")}
       encType="multipart/form-data"
       aria-busy={submitting}
       className="space-y-10"
@@ -854,6 +977,17 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
       <p aria-live="polite" className="sr-only">
         {announce}
       </p>
+
+      {showErrorSummary && Object.keys(fieldErrors).length > 0 && (
+        <p role="alert" className="text-sm font-medium text-destructive">
+          {t("partnerApply.errors.summary", { count: Object.keys(fieldErrors).length })}
+        </p>
+      )}
+      {formError && (
+        <p role="alert" className="text-sm font-medium text-destructive">
+          {formError}
+        </p>
+      )}
 
       {/* All stages stay mounted so their inputs still submit; inactive ones
           are only visually hidden. */}
