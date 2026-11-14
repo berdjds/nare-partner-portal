@@ -65,7 +65,7 @@ one.
    cd /tmp/wacontrol-ux-before
    export DATABASE_URL='file:/tmp/wacontrol-ux-before.db'
    export NEXTAUTH_URL='http://localhost:3000'
-   export NEXTAUTH_SECRET='local-ux-evidence-only-0123456789abcdef'
+   export NEXTAUTH_SECRET="$(openssl rand -hex 32)"
    export ADMIN_EMAIL='admin@example.com'
    export ADMIN_PASSWORD='admin123'
    npm ci
@@ -96,7 +96,7 @@ one.
    cd /tmp/wacontrol-ux-after
    export DATABASE_URL='file:/tmp/wacontrol-ux-after.db'
    export NEXTAUTH_URL='http://localhost:3000'
-   export NEXTAUTH_SECRET='local-ux-evidence-only-0123456789abcdef'
+   export NEXTAUTH_SECRET="$(openssl rand -hex 32)"
    export ADMIN_EMAIL='admin@example.com'
    export ADMIN_PASSWORD='admin123'
    npm ci
