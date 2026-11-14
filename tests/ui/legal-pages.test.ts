@@ -1,35 +1,26 @@
 /**
- * Public legal pages tests (W5f, task legal-pages) — app/terms/page.tsx and
- * app/privacy/page.tsx, rendered through the shared
- * components/public/LegalPage.tsx renderer.
+ * Public legal pages tests — app/terms/page.tsx and app/privacy/page.tsx,
+ * rendered through components/public/LegalPage.tsx.
  *
  * Contract under test:
  *
- * - Both pages are plain server components: no session, no DB, no mocks.
- *   Each renders the public chrome (PublicHeader / PublicFooter) around the
- *   shared LegalPage renderer fed with its document (TERMS_OF_USE or
- *   PRIVACY_NOTICE from lib/legal-content.ts).
- * - LegalPage renders the document faithfully: the h1 title, subtitle, the
- *   "Last updated" line with LEGAL_LAST_UPDATED, the intro, and every
- *   section as a numbered h2 ("1. ", "2. ", ...) with its paragraphs and its
- *   bullet list (list-disc). Sample paragraphs and items are spot-checked so
- *   the test catches the renderer silently dropping section content.
- * - The "Contact us" block is built from the shared CONTACT / OFFICE_ADDRESS
- *   (lib/portal-content.ts): office address as text, one mailto link for
- *   CONTACT.email and one tel link per phone with spaces stripped.
- * - Page metadata: robots is robotsDirective() — pinned to
- *   "noindex, nofollow" while INDEXABLE stays false, same owner decision as
- *   the landing page — and the title combines the document title with
- *   PRODUCT_NAME.
- * - Source-level guards: the renderer and both pages use token colours only
- *   (no hex, no Tailwind palette utilities) and wire the shared chrome
- *   components from "@/components/public/...".
+ * - Both pages remain plain server components with the shared public chrome,
+ *   noindex metadata and the legal document supplied by lib/legal-content.ts.
+ * - LegalPage renders every paragraph and item, a localised linked TOC using
+ *   the static section ids, and numbered h2s that can receive anchor focus.
+ * - The contact card is a labelled region populated only through
+ *   usePublicContact() and the existing primaryEmail()/telHref() helpers.
+ *   Mocked profiles cover all values, no values and Armenian labels; the old
+ *   CONTACT/OFFICE_ADDRESS rendering contract is intentionally superseded.
+ * - Source guards cover token colours, safe anchor scrolling, reduced motion,
+ *   the absence of rendered URL hashes and literal contact details, and the
+ *   scroll margin required by the computed sticky PublicHeader height.
  *
  * Vitest only picks up *.test.ts, so elements are built with createElement
- * instead of JSX, as in tests/ui/pub-chrome.test.ts.
+ * instead of JSX.
  */
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
@@ -38,19 +29,47 @@ import {
   LEGAL_LAST_UPDATED,
   PRIVACY_NOTICE,
   TERMS_OF_USE,
+  type LegalDocument,
 } from "@/lib/legal-content";
-import {
-  CONTACT,
-  OFFICE_ADDRESS,
-  PRODUCT_NAME,
-  robotsDirective,
-} from "@/lib/portal-content";
+import { PRODUCT_NAME, robotsDirective } from "@/lib/portal-content";
+import type { PublicContact } from "@/lib/contact/service";
+import { LegalPage } from "@/components/public/LegalPage";
+import { LocaleProvider } from "@/lib/i18n/react";
+import type { Locale } from "@/lib/i18n/locales";
 import TermsPage, { metadata as termsMetadata } from "@/app/terms/page";
 import PrivacyPage, { metadata as privacyMetadata } from "@/app/privacy/page";
 
-/** Escapes text the way React's server renderer does, for HTML assertions. */
-function escapeHtml(s: string): string {
-  return s
+type MockContact = PublicContact & { companyName?: string };
+
+const { contactRef } = vi.hoisted(() => ({
+  contactRef: { current: {} as MockContact },
+}));
+
+vi.mock("@/lib/contact/react", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/contact/react")>();
+  return {
+    ...actual,
+    usePublicContact: () => contactRef.current,
+  };
+});
+
+const FULL_CONTACT: MockContact = {
+  companyName: "Example Travel Company",
+  b2bEmail: "partners@example.test",
+  generalEmail: "info@example.test",
+  phones: [
+    { number: "+1 202 555 0100" },
+    { number: "+44 20 7946 0100" },
+  ],
+  address: "12 Example Avenue, Test City",
+};
+
+beforeEach(() => {
+  contactRef.current = FULL_CONTACT;
+});
+
+function escapeHtml(value: string): string {
+  return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -58,8 +77,8 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#x27;");
 }
 
-function readSource(rel: string): string {
-  return readFileSync(resolve(process.cwd(), rel), "utf8");
+function readSource(relativePath: string): string {
+  return readFileSync(resolve(process.cwd(), relativePath), "utf8");
 }
 
 const PAGES = [
@@ -83,105 +102,258 @@ function render(page: (typeof PAGES)[number]["page"]): string {
   return renderToStaticMarkup(createElement(page));
 }
 
-function sectionId(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+function renderLegal(document: LegalDocument, locale: Locale = "en"): string {
+  return renderToStaticMarkup(
+    createElement(LocaleProvider, {
+      locale,
+      children: createElement(LegalPage, { document }),
+    }),
+  );
+}
+
+function tocNav(html: string): string {
+  const nav = /<nav aria-labelledby="legal-toc-heading"[\s\S]*?<\/nav>/.exec(html)?.[0];
+  expect(nav).toBeDefined();
+  return nav ?? "";
+}
+
+function contactCard(html: string): string {
+  const card = /<section aria-labelledby="legal-contact-heading"[\s\S]*?<\/section>/.exec(html)?.[0];
+  expect(card).toBeDefined();
+  return card ?? "";
+}
+
+function utilityPx(classes: string, utility: string): number | undefined {
+  const match = new RegExp(`(?:^|\\s)${utility}-(\\d+)(?:\\s|$)`).exec(classes);
+  return match ? Number(match[1]) * 4 : undefined;
+}
+
+function requiredUtilityPx(classes: string, utility: string): number {
+  const value = utilityPx(classes, utility);
+  expect(value, `${utility} in ${classes}`).toBeDefined();
+  return value!;
 }
 
 describe.each(PAGES)("$name — rendered document", ({ page, document: doc, relatedHref }) => {
-  const html = render(page);
-
   it("renders the h1 title, the subtitle and the intro", () => {
-    expect(html).toContain(`<h1`);
+    const html = render(page);
+    expect(html).toContain("<h1");
     expect(html).toContain(escapeHtml(doc.title));
     expect(html).toContain(escapeHtml(doc.subtitle));
     expect(html).toContain(escapeHtml(doc.intro));
   });
 
   it("shows the last-updated line", () => {
+    const html = render(page);
     expect(html).toContain("Last updated:");
     expect(html).toContain(escapeHtml(LEGAL_LAST_UPDATED));
   });
 
-  it("renders every section title as a numbered heading with an anchor", () => {
+  it("renders every numbered h2 with its static id and anchor focus target", () => {
+    const html = render(page);
     doc.sections.forEach((section, index) => {
-      const id = sectionId(section.title);
-      expect(html).toContain(`<h2 id="${id}" class="scroll-mt-24`);
+      const heading = new RegExp(
+        `<h2 id="${section.id}" tabindex="-1" class="([^"]*)"`,
+      ).exec(html);
+      expect(heading, section.title).not.toBeNull();
+      expect(heading![1]).toContain("scroll-mt-");
+      expect(heading![1]).toContain("legal-h2");
       expect(html).toContain(escapeHtml(`${index + 1}. ${section.title}`));
     });
   });
 
-  it("links to every section and the other legal document from the page nav", () => {
-    const nav = html.match(/<nav aria-label="On this page"[\s\S]*?<\/nav>/)?.[0];
-    expect(nav).toBeDefined();
-    doc.sections.forEach((section) => {
-      expect(nav).toContain(`href="#${sectionId(section.title)}"`);
-    });
+  it("links every section in order and keeps plain anchors for no-JS navigation", () => {
+    const nav = tocNav(render(page));
+    const sectionLinks = Array.from(nav.matchAll(/<a\b[^>]*href="([^"]+)"/g), (match) => match[1])
+      .filter((href) => href.startsWith("#"));
+    expect(sectionLinks).toEqual(doc.sections.map((section) => `#${section.id}`));
     expect(nav).toContain(`href="${relatedHref}"`);
+    expect(nav).toContain("break-words");
+    expect(nav).not.toContain("whitespace-nowrap");
   });
 
-  it("renders the contact block from the shared contact content", () => {
-    expect(html).toContain('id="legal-contact-heading"');
-    expect(html).toContain('aria-labelledby="legal-contact-heading"');
-    expect(html).toContain("Contact us");
-    expect(html).toContain(escapeHtml(OFFICE_ADDRESS));
-    expect(html).toContain(`href="mailto:${CONTACT.email}"`);
-    for (const phone of CONTACT.phones) {
-      expect(html).toContain(escapeHtml(phone));
-      expect(html).toContain(`href="tel:${phone.replace(/\s/g, "")}"`);
-    }
+  it("gives TOC links a token-based keyboard focus ring", () => {
+    const nav = tocNav(render(page));
+    expect(nav).toContain("focus-visible:ring-2");
+    expect(nav).toContain("focus-visible:ring-ring");
+    expect(nav).toContain("focus-visible:ring-offset-2");
   });
 
   it("renders the shared chrome: header nav and footer legal links", () => {
+    const html = render(page);
     expect(html).toContain('id="public-header-nav"');
     expect(html).toContain('href="/terms"');
     expect(html).toContain('href="/privacy"');
   });
 });
 
-describe("Terms of Use — content spot-checks", () => {
-  const html = render(TermsPage);
+describe("localised table of contents", () => {
+  it.each([
+    { locale: "en" as const, label: "On this page" },
+    { locale: "hy" as const, label: "Այս էջում" },
+  ])("names the nav through its visible $locale non-h2 label", ({ locale, label }) => {
+    for (const document of [TERMS_OF_USE, PRIVACY_NOTICE]) {
+      const html = renderLegal(document, locale);
+      const nav = tocNav(html);
+      expect(nav).toMatch(
+        new RegExp(`<p id="legal-toc-heading"[^>]*>\\s*${label}\\s*</p>`),
+      );
+      expect(nav).not.toMatch(/<h2\b/);
+    }
+  });
+});
 
+describe("static legal section ids", () => {
+  const documentVersions: readonly {
+    name: string;
+    versions: readonly LegalDocument[];
+  }[] = [
+    { name: "Terms of Use", versions: [TERMS_OF_USE] },
+    { name: "Privacy Notice", versions: [PRIVACY_NOTICE] },
+  ];
+
+  it("are unique and kebab-case within every exported document version", () => {
+    for (const { versions } of documentVersions) {
+      for (const document of versions) {
+        const ids = document.sections.map((section) => section.id);
+        expect(new Set(ids).size).toBe(ids.length);
+        for (const id of ids) expect(id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      }
+    }
+  });
+
+  it("are equal across every exported language version of a document", () => {
+    for (const { name, versions } of documentVersions) {
+      const [first, ...otherVersions] = versions;
+      expect(first.sections.length, name).toBeGreaterThan(0);
+      const expected = first.sections.map((section) => section.id);
+      for (const version of otherVersions) {
+        expect(version.sections.map((section) => section.id), name).toEqual(expected);
+      }
+    }
+  });
+});
+
+describe("Privacy Notice — contact card", () => {
+  it("is a labelled region with every value from the full public contact profile", () => {
+    const card = contactCard(render(PrivacyPage));
+    expect(card).toContain('aria-labelledby="legal-contact-heading"');
+    expect(card).toContain('id="legal-contact-heading"');
+    expect(card).toContain("legal-h2");
+    expect(card).toContain("border-border");
+    expect(card).toContain("p-6");
+    expect(card).toContain("Contact us");
+    expect(card).toContain("Company");
+    expect(card).toContain(FULL_CONTACT.companyName!);
+    expect(card).toContain("Email");
+    expect(card).toContain(`href="mailto:${FULL_CONTACT.b2bEmail}"`);
+    expect(card).toContain("Address");
+    expect(card).toContain(FULL_CONTACT.address!);
+    expect(card).toContain("Phones");
+    for (const phone of FULL_CONTACT.phones!) {
+      expect(card).toContain(escapeHtml(phone.number));
+      expect(card).toContain(`href="tel:${phone.number.replace(/[^+\d]/g, "")}"`);
+    }
+  });
+
+  it("keeps only the Contact us heading when no profile values are set", () => {
+    contactRef.current = {};
+    const card = contactCard(render(PrivacyPage));
+    expect(card).toContain("Contact us");
+    expect(card).not.toContain("<dt");
+    expect(card).not.toContain("<dd");
+    expect(card).not.toContain("mailto:");
+    expect(card).not.toContain("tel:");
+    for (const label of ["Company", "Email", "Address", "Phones"]) {
+      expect(card).not.toContain(`>${label}<`);
+    }
+  });
+
+  it("uses Armenian heading and field labels with the same profile values", () => {
+    const card = contactCard(renderLegal(PRIVACY_NOTICE, "hy"));
+    expect(card).toContain("Կապվեք մեզ հետ");
+    expect(card).toContain("Ընկերություն");
+    expect(card).toContain("Էլ. փոստ");
+    expect(card).toContain("Հասցե");
+    expect(card).toContain("Հեռախոսներ");
+    expect(card).toContain(FULL_CONTACT.companyName!);
+    expect(card).toContain(FULL_CONTACT.b2bEmail!);
+    expect(card).toContain(FULL_CONTACT.address!);
+  });
+});
+
+describe("anchor scrolling and header clearance", () => {
+  it("focuses the heading, honours reduced motion and never renders the URL hash", () => {
+    const source = readSource("components/public/LegalPage.tsx");
+    expect(source).toContain("heading.focus({ preventScroll: true })");
+    expect(source).toContain("heading.scrollIntoView");
+    expect(source).toContain('window.matchMedia("(prefers-reduced-motion: reduce)")');
+    expect(source).toMatch(/\? "auto"\s*:\s*"smooth"/);
+    expect(source).not.toContain("location.hash");
+    expect(source).not.toContain("dangerouslySetInnerHTML");
+  });
+
+  it("computes the sticky header height and clears it at base and sm", () => {
+    const headerSource = readSource("components/public/PublicHeader.tsx");
+    const headerClasses = /<header\b[\s\S]*?className="([^"]*)"/.exec(headerSource)?.[1];
+    const containerClasses = /<div className="([^"]*\bpy-\d+[^"]*)"/.exec(headerSource)?.[1];
+    const logoClasses = /<img\b[^>]*className="([^"]*)"/.exec(headerSource)?.[1];
+    expect(headerClasses).toBeDefined();
+    expect(containerClasses).toBeDefined();
+    expect(logoClasses).toBeDefined();
+
+    const verticalPadding = requiredUtilityPx(containerClasses!, "py") * 2;
+    const border = headerClasses!.split(/\s+/).includes("border-b") ? 1 : 0;
+    const baseHeaderHeight = requiredUtilityPx(logoClasses!, "h") + verticalPadding + border;
+    const smHeaderHeight = requiredUtilityPx(logoClasses!, "sm:h") + verticalPadding + border;
+
+    const html = renderLegal(TERMS_OF_USE);
+    const headingAttributes = Array.from(html.matchAll(/<h2\b([^>]*)>/g), (match) => match[1])
+      .find((attributes) => attributes.includes(`id="${TERMS_OF_USE.sections[0].id}"`));
+    expect(headingAttributes).toBeDefined();
+    const headingClasses = /class="([^"]*)"/.exec(headingAttributes!)?.[1] ?? "";
+    const baseScrollMargin = requiredUtilityPx(headingClasses, "scroll-mt");
+    const smScrollMargin = utilityPx(headingClasses, "sm:scroll-mt") ?? baseScrollMargin;
+
+    expect(baseScrollMargin).toBeGreaterThanOrEqual(baseHeaderHeight);
+    expect(smScrollMargin).toBeGreaterThanOrEqual(smHeaderHeight);
+  });
+});
+
+describe("Terms of Use — content spot-checks", () => {
   it("renders a sample paragraph from the drafted text", () => {
-    expect(html).toContain(
+    expect(render(TermsPage)).toContain(
       escapeHtml("Every application is reviewed by the Nare team."),
     );
   });
 
   it("renders the first item of the information-and-documents list", () => {
     const section = TERMS_OF_USE.sections.find(
-      (s) => s.title === "Information and documents you provide",
+      (value) => value.title === "Information and documents you provide",
     );
     expect(section?.items?.length).toBeGreaterThan(0);
-    expect(html).toContain(escapeHtml(section!.items![0]));
-    expect(html).toContain("list-disc");
+    expect(render(TermsPage)).toContain(escapeHtml(section!.items![0]));
+    expect(render(TermsPage)).toContain("list-disc");
   });
 });
 
 describe("Privacy Notice — content spot-checks", () => {
-  const html = render(PrivacyPage);
-
   it("renders a sample paragraph from the drafted text", () => {
-    expect(html).toContain(escapeHtml("We do not sell your information."));
+    expect(render(PrivacyPage)).toContain(escapeHtml("We do not sell your information."));
   });
 
   it("renders the first item of the what-we-collect list", () => {
     const section = PRIVACY_NOTICE.sections.find(
-      (s) => s.title === "What we collect",
+      (value) => value.title === "What we collect",
     );
     expect(section?.items?.length).toBeGreaterThan(0);
-    expect(html).toContain(escapeHtml(section!.items![0]));
-    expect(html).toContain("list-disc");
+    expect(render(PrivacyPage)).toContain(escapeHtml(section!.items![0]));
+    expect(render(PrivacyPage)).toContain("list-disc");
   });
 });
 
 describe.each(PAGES)("$name — metadata", ({ metadata, document: doc }) => {
   it("pins the noindex default while INDEXABLE stays false", () => {
-    // INDEXABLE is false today (lib/portal-content.ts): both legal pages must
-    // stay out of search engines until the owner approves indexing. If
-    // INDEXABLE flips, update this expectation with the owner decision.
     expect(metadata.robots).toBe(robotsDirective());
     expect(metadata.robots).toBe("noindex, nofollow");
   });
@@ -203,22 +375,32 @@ describe("source-level guards", () => {
   ];
 
   it("the renderer and both pages use neither hex colours nor palette utilities", () => {
-    for (const rel of SOURCES) {
-      const source = readSource(rel);
-      expect(source, rel).not.toMatch(hexColour);
-      expect(source, rel).not.toMatch(paletteUtility);
+    for (const relativePath of SOURCES) {
+      const source = readSource(relativePath);
+      expect(source, relativePath).not.toMatch(hexColour);
+      expect(source, relativePath).not.toMatch(paletteUtility);
     }
   });
 
   it("both pages wire the shared chrome and the LegalPage renderer", () => {
-    for (const rel of ["app/terms/page.tsx", "app/privacy/page.tsx"]) {
-      const source = readSource(rel);
-      expect(source, rel).toContain('from "@/components/public/PublicHeader"');
-      expect(source, rel).toContain('from "@/components/public/PublicFooter"');
-      expect(source, rel).toContain('from "@/components/public/LegalPage"');
-      expect(source, rel).toContain("<PublicHeader");
-      expect(source, rel).toContain("<PublicFooter />");
-      expect(source, rel).toContain("<LegalPage");
+    for (const relativePath of ["app/terms/page.tsx", "app/privacy/page.tsx"]) {
+      const source = readSource(relativePath);
+      expect(source, relativePath).toContain('from "@/components/public/PublicHeader"');
+      expect(source, relativePath).toContain('from "@/components/public/PublicFooter"');
+      expect(source, relativePath).toContain('from "@/components/public/LegalPage"');
+      expect(source).toContain("<PublicHeader");
+      expect(source).toContain("<PublicFooter />");
+      expect(source).toContain("<LegalPage");
     }
+  });
+
+  it("uses the public contact hook and helpers without literal contact data", () => {
+    const source = readSource("components/public/LegalPage.tsx");
+    expect(source).toContain("usePublicContact()");
+    expect(source).toContain("primaryEmail(contact)");
+    expect(source).toContain("telHref(phone.number)");
+    expect(source).not.toMatch(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+    expect(source).not.toMatch(/(?:\+|\b)\d[\d\s().-]{7,}\d/);
+    expect(source).not.toMatch(/\b(?:Teryan|Yerevan|OFFICE_ADDRESS|CONTACT\.)\b/);
   });
 });

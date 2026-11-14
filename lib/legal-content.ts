@@ -18,6 +18,7 @@
 export const LEGAL_LAST_UPDATED = "4 October 2026";
 
 export interface LegalSection {
+  readonly id: string;
   readonly title: string;
   readonly paragraphs?: readonly string[];
   readonly items?: readonly string[];
@@ -37,12 +38,14 @@ export const TERMS_OF_USE: LegalDocument = {
     "These Terms of Use apply to the Nare Travel and Tours partner portal (the portal). By applying to become a partner or by using the portal you agree to them. Please read them together with our Privacy Notice.",
   sections: [
     {
+      id: "who-may-apply",
       title: "Who may apply",
       paragraphs: [
         "The portal is for businesses in the travel trade. You confirm that you apply on behalf of a registered business and that you are authorised to do so.",
       ],
     },
     {
+      id: "applications-and-approval",
       title: "Applications and approval",
       paragraphs: [
         "Every application is reviewed by the Nare team. Nare Travel and Tours may approve an application, reject it, or ask for more information, at its discretion and without having to give a reason beyond what it chooses to share.",
@@ -50,6 +53,7 @@ export const TERMS_OF_USE: LegalDocument = {
       ],
     },
     {
+      id: "information-and-documents-you-provide",
       title: "Information and documents you provide",
       items: [
         "The information and documents you submit, including the trade licence, must be true, complete and current.",
@@ -58,6 +62,7 @@ export const TERMS_OF_USE: LegalDocument = {
       ],
     },
     {
+      id: "use-of-the-portal",
       title: "Use of the portal",
       items: [
         "Access to the portal is granted by Nare Travel and Tours to approved partners and may be withdrawn at any time.",
@@ -66,42 +71,49 @@ export const TERMS_OF_USE: LegalDocument = {
       ],
     },
     {
+      id: "communication",
       title: "Communication",
       paragraphs: [
         "If you consent when you apply, Nare Travel and Tours communicates with your company by email and through a WhatsApp group that includes your contact persons and Nare staff. You can ask us at any time to stop using a channel or to change the contact persons.",
       ],
     },
     {
+      id: "requests-and-quotations",
       title: "Requests and quotations",
       paragraphs: [
         "A request sent through the portal, and a quotation prepared for it, is not a confirmed booking. A booking is confirmed only when Nare Travel and Tours confirms it in writing.",
       ],
     },
     {
+      id: "intellectual-property",
       title: "Intellectual property",
       paragraphs: [
         "The portal, its design, text, logos and software belong to Nare Travel and Tours or its licensors and are protected by copyright and other intellectual property laws. You may use them only to work with Nare Travel and Tours through the portal.",
       ],
     },
     {
+      id: "limitation-of-liability",
       title: "Limitation of liability",
       paragraphs: [
         "To the extent permitted by law, Nare Travel and Tours is not liable for indirect or consequential loss arising from the use of, or the unavailability of, the portal. Nothing in these Terms limits liability that cannot be limited by law.",
       ],
     },
     {
+      id: "suspension-and-ending",
       title: "Suspension and ending",
       paragraphs: [
         "Nare Travel and Tours may suspend or end a partner's access if these Terms are broken, if the information provided is found to be inaccurate, or if the trade licence is no longer valid. A partner may ask to end its access at any time.",
       ],
     },
     {
+      id: "changes-to-these-terms",
       title: "Changes to these Terms",
       paragraphs: [
         "We may update these Terms. The current version is always on this page with its date. Continued use of the portal after a change means you accept the updated Terms.",
       ],
     },
     {
+      id: "governing-law",
       title: "Governing law",
       paragraphs: ["These Terms are governed by the laws of Armenia, without regard to its conflict of law provisions."],
     },
@@ -115,6 +127,7 @@ export const PRIVACY_NOTICE: LegalDocument = {
     "Nare Travel and Tours is responsible for the personal and business information described in this notice. We explain what we collect when you apply to become a partner through the portal, why we collect it, who can see it and how long we keep it.",
   sections: [
     {
+      id: "what-we-collect",
       title: "What we collect",
       items: [
         "Company details: registered name, trading name, country, city, registered address and website.",
@@ -125,6 +138,7 @@ export const PRIVACY_NOTICE: LegalDocument = {
       ],
     },
     {
+      id: "why-we-use-it",
       title: "Why we use it",
       items: [
         "To review your application and to know our business partners (KYC review).",
@@ -134,12 +148,14 @@ export const PRIVACY_NOTICE: LegalDocument = {
       ],
     },
     {
+      id: "consent",
       title: "Consent",
       paragraphs: [
         "Your application asks for two consents: to process the information and documents for the KYC review, and to be contacted by email and added to a WhatsApp group. We do not create a group or add a contact without that consent and an approved application. You can withdraw a consent at any time by contacting us.",
       ],
     },
     {
+      id: "who-can-see-it",
       title: "Who can see it",
       items: [
         "Only authorised Nare Travel and Tours staff can open the documents you upload. Every opening, download, decision and deletion is recorded in an audit log.",
@@ -148,6 +164,7 @@ export const PRIVACY_NOTICE: LegalDocument = {
       ],
     },
     {
+      id: "how-long-we-keep-it",
       title: "How long we keep it",
       items: [
         "For an approved partner, documents are kept while the partnership is active.",
@@ -155,18 +172,21 @@ export const PRIVACY_NOTICE: LegalDocument = {
       ],
     },
     {
+      id: "how-we-protect-it",
       title: "How we protect it",
       paragraphs: [
         "Documents are stored privately, not on any publicly reachable address, access is restricted to authorised staff, and the portal limits and monitors submissions to prevent abuse. No system is perfectly secure, so we also ask you to share only what is requested.",
       ],
     },
     {
+      id: "your-rights",
       title: "Your rights",
       paragraphs: [
         "Depending on where you are, you may have the right to access, correct or delete your information, to object to or restrict its use, and to withdraw your consent. To use these rights, contact us using the details below.",
       ],
     },
     {
+      id: "changes-to-this-notice",
       title: "Changes to this notice",
       paragraphs: ["We may update this notice. The current version is always on this page with its date."],
     },
