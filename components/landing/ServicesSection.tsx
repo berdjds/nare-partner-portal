@@ -17,7 +17,7 @@ export function ServicesSection() {
   return (
     <section id="services" aria-labelledby="services-heading" className="bg-background">
       <div className="mx-auto max-w-7xl px-6 pb-14 lg:pb-20">
-        <h2 id="services-heading" className="font-display max-w-2xl text-balance text-[clamp(2.1rem,4.6vw,4rem)] font-semibold leading-[1.05] text-plum">{t("landing.title.services")}</h2>
+        <h2 id="services-heading" className="font-display max-w-2xl text-balance leading-[1.05] text-plum">{t("landing.title.services")}</h2>
         <ul className="mt-8 grid gap-5 lg:grid-cols-3 lg:grid-rows-2">
           {SERVICES.map(([title, body], i) =>
             i === 0 ? (

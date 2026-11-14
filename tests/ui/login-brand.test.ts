@@ -25,7 +25,7 @@ describe("branded login page", () => {
     const page = readRepoFile("app/login/page.tsx");
     expect(page).not.toContain("BrandMark");
     expect(page).toContain(
-      '<CardTitle className="text-3xl">{t("login.title")}</CardTitle>'
+      '<CardTitle>{t("login.title")}</CardTitle>'
     );
     expect(page).not.toContain("PRODUCT_NAME");
     expect(page).not.toContain("uppercase tracking-[0.2em]");

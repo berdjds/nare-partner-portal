@@ -31,7 +31,7 @@ export function LegalPage({ document }: { document: LegalDocument }) {
   return (
     <article className="mx-auto max-w-3xl px-6 py-12">
       <header className="space-y-3 border-b border-border pb-8">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+        <h1 className="font-display tracking-tight text-foreground">
           {document.title}
         </h1>
         <p className="text-lg text-muted-foreground">{document.subtitle}</p>
@@ -41,8 +41,8 @@ export function LegalPage({ document }: { document: LegalDocument }) {
         <p className="leading-relaxed text-foreground">{document.intro}</p>
       </header>
 
-      <nav aria-label="On this page" className="mt-8 space-y-3">
-        <h2 className="text-lg font-semibold text-foreground">On this page</h2>
+      <nav aria-label="On this page" aria-labelledby="legal-toc-heading" className="mt-8 space-y-3">
+        <p id="legal-toc-heading" className="text-lg font-semibold text-foreground">On this page</p>
         <ul className="list-disc space-y-2 ps-6 text-foreground">
           {document.sections.map((section) => (
             <li key={section.title}>
@@ -70,7 +70,7 @@ export function LegalPage({ document }: { document: LegalDocument }) {
           <section key={section.title} className="space-y-3">
             <h2
               id={sectionId(section.title)}
-              className="scroll-mt-24 text-xl font-semibold text-foreground"
+              className="scroll-mt-24 font-display legal-h2 text-foreground"
             >
               {index + 1}. {section.title}
             </h2>
@@ -93,7 +93,7 @@ export function LegalPage({ document }: { document: LegalDocument }) {
           aria-labelledby="legal-contact-heading"
           className="space-y-3 rounded-lg border border-border bg-card p-6"
         >
-          <h2 id="legal-contact-heading" className="text-xl font-semibold text-foreground">
+          <h2 id="legal-contact-heading" className="font-display legal-h2 text-foreground">
             Contact us
           </h2>
           {contact.address && <p className="leading-relaxed text-foreground">{contact.address}</p>}

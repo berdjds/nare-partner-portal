@@ -134,7 +134,8 @@ describe("typography matches staging.nare.am (self-hosted, no font service)", ()
     expect(read("public/fonts/SOURCES.md")).toContain("staging.nare.am");
     expect(read("tailwind.config.ts")).toContain('sans: ["var(--font-sans-stack)"]');
   });
-  it("section titles use staging's display scale", () => {
-    for (const f of ["ServicesSection", "HowItWorks", "AboutNare"]) expect(read(`components/landing/${f}.tsx`), f).toContain("text-[clamp(2.1rem,4.6vw,4rem)]");
+  it("section titles use the shared display scale", () => {
+    for (const f of ["ServicesSection", "HowItWorks", "AboutNare"]) expect(read(`components/landing/${f}.tsx`), f).toContain("font-display");
+    expect(read("app/globals.css")).toContain("--h2-size: clamp(2.1rem, 4.6vw, 4rem);");
   });
 });

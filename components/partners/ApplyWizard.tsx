@@ -684,7 +684,7 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
       {STAGES.slice(0, 3).map((stage, index) => (
         <div key={stage.key} className="space-y-3 rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-base font-semibold">{PARTNER_APPLY.sections[stage.key]}</h3>
+            <h3 className="font-display">{PARTNER_APPLY.sections[stage.key]}</h3>
             <Button
               type="button"
               variant="outline"
@@ -820,7 +820,7 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
             id={`stage-${stage.key}-heading`}
             tabIndex={-1}
             ref={index === stageIndex ? headingRef : undefined}
-            className="text-lg font-semibold focus:outline-none"
+            className="font-display focus:outline-none"
           >
             {PARTNER_APPLY.sections[stage.key]}
           </h2>

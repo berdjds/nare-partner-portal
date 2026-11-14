@@ -87,6 +87,19 @@ html:lang(hy) .font-display { font-family: var(--font-display-hy-stack); letter-
 
 /* Editorial serif display type for headings and big numbers (local fonts). */
 .font-display { font-family: var(--font-display-stack); font-weight: 600; font-optical-sizing: auto; letter-spacing: -0.02em; }
+
+:root {
+  --h1-size: clamp(2rem, 4vw, 3rem);
+  --h2-size: clamp(2.1rem, 4.6vw, 4rem);
+  --h3-size: clamp(1.25rem, 2vw, 1.5rem);
+}
+h1.font-display:not(.hero-h1) { font-size: var(--h1-size); font-weight: 600; }
+h2.font-display:not(.legal-h2) { font-size: var(--h2-size); font-weight: 600; }
+h3.font-display { font-size: var(--h3-size); font-weight: 600; }
+h2.font-display.legal-h2 { font-size: var(--h3-size); }
+h2#benefits-heading { font-family: var(--font-display-stack); font-size: var(--h2-size); font-weight: 600; }
+html:lang(hy) h2#benefits-heading { font-family: var(--font-display-hy-stack); }
+
 body { font-family: var(--font-sans-stack); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 /* Motion is decoration: honour the OS setting everywhere. */

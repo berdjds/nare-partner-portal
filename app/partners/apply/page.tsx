@@ -49,7 +49,7 @@ export default function PartnerApplyPage() {
         <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/yerevan-market.webp")' }} />
         <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/75 to-black/55" />
         <div className="relative mx-auto flex max-w-2xl flex-col items-start gap-6 px-6 py-10 sm:py-14">
-          <h1 className="relative text-balance text-3xl font-bold leading-tight tracking-tight drop-shadow-lg sm:text-4xl">
+          <h1 className="relative text-balance font-display leading-tight tracking-tight drop-shadow-lg">
             {PARTNER_APPLY.headline}
           </h1>
           <p className="max-w-xl leading-relaxed relative text-white/90">

@@ -21,7 +21,7 @@ export function AboutNare() {
           <img src="/brand/photos/about-monastery.webp" alt={t("about.photo.alt")} width={669} height={446} loading="lazy" className="relative aspect-[5/4] max-h-[26rem] w-full rounded-[2rem] object-cover shadow-[var(--shadow-lift)]" />
         </div>
         <div className="lg:col-span-7">
-          <h2 id="about-heading" className="font-display text-balance text-[clamp(2.1rem,4.6vw,4rem)] font-semibold leading-[1.05] text-plum">{t("landing.title.trust")}</h2>
+          <h2 id="about-heading" className="font-display text-balance leading-[1.05] text-plum">{t("landing.title.trust")}</h2>
           <p className="mt-6 text-xl leading-relaxed text-foreground md:text-[1.35rem]">{c.foundedYear ? t("about.p1.year", { year: c.foundedYear }) : t("about.p1")}</p>
           <div className="mt-6 grid gap-6 text-[17px] leading-relaxed text-muted-foreground md:grid-cols-2">
             <p>{t("about.p2")}</p>

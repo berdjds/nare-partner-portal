@@ -31,7 +31,7 @@ export function Hero() {
       <div className="mx-auto flex min-h-[32rem] max-w-7xl items-center px-6 py-14 sm:min-h-[36rem] lg:min-h-[40rem] lg:py-20">
         <div className="relative max-w-2xl rounded-2xl bg-gradient-to-r from-black/45 via-black/25 to-transparent p-6 sm:p-9 rtl:bg-gradient-to-l">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/85">{t("landing.eyebrow")}</p>
-          <h1 className="mt-4 text-balance text-3xl font-bold leading-[1.1] tracking-tight drop-shadow-lg sm:text-4xl lg:text-5xl">{t("landing.headline")}</h1>
+          <h1 className="mt-4 text-balance font-display hero-h1 text-3xl leading-[1.1] tracking-tight drop-shadow-lg sm:text-4xl lg:text-5xl">{t("landing.headline")}</h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-white/90 drop-shadow-md sm:text-xl">{t("landing.subline")}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Link href="/login" className="pill-btn pill-btn-primary group px-8 py-4 text-base">

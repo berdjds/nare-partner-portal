@@ -77,10 +77,10 @@ function LoginForm() {
     <div className="flex min-h-screen flex-col">
       <PublicHeader active="login" />
       <div className="grid flex-1 grid-rows-[auto_1fr] lg:grid-cols-2 lg:grid-rows-1">
-      <aside className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-plum via-plum to-brand px-6 py-8 text-white lg:justify-center lg:gap-10 lg:px-16">
+      <aside className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-plum via-plum to-brand px-6 py-8 text-white text-3xl lg:justify-center lg:gap-10 lg:px-16 lg:text-5xl">
         <span aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/brand/photos/yerevan-market.webp")' }} />
         <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/75 to-black/55" />
-        <h1 className="relative max-w-md text-balance text-3xl font-bold leading-tight tracking-tight drop-shadow-lg lg:text-5xl">
+        <h1 className="relative max-w-md text-balance font-display leading-tight tracking-tight drop-shadow-lg">
           {t("login.headline")}
         </h1>
         <ul className="max-w-md space-y-2 relative text-base leading-relaxed text-white/90 lg:space-y-4 lg:text-lg">
@@ -96,7 +96,7 @@ function LoginForm() {
       <div className="flex flex-col items-center justify-start bg-background p-4 pt-10 lg:justify-center lg:pt-4">
         <Card className="w-full max-w-md shadow-[var(--shadow-lift)]">
           <CardHeader className="p-8 pb-4 text-center">
-            <CardTitle className="text-3xl">{t("login.title")}</CardTitle>
+            <CardTitle>{t("login.title")}</CardTitle>
             <CardDescription>
               {t("login.subtitle")}
             </CardDescription>

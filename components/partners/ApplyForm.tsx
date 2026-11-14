@@ -76,7 +76,7 @@ export function ApplySuccess({ reference }: { reference: string }) {
   const contactEmail = primaryEmail(usePublicContact());
   return (
     <div role="status" className="rounded-lg border border-border bg-card p-8">
-      <h2 className="text-2xl font-semibold tracking-tight">{PARTNER_APPLY.successTitle}</h2>
+      <h2 className="font-display tracking-tight">{PARTNER_APPLY.successTitle}</h2>
       <p className="mt-6 text-sm text-muted-foreground">{PARTNER_APPLY.successReferenceLabel}</p>
       <p className="mt-1 font-mono text-xl font-semibold">{reference}</p>
       <p className="mt-6 text-sm leading-relaxed text-muted-foreground">{PARTNER_APPLY.successBody}</p>
