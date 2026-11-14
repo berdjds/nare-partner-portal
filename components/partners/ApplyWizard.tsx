@@ -29,12 +29,13 @@ import { Check } from "lucide-react";
 import type { ZodTypeAny } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label as SharedLabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PARTNER_APPLY } from "@/lib/portal-content";
 import { applicationFieldsSchema, CONSENT_VERSION } from "@/lib/partners/validation";
 import { COUNTRIES, getCitySuggestions } from "@/lib/partners/locations";
 import { TERMS_OF_USE, PRIVACY_NOTICE } from "@/lib/legal-content";
+import { useT } from "@/lib/i18n/react";
 import {
   ApplySuccess,
   FILE_FIELD_NAMES,
@@ -126,6 +127,29 @@ const FIELD_LABELS: Record<string, string> = { ...PARTNER_APPLY.labels };
 
 const CONSENT_FIELD_NAMES = ["consentKyc", "consentChannels"] as const;
 
+function RequiredMarker({ text }: { text: string }) {
+  return (
+    <span className="ms-1">
+      <span aria-hidden="true">*</span>
+      <span className="sr-only"> ({text})</span>
+    </span>
+  );
+}
+
+function Label({ htmlFor, children, ...props }: React.ComponentProps<typeof SharedLabel>) {
+  const t = useT();
+  const isRequired =
+    htmlFor === "licenceFile" ||
+    (htmlFor !== undefined && fieldSchemas[htmlFor]?.safeParse("").success === false);
+
+  return (
+    <SharedLabel htmlFor={htmlFor} {...props}>
+      {children}
+      {isRequired && <RequiredMarker text={t("partnerApply.required")} />}
+    </SharedLabel>
+  );
+}
+
 function stepText(index: number): string {
   return PARTNER_APPLY.stepLabel
     .replace("{step}", String(index + 1))
@@ -172,6 +196,7 @@ export function ApplyStepper({ stageIndex }: { stageIndex: number }) {
 }
 
 export function ApplyWizard({ formToken }: { formToken: string }) {
+  const t = useT();
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const stage of STAGES) {
@@ -227,10 +252,13 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
     );
   }
 
-  function validityProps(name: string) {
+  function validityProps(name: string, descriptionId?: string) {
+    const describedBy = [descriptionId, fieldErrors[name] ? errorId(name) : undefined]
+      .filter(Boolean)
+      .join(" ");
     return {
       "aria-invalid": fieldErrors[name] ? true : undefined,
-      "aria-describedby": fieldErrors[name] ? errorId(name) : undefined,
+      "aria-describedby": describedBy || undefined,
     };
   }
 
@@ -345,9 +373,10 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
   }
 
   const inputClass = "h-11";
-  // Mirrors the ui Input classes so the native country <select> looks identical.
-  const selectClass =
-    "flex h-11 w-full rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-sm ring-offset-background transition-colors placeholder:text-muted-foreground hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+  // Mirrors ui Input so the native select and file buttons share its border,
+  // radius, focus ring and 44 px height.
+  const controlClass =
+    "flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-sm shadow-sm ring-offset-background transition-colors placeholder:text-muted-foreground hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
 
   const companyStage = (
     <>
@@ -386,7 +415,7 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
             name="country"
             required
             autoComplete="country-name"
-            className={selectClass}
+            className={controlClass}
             value={values.country}
             onChange={(event) => setValue("country", event.target.value)}
             {...validityProps("country")}
@@ -535,24 +564,41 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
                   type="file"
                   required={name === "licenceFile"}
                   accept={FILE_INPUT_ACCEPT}
-                  className="h-11 py-2"
-                  onChange={(event) => setFile(name, event.target.files?.[0] ?? null)}
+                  className="hidden"
+                  onChange={(event) => {
+                    setFile(name, event.target.files?.[0] ?? null);
+                    requestAnimationFrame(() => document.getElementById(`${name}-replace`)?.focus());
+                  }}
                   {...validityProps(name)}
                 />
+                <button
+                  id={`${name}-choose`}
+                  type="button"
+                  className={`${controlClass} items-center text-start leading-tight`}
+                  onClick={() => document.getElementById(name)?.click()}
+                  {...validityProps(name)}
+                >
+                  {t("partnerApply.chooseFile", { document: PARTNER_APPLY.labels[name] })}
+                </button>
                 <p className="text-sm text-muted-foreground">{PARTNER_APPLY.fileRules}</p>
               </>
             ) : (
-              <div className="flex h-11 items-center justify-between gap-3 rounded-lg border border-input bg-card px-3 text-sm shadow-sm">
-                <span className="truncate">
-                  {file.name} ({formatFileSize(file.size)})
-                </span>
+              <div className="space-y-2">
+                <div className="flex h-11 items-center rounded-xl border border-input bg-card px-3.5 text-sm shadow-sm">
+                  <span className="truncate">
+                    {file.name} ({formatFileSize(file.size)})
+                  </span>
+                </div>
                 <button
+                  id={`${name}-replace`}
                   type="button"
-                  className="shrink-0 font-medium text-primary underline underline-offset-4"
-                  aria-label={`${PARTNER_APPLY.replaceFileLabel} ${PARTNER_APPLY.labels[name]}`}
-                  onClick={() => setFile(name, null)}
+                  className={`${controlClass} items-center text-start leading-tight`}
+                  onClick={() => {
+                    setFile(name, null);
+                    requestAnimationFrame(() => document.getElementById(`${name}-choose`)?.focus());
+                  }}
                 >
-                  {PARTNER_APPLY.replaceFileLabel}
+                  {PARTNER_APPLY.replaceFileLabel} {PARTNER_APPLY.labels[name]}
                 </button>
               </div>
             )}
@@ -625,9 +671,11 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
             className={inputClass}
             value={values.contactPhone}
             onChange={(event) => setValue("contactPhone", event.target.value)}
-            {...validityProps("contactPhone")}
+            {...validityProps("contactPhone", "contactPhone-helper")}
           />
-          <p className="text-sm text-muted-foreground">{PARTNER_APPLY.contactPhoneHelper}</p>
+          <p id="contactPhone-helper" className="text-sm text-muted-foreground">
+            {PARTNER_APPLY.contactPhoneHelper} {t("partnerApply.contactPhoneExample")}
+          </p>
           {fieldError("contactPhone")}
         </div>
       </div>
@@ -824,6 +872,7 @@ export function ApplyWizard({ formToken }: { formToken: string }) {
           >
             {PARTNER_APPLY.sections[stage.key]}
           </h2>
+          <p className="text-sm text-muted-foreground">{t("partnerApply.requiredLegend")}</p>
           <div className="space-y-4">{stageContent[stage.key]}</div>
         </section>
       ))}

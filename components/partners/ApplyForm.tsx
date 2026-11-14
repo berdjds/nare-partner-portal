@@ -37,6 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PARTNER_APPLY } from "@/lib/portal-content";
 import { primaryEmail, usePublicContact } from "@/lib/contact/react";
 import { CONSENT_VERSION } from "@/lib/partners/validation";
+import { useT } from "@/lib/i18n/react";
 
 // Mirrors KYC_MAX_FILE_BYTES (lib/partners/kyc-storage.ts, node-only).
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -101,6 +102,7 @@ export function ApplySuccess({ reference }: { reference: string }) {
 }
 
 export function ApplyForm({ formToken }: { formToken: string }) {
+  const t = useT();
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -120,10 +122,11 @@ export function ApplyForm({ formToken }: { formToken: string }) {
     );
   }
 
-  function validityProps(name: string) {
+  function validityProps(name: string, descriptionId?: string) {
+    const describedBy = [descriptionId, fieldErrors[name] ? errorId(name) : undefined].filter(Boolean).join(" ");
     return {
       "aria-invalid": fieldErrors[name] ? true : undefined,
-      "aria-describedby": fieldErrors[name] ? errorId(name) : undefined,
+      "aria-describedby": describedBy || undefined,
     };
   }
 
@@ -256,7 +259,7 @@ export function ApplyForm({ formToken }: { formToken: string }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="licenceFile">{PARTNER_APPLY.labels.licenceFile}</Label>
-          <Input id="licenceFile" name="licenceFile" type="file" required accept={FILE_INPUT_ACCEPT} className="h-11 py-2" {...validityProps("licenceFile")} />
+          <Input id="licenceFile" name="licenceFile" type="file" required accept={FILE_INPUT_ACCEPT} className={`${inputClass} py-2`} aria-label={t("partnerApply.chooseFile", { document: PARTNER_APPLY.labels.licenceFile })} {...validityProps("licenceFile")} />
           <p className="text-sm text-muted-foreground">{PARTNER_APPLY.fileRules}</p>
           {fieldError("licenceFile")}
         </div>
@@ -284,8 +287,8 @@ export function ApplyForm({ formToken }: { formToken: string }) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="contactPhone">{PARTNER_APPLY.labels.contactPhone}</Label>
-            <Input id="contactPhone" name="contactPhone" type="tel" required autoComplete="tel" placeholder="+374 91 000000" className={inputClass} {...validityProps("contactPhone")} />
-            <p className="text-sm text-muted-foreground">{PARTNER_APPLY.contactPhoneHelper}</p>
+            <Input id="contactPhone" name="contactPhone" type="tel" required autoComplete="tel" placeholder="+374 91 000000" className={inputClass} {...validityProps("contactPhone", "contactPhone-helper")} />
+            <p id="contactPhone-helper" className="text-sm text-muted-foreground">{PARTNER_APPLY.contactPhoneHelper} {t("partnerApply.contactPhoneExample")}</p>
             {fieldError("contactPhone")}
           </div>
         </div>
@@ -314,13 +317,13 @@ export function ApplyForm({ formToken }: { formToken: string }) {
         <legend className="text-lg font-semibold">{PARTNER_APPLY.sections.signatory}</legend>
         <div className="space-y-2">
           <Label htmlFor="signatoryIdFile">{PARTNER_APPLY.labels.signatoryIdFile}</Label>
-          <Input id="signatoryIdFile" name="signatoryIdFile" type="file" accept={FILE_INPUT_ACCEPT} className="h-11 py-2" {...validityProps("signatoryIdFile")} />
+          <Input id="signatoryIdFile" name="signatoryIdFile" type="file" accept={FILE_INPUT_ACCEPT} className={`${inputClass} py-2`} aria-label={t("partnerApply.chooseFile", { document: PARTNER_APPLY.labels.signatoryIdFile })} {...validityProps("signatoryIdFile")} />
           <p className="text-sm text-muted-foreground">{PARTNER_APPLY.fileRules}</p>
           {fieldError("signatoryIdFile")}
         </div>
         <div className="space-y-2">
           <Label htmlFor="otherFile">{PARTNER_APPLY.labels.otherFile}</Label>
-          <Input id="otherFile" name="otherFile" type="file" accept={FILE_INPUT_ACCEPT} className="h-11 py-2" {...validityProps("otherFile")} />
+          <Input id="otherFile" name="otherFile" type="file" accept={FILE_INPUT_ACCEPT} className={`${inputClass} py-2`} aria-label={t("partnerApply.chooseFile", { document: PARTNER_APPLY.labels.otherFile })} {...validityProps("otherFile")} />
           <p className="text-sm text-muted-foreground">{PARTNER_APPLY.fileRules}</p>
           {fieldError("otherFile")}
         </div>

@@ -8,3 +8,7 @@
 | `legal.email` | Email | Էլ. փոստ |
 | `legal.address` | Address | Հասցե |
 | `legal.phones` | Phones | Հեռախոսներ |
+| `partnerApply.chooseFile` | Choose {document} | Ընտրել {document} |
+| `partnerApply.contactPhoneExample` | Example: +374 91 000000 | Օրինակ՝ +374 91 000000 |
+| `partnerApply.required` | required | պարտադիր |
+| `partnerApply.requiredLegend` | * Required fields | * Պարտադիր դաշտեր |
